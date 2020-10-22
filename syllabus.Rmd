@@ -1,0 +1,124 @@
+---
+title: "Syllabus for STATS 531 (Winter 2021) <br><it>Analysis of Time Series</it><br><br>DRAFT. COURSE UNDER CONSTRUCTION.<br>"
+author: "Instructor: Edward L. Ionides"
+output:
+  html_document:
+    toc: no
+csl: ecology.csl
+---
+
+
+## Course information
+
+* Class is online. Activities include the following.
+    + Asynchronous lectures (120 minute per week)
+    + 30 minute per week small group meeting with professor or GSI
+    + 30 minute per week small group meeting without an instructor
+    + weekly homework
+    + optional office hours
+    + group midterm project
+    + group final project
+    
+
+* Contact information:
+<!--
+    + Office: 453 West Hall 
++ Phone: 615 3332
+-->
+    + E-mail: ionides@umich.edu 
+    + Web: dept.stat.lsa.umich.edu/~ionides
+<!--
++ Office hours: Tue 11:30-12:30, Thu 1-2
+-->
+    
+* GSI team: TBD
+<!--
+Sunrit Chakraborty (<sunritc@umich.edu>) and Saptarshi Roy (<roysapta@umich.edu>)
+    + Sunrit sffice hours: Tue 2:30-3:00, Fri 1-2 at Science Learning Center.
+    + Saptarshi office hours: Friday 2-3:30 at Science Learning Center.
+    + Computing support: inquire by email, with a detailed description of the problem, what you did, and what error message you obtained.
+-->
+
+* Course notes are at https://github.com/ionides/531w21
+
+* Supplementary textbook: R. Shumway and D. Stoffer "Time Series Analysis and its Applications" 4th edition. 
+A pdf is available using the UM Library's Springer subscription.
+An updated pdf is available free from [David Stoffer's website](http://www.stat.pitt.edu/stoffer/tsa4/tsa4.pdf)
+
+* Pre-requisites:
+    + Theoretical statistics. STATS 510 or STATS 426 or equivalent. For review, see "Mathematical Statistics and Data Analysis" by J. A. Rice. 
+    + Linear algebra. A certain amount of basic linear algebra will be required. For review, see 
+[www.sosmath.com/matrix/matrix.html](http://www.sosmath.com/matrix/matrix.html).
+    + R programming. There is no formal R prerequisite, but we will be working with R extensively and so you should allow extra time for this course if you are new to R programming. Come to chat and we can make a plan for learning R in the context of your computational background.
+
+-----------
+
+
+
+## Course outline
+
+
+1. Introduction to time series analysis.
+
+2. Time series models, trend and autocovariance.
+
+3. Stationarity, white noise, and some basic time series models.
+
+4. Linear time series models and the algebra of autoregressive moving average (ARMA) models.
+
+5. Parameter estimation and model identification for ARMA models.
+
+6. Extending the ARMA model: Seasonality and trend.
+
+7. Introduction to the frequency domain.
+
+8. Smoothing in the time and frequency domains.
+
+9. Introduction to partially observed Markov process models.
+
+10. Statistical methodology for nonlinear partially observed Markov process (POMP) models.
+
+11. Dynamic models and their simulation by Euler’s method.
+
+12. Practical likelihood-based inference for POMP models.
+
+13. POMP models with covariates, and a case study of polio transmission.
+
+14.  A case study using POMP modeling to study financial volatility.
+
+--------------
+
+## Groups
+
+* Groups will be randomly assigned during the second week of class, and will work together up to and including the midterm project. Randomly selected individuals may also be asked to move between groups---this is mostly likely to happen early in the course before class enrollments have stabilized.
+
+* Groups will be re-randomized after the midterm project. The new groups will work together up to and including the final project.
+
+* Groups are expected to meet up for at least 30 minutes a week, to discuss class notes or homework or projects, and for another 30 minutes a week together with an instructor. Active participation in your group will carry course credit.
+
+-------------
+
+##  Grading
+
+* Weekly homeworks (30\%).
+* A group midterm projct (20\%, due ???). The group can divide into subgroups to submit more than one project. If you have a particular interest, you are also welcome to write an individual project, i.e., subgroups of size one are permitted.
+* An individual midterm report (5\%, due ???) discussing your group midterm project. This should be about 1000 words, and should include reflections on the strengths and limitations of the project, your personal contribution, and contributions of other group members. 
+* A final project (35%, due ???). As for the miderm project, subgroups of any size are permitted.
+* An individual final report (5\%, due ???) discussing your group final project. This should be about 1000 words, and should reflect on the strengths and limitations of the project, your personal contribution, and contributions of other group members. 
+* Participation (5\%). All forms of participation are appreciated and help to build the constructive climate of the class. In particular, the participation credit will recognize contributions in group meetings, the class slack channel, and office hours.
+* Course letter grades are anticipated to be mostly in the A, A-, B+ range customary for courses at this level. In the past, this has corresponded to overall scores of approximately 95% for A+, 90% for A, 85% for A-, 75% for B+. However, the exact cutoff used will be determined in the context of the course for this specific semester.
+
+Each homework will have a question asking about sources. You will be asked to explain which parts of your responses above made use of a source, meaning anything or anyone you consulted (including classmates or office hours) to help you write or check your answers. All sources are permitted, but failure to attribute material from a source is plagiarism, which is unethical and may have serious consequences. **Directly copied text must be in quotation marks. Directly copied equations must be explicitly referenced to the source. The reader should not have to carry out detective work to figure out correctly which parts of the homework are attributable to a source.** Careful attribution of sources is fundamental to good scholarship, and it also facilitates meaningful grading given the reality of abundant sources.
+
+The graders will look for an honest effort applied to the homework, with contributions that go beyond the sources. It is your responsibility to demonstrate to the reader that you have engaged in careful thought related to the questions. If you use sources, you are welcome to comment on what you learned from the sources as a way to show engagement with the questions.
+
+The midterm and final project will also have a substantial grading component allocated to clear and scholarly assignment of credit to sources.
+
+----
+
+## Student Mental Health and Wellbeing
+
+University of Michigan is committed to advancing the mental health and wellbeing of its students. If you or someone you know is feeling overwhelmed, depressed, and/or in need of support, services are available. For help, contact Counseling and Psychological Services (CAPS) at 734.764.8312 and  https://caps.umich.edu during and after hours, on weekends and holidays. You may also consult University Health Service (UHS) at 734.764.8320 and https://www.uhs.umich.edu/mentalhealthsvcs. For a listing of other mental health resources available on and off campus, visit http://umich.edu/~mhealth/
+
+----------
+
