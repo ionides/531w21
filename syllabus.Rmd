@@ -1,5 +1,5 @@
 ---
-title: "Syllabus for STATS 531 (Winter 2021) <br><it>Analysis of Time Series</it><br><br>DRAFT. COURSE UNDER CONSTRUCTION.<br>"
+title: "Syllabus for STATS/DATASCI 531 (Winter 2021) <br><it>Analysis of Time Series</it>"
 author: "Instructor: Edward L. Ionides"
 output:
   html_document:
@@ -11,35 +11,25 @@ csl: ecology.csl
 ## Course information
 
 * Class is online. Activities include the following.
-    + Asynchronous lectures (120 minute per week)
-    + 30 minute per week small group meeting with professor or GSI
-    + 30 minute per week small group meeting without an instructor
-    + weekly homework
-    + optional office hours
-    + group midterm project
-    + group final project
+    + asynchronous lectures (approximately 120 minutes per week)
+    + 25 minute per week small group meeting with professor or GSI, scheduled during class time
+    + 25 minute per week small group meeting without an instructor, scheduled during class time
+    + homework
+    + Piazza discussion forum
+    + group midterm project, with individual peer review
+    + group final project, with individual peer review
     
 
 * Contact information:
-<!--
-    + Office: 453 West Hall 
-+ Phone: 615 3332
--->
     + E-mail: ionides@umich.edu 
     + Web: dept.stat.lsa.umich.edu/~ionides
-<!--
-+ Office hours: Tue 11:30-12:30, Thu 1-2
--->
-    
-* GSI team: TBD
-<!--
-Sunrit Chakraborty (<sunritc@umich.edu>) and Saptarshi Roy (<roysapta@umich.edu>)
-    + Sunrit sffice hours: Tue 2:30-3:00, Fri 1-2 at Science Learning Center.
-    + Saptarshi office hours: Friday 2-3:30 at Science Learning Center.
-    + Computing support: inquire by email, with a detailed description of the problem, what you did, and what error message you obtained.
--->
 
-* Course notes are at https://github.com/ionides/531w21
+* GSI: Baekjin Kim <baekjin@umich.edu>
+    + Computing support: If you have a coding problem you cannot debug, it is often helpful to develop a simple reproducible example that others can run to you help. You can share this, and the error message you obtain, with your group and/or on Piazza, or by email if necessary.
+
+* Office hours: Most questions about homework, lectures and other course activities should be addressed during group meetings or on Piazza. Please email the instructor or GSI if an issue arises that requires an individual meeting.
+
+* Course notes and lectures are posted at https://ionides.github.io/531w20/ with source files available at https://github.com/ionides/531w21
 
 * Supplementary textbook: R. Shumway and D. Stoffer "Time Series Analysis and its Applications" 4th edition. 
 A pdf is available using the UM Library's Springer subscription.
@@ -90,27 +80,27 @@ An updated pdf is available free from [David Stoffer's website](http://www.stat.
 
 ## Groups
 
-* Groups will be randomly assigned during the second week of class, and will work together up to and including the midterm project. Randomly selected individuals may also be asked to move between groups---this is mostly likely to happen early in the course before class enrollments have stabilized.
+* Groups for the first half-semester will be randomly assigned, and will work together up to and including the midterm project.
 
 * Groups will be re-randomized after the midterm project. The new groups will work together up to and including the final project.
 
-* Groups are expected to meet up for at least 30 minutes a week, to discuss class notes or homework or projects, and for another 30 minutes a week together with an instructor. Active participation in your group will carry course credit.
+* Groups are expected to meet up for at least 25 minutes a week, to discuss class notes or homework or projects, and for another 25 minutes a week together with an instructor. Active participation in your group will carry course credit.
 
 -------------
 
 ##  Grading
 
-* Weekly homeworks (30\%).
-* A group midterm projct (20\%, due ???). The group can divide into subgroups to submit more than one project. If you have a particular interest, you are also welcome to write an individual project, i.e., subgroups of size one are permitted.
-* An individual midterm report (5\%, due ???) discussing your group midterm project. This should be about 1000 words, and should include reflections on the strengths and limitations of the project, your personal contribution, and contributions of other group members. 
-* A final project (35%, due ???). As for the miderm project, subgroups of any size are permitted.
-* An individual final report (5\%, due ???) discussing your group final project. This should be about 1000 words, and should reflect on the strengths and limitations of the project, your personal contribution, and contributions of other group members. 
-* Participation (5\%). All forms of participation are appreciated and help to build the constructive climate of the class. In particular, the participation credit will recognize contributions in group meetings, the class slack channel, and office hours.
+* Weekly homeworks (25\%).
+* A group midterm project (20\%, due 11:59pm on 3/2). In special situations, you can request to write an individual project for the midterm and/or the final project. This may be appropriate if you have a particular dataset or scientific question that has motivated your interest in learning time series analysis. You can also ask your group if it is willing to join collaboratively on your project to make it a group project.
+* Two individual anonymous peer review evaluations of other group midterm projects (5\%, due 11:59pm on 3/9). Each should be about 500 words, and should identify the main strengths and weaknesses of the project (from both technical and conceptual perspectives) as well as identifying points with room for improvement.
+* A group final project (30%, due 11:59pm on 4/20).
+* Two individual anonymous peer review evaluations of other group final projects (10\%, due 11:59pm on 4/29). Each should be about 1000 words, and should identify the main strengths and weaknesses of the project (from both technical and conceptual perspectives) as well as identifying points with room for improvement.
+* Participation (10%). To build community for an online course, attendance and contributions in group meetings are valuable. Similarly, both raising and answering questions on a discussion forum is helpful.
 * Course letter grades are anticipated to be mostly in the A, A-, B+ range customary for courses at this level. In the past, this has corresponded to overall scores of approximately 95% for A+, 90% for A, 85% for A-, 75% for B+. However, the exact cutoff used will be determined in the context of the course for this specific semester.
 
 Each homework will have a question asking about sources. You will be asked to explain which parts of your responses above made use of a source, meaning anything or anyone you consulted (including classmates or office hours) to help you write or check your answers. All sources are permitted, but failure to attribute material from a source is plagiarism, which is unethical and may have serious consequences. **Directly copied text must be in quotation marks. Directly copied equations must be explicitly referenced to the source. The reader should not have to carry out detective work to figure out correctly which parts of the homework are attributable to a source.** Careful attribution of sources is fundamental to good scholarship, and it also facilitates meaningful grading given the reality of abundant sources.
 
-The graders will look for an honest effort applied to the homework, with contributions that go beyond the sources. It is your responsibility to demonstrate to the reader that you have engaged in careful thought related to the questions. If you use sources, you are welcome to comment on what you learned from the sources as a way to show engagement with the questions.
+The grader will look for an honest effort applied to the homework, with contributions that go beyond the sources. It is your responsibility to demonstrate to the reader that you have engaged in careful thought related to the questions. If you use sources, you are welcome to comment on what you learned from the sources as a way to show engagement with the questions.
 
 The midterm and final project will also have a substantial grading component allocated to clear and scholarly assignment of credit to sources.
 
@@ -118,7 +108,7 @@ The midterm and final project will also have a substantial grading component all
 
 ## Student Mental Health and Wellbeing
 
-University of Michigan is committed to advancing the mental health and wellbeing of its students. If you or someone you know is feeling overwhelmed, depressed, and/or in need of support, services are available. For help, contact Counseling and Psychological Services (CAPS) at 734.764.8312 and  https://caps.umich.edu during and after hours, on weekends and holidays. You may also consult University Health Service (UHS) at 734.764.8320 and https://www.uhs.umich.edu/mentalhealthsvcs. For a listing of other mental health resources available on and off campus, visit http://umich.edu/~mhealth/
+University of Michigan is committed to advancing the mental health and wellbeing of its students. If you or someone you know is feeling overwhelmed, depressed, and/or in need of support, services are available. For help, contact Counseling and Psychological Services (CAPS) at 734.764.8312 and  https://caps.umich.edu during and after hours, on weekends and holidays. You may also consult University Health Service (UHS) at 734.764.8320 and https://www.uhs.umich.edu/mentalhealthsvcs.
 
 ----------
 
