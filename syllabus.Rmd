@@ -12,8 +12,8 @@ csl: ecology.csl
 
 * Class is online. Activities include the following.
     + asynchronous lectures (approximately 120 minutes per week)
-    + 25 minute per week small group meeting with professor or GSI, scheduled during class time
-    + 25 minute per week small group meeting without an instructor, scheduled during class time
+    + 25 minute per week small group meeting with professor or GSI, scheduled during class time (Tu/Th 10-11:30am)
+    + 25 minute per week small group meeting without an instructor, scheduled during class time (Tu/Th 10-11:30am)
     + homework
     + Piazza discussion forum
     + group midterm project, with individual peer review
