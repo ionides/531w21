@@ -1,20 +1,17 @@
-default: html-docs
+MODULES = 01
 
-html-docs: index.html
+default: index.html syllabus.html acknowledge.html modules
 
-%.html: %.Rmd
-	Rscript --vanilla -e "rmarkdown::render(\"$*.Rmd\",output_format=\"html_document\")"
+modules:
+	for module in $(MODULES); do ($(MAKE) -C $$module); done
 
-%.html: %.md
-	pandoc $*.md > $*.html
+include rules.mk
 
-%.R: %.Rmd
-	Rscript --vanilla -e "library(knitr); purl(\"$*.Rmd\",output=\"$*.R\")"
+.fresh:
+	for module in $(MODULES); do (cd $$module && $(MAKE) fresh); done
 
-clean:
-	$(RM) *.o *.so *.log *.aux *.out *.nav *.snm *.toc *.bak
-	$(RM) Rplots.ps Rplots.pdf
+fresh: .fresh
 
-fresh: clean
-	$(RM) -r cache figure
-
+welcome.html: welcome.md
+	PATH=/usr/lib/rstudio/bin/pandoc:$$PATH \
+	$(REXE) -e "rmarkdown::render(\"$^\",output_format=\"revealjs::revealjs_presentation\")"

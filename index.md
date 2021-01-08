@@ -4,7 +4,6 @@ author: "Instructor: Edward L. Ionides"
 output:
   html_document:
     toc: yes
-csl: ecology.csl
 ---
 
 ------
@@ -22,11 +21,11 @@ A course outline, course information and grading policies are described in the [
 
 --------------
 
-## Class notes
+## Class notes and lectures
+
+1. [Introduction](01/index.html).
 
 <!--
-
-1. Introduction.
 [ html. ](01/notes01.html)
 [ pdf. ](01/notes01.pdf)
 [ R script. ](01/notes01.R)
