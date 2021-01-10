@@ -13,7 +13,7 @@
 % \newcommand\answer[2]{\textcolor{red}{#2}} % to show answers
  \newcommand\answer[2]{#1} % to show blank space
 
-\title{\link{https://ionides.github.io/531w21/}{Analysis of Time Series (STATS/DATASCI 531, Winter 2021)}\\ \vspace{2mm}
+\title{\vspace{2mm} \link{https://ionides.github.io/531w21/}{Analysis of Time Series}\\ \vspace{2mm}
 Chapter \CHAPTER: Introduction}
 \author{Edward L. Ionides}
 \date{}
@@ -101,9 +101,9 @@ There is a temptation to attribute a warm winter to global warming. You can then
 
 \begin{itemize}
 
-\item You can get this file from the course website, \link{http://ionides.github.io/531w21}{ionides.github.io/531w21}. 
+\item You can get this file from the \link{https://github.com/ionides/531w21}{course repository on GitHub}.
 
-\item Better, you can make a local clone of this git repository that will give you an up-to-date copy of all the data, notes, code, homeworks and solutions for this course. See Homework 0.
+\item Better, you can make a local clone of this git repository that will give you an up-to-date copy of all the data, notes, code, homeworks and solutions for this course.
 
 \end{itemize}
 
