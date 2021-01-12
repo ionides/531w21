@@ -8,13 +8,17 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture         | [Video (TBD)](https://youtu.be/ol7eQ0SX-EY) |
+| Lecture 1 (Chapter 1, Part 1)   | [Video (18 mins)](https://youtu.be/ol7eQ0SX-EY) |
+| Lecture 2 (Chapter 1, Part 2)   | [Video (29 mins)](https://youtu.be/seSMkfQJd-4) 
 | Lecture slides  | [PDF](slides.pdf)                                                                 |
 | Lecture notes   | [PDF](notes.pdf)                                                                  |
 
 ----------------------
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/ol7eQ0SX-EY" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/seSMkfQJd-4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 
 ----------------------
 
