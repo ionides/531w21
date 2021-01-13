@@ -8,8 +8,8 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture 1 (Chapter 1, Part 1)   | [Video (18 mins)](https://youtu.be/ol7eQ0SX-EY) |
-| Lecture 2 (Chapter 1, Part 2)   | [Video (29 mins)](https://youtu.be/seSMkfQJd-4) 
+| Lecture: Chapter 1, Part 1   | [Video (18 mins)](https://youtu.be/ol7eQ0SX-EY) |
+| Lecture: Chapter 1, Part 2   | [Video (29 mins)](https://youtu.be/seSMkfQJd-4) 
 | Lecture slides  | [PDF](slides.pdf)                                                                 |
 | Lecture notes   | [PDF](notes.pdf)                                                                  |
 

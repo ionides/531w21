@@ -7,6 +7,7 @@
 *.vrb
 *.out
 *.toc
+*.brf
 .directory
 .DS_Store
 *.log
