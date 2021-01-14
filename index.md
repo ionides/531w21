@@ -106,11 +106,11 @@ There are further POMP case studies, in a similar style, on [Ebola modeling](htt
 
 ## Homework assignments
 
-Please read the [grading policy in the syllabus](syllabus.html) before turning in homework.
+Please read the [grading policy in the syllabus](syllabus.html) before submitting homework.
+
+* [Homework 0](hw00/hw00.html). Setting up your computational environment. Nothing to submit.
 
 <!--
-
-* [Homework 0](hw00/hw00.html). Setting up your computational environment. Nothing to turn in.
 
 * [Homework 1](hw01/hw01.html), due 5pm Mon Jan 20. [Solution](hw01/sol01.html).
 
