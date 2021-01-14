@@ -186,7 +186,7 @@ $ \mu(t_n)= \mu_n$.
 \item  For example, suppose a model with $\mu_n=\mu$, so the mean is assumed constant. In this case, the model is called \myemph{mean stationary}.
 Then, we might estimate $\mu$ using the mean estimator,
 \begin{equation}
-\hat\mu(y_{1:N})=\frac{1}{N}\sum_{k=1}^N y_k.
+\hat\mu(y_{1:N})=\frac{1}{N}\sum_{n=1}^N y_n.
 \end{equation}
 
 \item $\estimate{\hat\mu}=\hat\mu(\data{y_{1:N}})$ denotes the sample mean.

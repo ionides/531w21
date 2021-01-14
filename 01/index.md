@@ -8,17 +8,16 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture: Chapter 1, Part 1   | [Video (18 mins)](https://youtu.be/ol7eQ0SX-EY) |
-| Lecture: Chapter 1, Part 2   | [Video (29 mins)](https://youtu.be/seSMkfQJd-4) 
+| Lecture: Chapter 1, Part 1   | [Video (15 mins)](https://youtu.be/Zb8QPW-ldPM) |
+| Lecture: Chapter 1, Part 2   | [Video (25 mins)](https://youtu.be/8LvOkEgtwpU)
 | Lecture slides  | [PDF](slides.pdf)                                                                 |
 | Lecture notes   | [PDF](notes.pdf)                                                                  |
 
 ----------------------
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/ol7eQ0SX-EY" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Zb8QPW-ldPM" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/seSMkfQJd-4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-
+<iframe width="560" height="315" src="https://www.youtube.com/embed/8LvOkEgtwpU" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ----------------------
 

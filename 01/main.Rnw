@@ -247,7 +247,7 @@ To be concrete, let's specify a model where they are normally distributed with m
 
 \item In this course, capital Roman letters, e.g., $X$, $Y$, $Z$, denote random variables. We may also use $\epsilon$, $\eta$, $\xi$, $\zeta$ for random noise processes. Thus, these symbols are used to build models.
 
-\item We use lower case Roman letters ($x$, $y$, $z$, $\dots$) to denote numbers. These are not random variables. Often, $y$ will denote a data point.
+\item We use lower case Roman letters ($x$, $y$, $z$, $\dots$) to denote numbers. These are not random variables. We use $\data{y}$ to denote a data point.
 
 \item  ``We must be careful not to confuse data with the abstractions we use to analyze them.'' (William James, 1842-1910).
 
@@ -333,7 +333,7 @@ Exactly how the ARMA(1,1) model is fitted and the standard errors computed will 
 \begin{itemize}
 
 \item We should do \myemph{diagnostic analysis}. The first thing to do is to look at the residuals.
-\item For an ARMA model, the residual $\data{r_n}$ at time $t_n$ is defined to be the difference between the data, $\data{y_n}$, and a one-step ahead prediction of $\data{y_n}$ based on $\data{y_{1:n-1}}$, written as $\predict{y_n}$.
+\item For an ARMA model, the residual $\residual_n$ at time $t_n$ is defined to be the difference between the data, $\data{y_n}$, and a one-step ahead prediction of $\data{y_n}$ based on $\data{y_{1:n-1}}$, written as $\predict{y_n}$.
 \end{itemize}
 From the ARMA(1,1) definition, 
 \begin{equation}
@@ -343,9 +343,9 @@ a basic one-step-ahead predicted value corresponding to parameter estimates $\es
 \begin{equation}
 \predict{y_n} = \estimate{\hat{\mu}} + \estimate{\hat{\alpha}}(\data{y_{n-1}}-\estimate{\hat{\mu}}).
 \end{equation}
-A so-called residual time series, $\{\data{r_n}\}$, is then given by
+A \myemph{residual time series}, $\residual_{1:N}$, is then given by
 \begin{equation}
-\data{r_n} = \data{y_n} - \predict{y_n}.
+\residual_n = \data{y_n} - \predict{y_n}.
 \end{equation}
 In fact, R does something slightly more sophisticated.
 
@@ -364,13 +364,12 @@ par(mai=c(0.8,0.5,0.1,0.1))
 plot(arma11$resid)
 @
 
-We see slow variation in the residuals, over a decadal time scale. However, the residuals $\data{r_{1:N}}$ are close to uncorrelated. We see this by plotting their pairwise sample correlations at a range of lags. This is the \myemph{sample autocorrelation function}, or \myemph{sample ACF}, written for each lag $h$ as
+We see slow variation in the residuals, over a decadal time scale. However, the residuals $\residual_{1:N}$ are close to uncorrelated. We see this by plotting their pairwise sample correlations at a range of lags. This is the \myemph{sample autocorrelation function}, or \myemph{sample ACF}, written for each lag $h$ as
 
 \vspace{-2mm}
 
 \begin{equation}
-\estimate{\hat\rho_h} = \frac{\frac{1}{N}\sum_{n=1}^{N-h} \data{r_n} \, \data{r_{n+h}}}
-{\frac{1}{N}\sum_{n=1}^{N} \data{r_{n}}^2}.
+\estimate{\hat\rho_h} = \frac{\frac{1}{N}\sum_{n=1}^{N-h} \residual_n \, \residual_{n+h}}{\frac{1}{N}\sum_{n=1}^{N} {\residual_n}^2}.
 \end{equation}
 
 \end{frame}
@@ -439,7 +438,7 @@ We will look at examples from a wide range of scientific applications. The dynam
 
 \item Let $\{\data{y_n},n=1,\dots,N\}$ be the daily returns on a stock market index, such as the S\&P 500.
 
-\item The \myemph{return} is the difference of the log of the index. If $z_n$ is the index value for day $n$, then $y_n = \log(z_n)-\log(z_{n-1})$.
+\item The \myemph{return} is the difference of the log of the index. If $z_n$ is the index value for day $n$, then $\data{y_n} = \log(z_n)-\log(z_{n-1})$.
 
 \item Since the stock market is notoriously unpredictable, it is often unproductive to predict the mean of the returns and instead there is much emphasis on predicting the variability of the returns, known as the \myemph{volatility}.
 
