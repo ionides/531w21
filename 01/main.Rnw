@@ -236,7 +236,7 @@ This has a one-lag autoregressive term, $\alpha(Y_{n-1}-\mu)$, and a one-lag mov
 
 \end{itemize}
 
-We model $\epsilon_1\dots,\epsilon_N$ to be an independent, identically distributed sequence. 
+We model $\epsilon_1\dots,\epsilon_N$ to be an independent, identically distributed (\iid) sequence. 
 To be concrete, let's specify a model where they are normally distributed with mean zero and variance $\sigma^2$.
 
 \end{frame}
@@ -308,7 +308,7 @@ cat("mu2 =", mu2, ",  se2 =", se2, "\n")
 
 \section{Model diagnostics}
 
-\begin{frame}[fragile]{Comparing the iid estimate with the ARMA estimate}
+\begin{frame}[fragile]{Comparing the {\iid} estimate with the ARMA estimate}
 
 We see that the two estimates, $\estimate{\hat\mu_1}=\Sexpr{round(mu1,2)}$ and $\estimate{\hat\mu_2}=\Sexpr{round(mu2,2)}$, are close. 
 
@@ -461,7 +461,7 @@ H_n &= \mu_h(1-\phi) + \phi H_{n-1} \\
 \end{aligned}
 \end{equation}
 \begin{itemize}
-\item $\{\epsilon_n\}$ is iid $N(0,1)$, $\{\nu_n\}$ is iid $N(0,\sigma_{\nu}^2)$, $\{\omega_n\}$ is iid $N(0,\sigma_\omega^2)$.
+\item $\{\epsilon_n\}$ is {\iid} $N(0,1)$, $\{\nu_n\}$ is {\iid} $N(0,\sigma_{\nu}^2)$, $\{\omega_n\}$ is {\iid} $N(0,\sigma_\omega^2)$.
 
 \item $H_n$ is unobserved volatility at time $t_n$. We only observe the return, modeled by $Y_n$.
 

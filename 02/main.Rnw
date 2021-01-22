@@ -463,8 +463,8 @@ $$Y = (Y_1,Y_2,\dots,Y_N)^\transpose.$$
 
 [L1] $\quad\quad\quad\quad\quad Y = Z\beta + \epsilon,$
 
-where $\epsilon=\epsilon_{1:N}$ is a vector of independent, identically distributed random variables with mean zero and constant variance,
-$\E[\epsilon_n]=0, \quad\quad \var{\epsilon_n} = \sigma^2$.
+where $\epsilon=\epsilon_{1:N}$ is a vector of independent identically distributed (\iid) random variables with mean zero and constant variance,
+$\E[\epsilon_n]=0$ and $\myvar(\epsilon_n) = \sigma^2$.
 Standard linear model software, such as \code{lm} in \code{R}, provides confidence intervals based on this model. 
 
 \item Under model L1, the estimator $\hat\beta_{OLS}(y_{1:N})$ is unbiased. This can be checked:
@@ -514,7 +514,7 @@ acf(resid(lm_fit))
 
 \begin{itemize}
 
-\item The horizontal dashed lines on the graph of the sample autocorrelation function (ACF) give a measure of chance variation under the null hypothesis that the residuals are IID. 
+\item The horizontal dashed lines on the graph of the sample autocorrelation function (ACF) give a measure of chance variation under the null hypothesis that the residuals are {\iid}.
 
 \item At each lag $h$, the chance that the estimated ACF falls within this band is approximately 95\%, under the null hypothesis. 
 
