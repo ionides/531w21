@@ -79,7 +79,7 @@ set.seed(2050320976)
 
 \myquestion. How could we assess whether a weak stationary model is appropriate for a time series dataset?
 
-\answer{\vspace{15mm}}{
+\answer{\vspace{40mm}}{
 Supposed they are equally spaced, we can
 \begin{enumerate}
 \item calculate average in chunks (for mean stationary)
@@ -87,9 +87,12 @@ Supposed they are equally spaced, we can
 \end{enumerate}
 }
 
+\end{frame}
+\begin{frame}
+
 \myquestion. How could we assess whether a strictly stationary model is appropriate for a time series dataset?
 
-\answer{\vspace{15mm}}
+\answer{\vspace{40mm}}
 
 \end{frame} 
 
@@ -99,7 +102,7 @@ Supposed they are equally spaced, we can
 
 \answer{\vspace{25mm}}{It sometimes happens. However, systems often change over time, and that may be one of the things we are interested in.}
 
-\myquestion. If data do not often show stationary behavior, why do many fundamental models have stationarity?
+\myquestion. If data often do not show stationary behavior, why do many fundamental models have stationarity?
 
 \answer{\vspace{25mm}}{todo}
 
@@ -385,7 +388,7 @@ X <- numeric(N)
 X[1] <- rnorm(1,sd=sqrt(1.56))
 for(n in 2:N) X[n] <- 0.6 * X[n-1] + rnorm(1)
 plot(X,type="l")
-points(lag(ar1,-13),col="red",lty="dotted",pch=1)
+points(lag(ar1,-13),col="red",pch=1)
 @
 
 \vspace{-2mm}
@@ -599,7 +602,7 @@ We test this on daily S\&P 500 data, downloaded from \link{https://finance.yahoo
 
 \vspace{-1mm}
 
-<< sp500_code,echo=T,eval=F>>=
+<< sp500_code,echo=T,fig.align="left",eval=F>>=
 dat <- read.table("sp500.csv",sep=",",header=TRUE)
 N <- nrow(dat)
 sp500 <- dat$Close[N:1] # data are in reverse order in sp500.csv

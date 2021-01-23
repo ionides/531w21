@@ -27,11 +27,9 @@ A course outline, course information and grading policies are described in the [
 
 2. [Time series models, trend and autocovariance](02/index.html).
 
+3. [Stationarity, white noise, and some basic time series models](03/index.html).
+
 <!--
-3. Stationarity, white noise, and some basic time series models.
-[ pdf. ](03/notes03.pdf)
-[ R script. ](03/notes03.R)
-[ annotations. ](03/notes03-annotated.pdf)
 
 4. Linear time series models and the algebra of ARMA models.
 [ pdf. ](04/notes04.pdf)
@@ -110,9 +108,11 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 * [Homework 0](hw00/hw00.html). Setting up your computational environment. Nothing to submit.
 
+* [Homework 1](hw01/hw01.html), due Mon Feb 1, 11:59pm.
+
 <!--
 
-* [Homework 1](hw01/hw01.html), due 5pm Mon Jan 20. [Solution](hw01/sol01.html).
+[Solution](hw01/sol01.html).
 
 * [Homework 2](hw02/hw02.html), due 5pm Mon Jan 27. [Solution](hw02/sol02.html).
 
