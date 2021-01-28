@@ -11,9 +11,9 @@ output: html_document
 | Lecture: Chapter 3, Part 1  | [Video (27 mins)](https://youtu.be/tLCAJ74cvnA) |
 | Lecture: Chapter 3, Part 2  | [Video (24 mins)](https://youtu.be/HSWLJnLbCC0) |
 | Lecture: Chapter 3, Part 3  | [Video (19 mins)](https://youtu.be/rU8MnB6zAvM) |
-| Lecture slides  | [PDF](slides.pdf)                                                                 |
-| Lecture notes   | [PDF](notes.pdf)                                                                  |
-
+| Lecture slides  | [PDF](slides.pdf) |
+| Annotated slides | [PDF](slides-annotated.pdf) |
+| Lecture notes   | [PDF](notes.pdf) |
 ----------------------
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/tLCAJ74cvnA" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>

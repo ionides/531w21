@@ -10,9 +10,9 @@ output: html_document
 |:----------------|:---------------------------------------------------------------------------------:|
 | Lecture: Chapter 1, Part 1   | [Video (15 mins)](https://youtu.be/Zb8QPW-ldPM) |
 | Lecture: Chapter 1, Part 2   | [Video (25 mins)](https://youtu.be/8LvOkEgtwpU)
-| Lecture slides  | [PDF](slides.pdf)                                                                 |
-| Lecture notes   | [PDF](notes.pdf)                                                                  |
-
+| Lecture slides  | [PDF](slides.pdf) |
+| Annotated slides | [PDF](slides-annotated.pdf) |
+| Lecture notes   | [PDF](notes.pdf) |
 ----------------------
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/Zb8QPW-ldPM" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
