@@ -15,7 +15,7 @@ csl: ecology.csl
     + 25 minute per week small group meeting with professor or GSI, scheduled during class time (Tu/Th 10-11:30am)
     + 25 minute per week small group meeting without an instructor, scheduled during class time (Tu/Th 10-11:30am)
     + homework
-    + Piazza discussion forum
+    + [Piazza discussion forum](https://piazza.com/umich/winter2021/statsdatasci531)
     + group midterm project, with individual peer review
     + group final project, with individual peer review
     
