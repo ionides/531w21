@@ -8,14 +8,19 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture: Chapter 4, Part 1  | [Video ()]() |
-| Lecture: Chapter 4, Part 2  | [Video (]() |
-| Lecture: Chapter ,4 Part 3  | [Video (]() |
+| Lecture: Chapter 4, Part 1  | [Video (27 mins)](https://youtu.be/dtef_fgyrIc) |
+| Lecture: Chapter 4, Part 2  | [Video (19 mins)](https://youtu.be/hPeCV-MSnag) |
+| Lecture: Chapter ,4 Part 3  | [Video (21 mins)](https://youtu.be/qcx_-C3WKA0) |
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
 ----------------------
 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/dtef_fgyrIc" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/hPeCV-MSnag" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/qcx_-C3WKA0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ----------------------
 

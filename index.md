@@ -29,12 +29,9 @@ A course outline, course information and grading policies are described in the [
 
 3. [Stationarity, white noise, and some basic time series models](03/index.html).
 
-<!--
+4. [Linear time series models and the algebra of ARMA models](04/index.html).
 
-4. Linear time series models and the algebra of ARMA models.
-[ pdf. ](04/notes04.pdf)
-[ R script. ](04/notes04.R)
-[ annotations. ](04/notes04-annotated.pdf)
+<!--
 
 5. Parameter estimation and model identification for ARMA models.
 [ pdf. ](05/notes05.pdf)
@@ -114,7 +111,15 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 [Solution](hw01/sol01.html).
 
-* [Homework 2](hw02/hw02.html), due 5pm Mon Jan 27. [Solution](hw02/sol02.html).
+-->
+
+* [Homework 2](hw02/hw02.html), due Mon Feb 8, 11:59pm.
+
+<!--
+
+[Solution](hw02/sol02.html).
+
+
 
 * [Homework 3](hw03/hw03.html), due 5pm on Mon Feb 10. [Solution](hw03/sol03.html).
 
