@@ -106,12 +106,7 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 * [Homework 0](hw00/hw00.html). Setting up your computational environment. Nothing to submit.
 
 * [Homework 1](hw01/hw01.html), due Mon Feb 1, 11:59pm.
-
-<!--
-
 [Solution](hw01/sol01.html).
-
--->
 
 * [Homework 2](hw02/hw02.html), due Mon Feb 8, 11:59pm.
 
