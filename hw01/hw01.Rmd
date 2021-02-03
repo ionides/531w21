@@ -80,6 +80,10 @@ This approximates $Y$ as a linear function of $X$, so we have
 
 3. $\quad$If $X\sim N\big[\mu^{}_X,\sigma_X^2\big]$, then $Y$ approximately follows a $N\big[g(\mu^{}_X), \sigma^2_X \big\{g^\prime(\mu^{}_X)\big\}^2\big]$ distribution.
 
+For this question, we have a two-dimensional situation, where $Y=g(U,V)$ and the Taylor series approximation becomes
+$$ Y \approx g(\mu^{}_U,\mu^{}_V) + (U-\mu^{}_U) \frac{\partial }{\partial u}g(\mu^{}_U,\mu^{}_V) + (V-\mu^{}_V) \frac{\partial}{\partial v}g(\mu^{}_U,\mu^{}_V)$$
+with $U=\hat\gamma_h(Y_{1:N})=\frac{1}{N}\sum_{n=1}^{N-h} {Y_n} \, Y_{n+h}$ and $V=\hat\gamma_0(Y_{1:N}) = \frac{1}{N}\sum_{n=1}^{N} {Y_n}^2$. Finding the mean and variance of $U$ and $V$ requires similar techniques to Question 1.1.
+
 <br>
 
 **B**. It is often asserted that the horizontal dashed lines on the sample ACF plot represent a confidence interval. For example, in the documentation produced by `?plot.acf` we read
