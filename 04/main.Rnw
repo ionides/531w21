@@ -605,7 +605,7 @@ Here, $a$ and $b$ could be complex numbers.
 4. We may suspect that $x(t) = a e^{i\omega t} + b e^{-i\omega t}$ is sinusoidal by recalling the identities
 \begin{equation}
 \label{eq:sin-cos-identity}
-\sin(\omega t) = \frac{1}{2}\big(e^{i\omega t} - e^{-i\omega t}\big), 
+\sin(\omega t) = \frac{1}{2i}\big(e^{i\omega t} - e^{-i\omega t}\big), 
 \quad\quad 
 \cos(\omega t) = \frac{1}{2}\big(e^{i\omega t} + e^{-i\omega t}\big).
 \end{equation}
