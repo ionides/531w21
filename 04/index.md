@@ -10,7 +10,7 @@ output: html_document
 |:----------------|:---------------------------------------------------------------------------------:|
 | Lecture: Chapter 4, Part 1  | [Video (27 mins)](https://youtu.be/dtef_fgyrIc) |
 | Lecture: Chapter 4, Part 2  | [Video (19 mins)](https://youtu.be/hPeCV-MSnag) |
-| Lecture: Chapter ,4 Part 3  | [Video (21 mins)](https://youtu.be/qcx_-C3WKA0) |
+| Lecture: Chapter 4, Part 3  | [Video (21 mins)](https://youtu.be/qcx_-C3WKA0) |
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |

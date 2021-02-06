@@ -21,10 +21,6 @@
  \newcommand\answer[2]{#1} % to show blank space
 \usepackage{bbm} % for blackboard bold 1
 
-% other set up
-<<setup,echo=F,results=F,cache=F>>=
-library(broman) # used for myround 
-@
 
 \title{\vspace{2mm} \link{https://ionides.github.io/531w21/}{Analysis of Time Series}\\ \vspace{2mm}
 Chapter \CHAPTER: Linear time series models and the algebra of ARMA models}
@@ -717,7 +713,7 @@ Equivalently, on what timescale does the phase of the fluctuations lose memory o
 \begin{frame}{License, acknowledgments, and links}
   \begin{itemize}
   \item
-  \parbox[t]{0.75\textwidth}{Licensed under the \link{http://creativecommons.org/licenses/by-nc/4.0/}{Creative Commons Attribution-NonCommercial license}.
+  \parbox[t]{0.75\textwidth}{Licensed under the \link{https://creativecommons.org/licenses/by-nc/4.0/}{Creative Commons Attribution-NonCommercial license}.
     Please share and remix non-commercially, mentioning its origin.}
     \parbox[c]{1.5cm}{\includegraphics[height=12pt]{../graphics/cc-by-nc}}
 
