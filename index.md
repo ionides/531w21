@@ -145,15 +145,13 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 
 
-<!--
 
 * [Information](midterm_project/midterm_project_info.html).
 
+<!--
 * [2020 midterm projects](midterm_project/index.html)
 
 -->
-
-* Information to be posted.
 
 * You are welcome to browse previous midterm projects from [2016](http://ionides.github.io/531w16/midterm_project/), [2018](http://ionides.github.io/531w18/midterm_project/) and [2020](http://ionides.github.io/531w20/midterm_project/)
 
