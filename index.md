@@ -33,12 +33,9 @@ A course outline, course information and grading policies are described in the [
 
 5. [Parameter estimation and model identification for ARMA models](05/index.html).
 
-<!--
+6. [Extending the ARMA model: Seasonality, integration and trend](06/index.html)
 
-6. Extending the ARMA model: Seasonality and trend.
-[ pdf. ](06/notes06.pdf)
-[ R script. ](06/notes06.R)
-[ annotations. ](06/notes06-annotated.pdf)
+<!--
 
 7. Introduction to the frequency domain.
 [ pdf. ](07/notes07.pdf)

@@ -4,8 +4,6 @@
 \newcommand\eqvspace{\vspace{1mm}}
 \newcommand\negListSpace{\hspace{-4mm}}
 
-\newcommand\ar{\phi}
-\newcommand\ma{\psi}
 
 \mode<beamer>{\usetheme{AnnArbor}}
 \mode<beamer>{\setbeamertemplate{footline}}
