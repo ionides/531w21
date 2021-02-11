@@ -12,7 +12,7 @@ output: html_document
 | Lecture: Chapter 5, Part 2  | [Video (25 mins)](https://youtu.be/PUN-LY9bygo) |
 | Lecture: Chapter 5, Part 3  | [Video (33 mins)](https://youtu.be/jtu96XUX3Vg) |
 | Lecture slides  | [PDF](slides.pdf) |
-| Annotated slides | [PDF](slides-annotated.pdf) |
+| Annotated slides | [PDF](slides-annotated-revised.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
 ----------------------
 
