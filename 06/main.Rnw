@@ -216,18 +216,18 @@ acf(resid(huron_sarma11x10))
 
 \item This can be viewed as a \myemph{transformation to stationarity}
 
-\item We can transform the data $\data{y_{1:N}}$ to $\data{z_{2:N}}$ 
+\item We can transform the data $\data{y_{1:N}}$ to ${z_{2:N}}$ 
 \begin{equation}
-\data{z_n} = \Delta \data{y_n} = \data{y_n}-\data{y_{n-1}}.
+{z_n} = \Delta \data{y_n} = \data{y_n}-\data{y_{n-1}}.
 \end{equation}
 
-\item Then, an ARMA(p,q) model $Z_{2:N}$ for the differenced data $\data{z_{2:N}}$ is called an \myemph{integrated autoregressive moving average} model for $\data{y_{1:N}}$ and is written as ARIMA(p,1,q).
+\item Then, an ARMA(p,q) model $Z_{2:N}$ for the differenced data ${z_{2:N}}$ is called an \myemph{integrated autoregressive moving average} model for $\data{y_{1:N}}$ and is written as ARIMA(p,1,q).
 
 \item Formally, the ARIMA(p,d,q) model with intercept $\mu$ for $Y_{1:N}$ is
 
 \vspace{3mm}
 
-[S4] $\eqspace \ar(B)\big( (1-B)^d Y_n-\mu \big) = \ma(B) \epsilon_n$,
+\negListSpace [S4] $\eqspace \ar(B)\big( (1-B)^d Y_n-\mu \big) = \ma(B) \, \epsilon_n$,
 
 \vspace{3mm}
 
@@ -272,7 +272,7 @@ where $\{\epsilon_n\}$ is a white noise process; $\ar(x)$ and $\ma(x)$ are ARMA 
 
 \bi
 
-\item ARIMA analysis is relatively simple to do. It has been a foundational component of time series analysis since the publication of the influential book ``Time Series Analysis'' by Box and Jenkins (1st edition, 1970) which developed and popularized ARIMA modeling. 
+\item ARIMA analysis is relatively simple to do. It has been a foundational component of time series analysis since the publication of the influential book ``Time Series Analysis'' \citep{box70} which developed and popularized ARIMA modeling. 
 
 \item A practical approach is:
 
@@ -324,7 +324,7 @@ where $\{\epsilon_n\}$ is a white noise process, the intercept $\mu$ is the mean
 
 \vspace{1mm}
 
-\negListSpace [S6] $\eqspace   Y_n = \mu_n + \eta_n$,
+\negListSpace [S6] $\hspace{10mm}   Y_n = \mu_n + \eta_n$,
 
 \vspace{1mm}
 
@@ -349,11 +349,15 @@ where $\{\eta_n\}$ is a stationary, mean zero stochastic process, and $\mu_n$ is
 
 \bi
 \item When the mean function (also known as the trend) has a linear specification,
-$$\mu_n = \sum_{k=1}^K Z_{n,k}\beta_k,$$
+\begin{equation}
+\mu_n = \sum_{k=1}^K Z_{n,k}\beta_k,
+\end{equation}
 the signal plus ARMA noise model is known as \myemph{linear regression with ARMA errors}.
 
 \item Writing $Y$ for a column vector of $Y_{1:N}$, $\mu$ for a column vector of $\mu_{1:N}$, $\eta$ for a column vector of $\eta_{1:N}$, and $Z$ for the $N\times K$ matrix with $(n,k)$ entry $Z_{n,k}$, we have a general linear regression model with correlated ARMA errors,
-$$ Y = Z\beta + \eta.$$
+\begin{equation}
+Y = Z\beta + \eta.
+\end{equation}
 
 \ei
 
@@ -395,7 +399,7 @@ plot(x=year,y=huron,type="l")
 
 \item Let's test for a trend, using a regression model with Gaussian AR(1) errors. We have previously found that this is a reasonable model for these data.
 
-\item First, let's fit a null model.
+\item First, for comparison, we fit a null model with no trend.
 \ei
 \end{frame} 
 
@@ -442,11 +446,17 @@ fit1
 
 \item To talk formally about these results, we must down a model and some hypotheses. 
 \item Writing the data as $\data{y_{1:N}}$, collected at years $t_{1:N}$, the model we have fitted is
-$$ (1-\ar_1 B)(Y_n - \mu - \beta t_n) = \epsilon_n,$$
+\begin{equation}
+(1-\ar_1 B)(Y_n - \mu - \beta t_n) = \epsilon_n,
+\end{equation}
 where $\{\epsilon_n\}$ is Gaussian white noise with variance $\sigma^2$. Our null model is
-$$ H^{\langle 0\rangle}: \beta=0,$$
+\begin{equation}
+H^{\langle 0\rangle}: \beta=0,
+\end{equation}
 and our alternative hypothesis is
-$$ H^{\langle 1\rangle}: \beta\neq 0.$$
+\begin{equation}
+H^{\langle 1\rangle}: \beta\neq 0.
+\end{equation}
 \ei
 
 \end{frame} 
@@ -479,10 +489,9 @@ $$ H^{\langle 1\rangle}: \beta\neq 0.$$
 
 \bi
 
-\item Section~3.5 of \citet{shumway17} gives a complementary discussion of parameter estimation for ARMA models.
+\item Section~3.9 of \citet{shumway17} discusses SARIMA modeling.
 
-\item Section~3.7 of \citet{shumway17} takes a different perspective on selecting ARMA models, putting less emphasis on likelihood. Both perspectives can be valuable.
-
+\item Section~3.8 of \citet{shumway17} introduces regression with ARMA errors.
 
 \ei
 
