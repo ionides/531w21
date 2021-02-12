@@ -1,5 +1,5 @@
 ---
-title: "Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 6: Extending the ARMA model: Seasonality, integration and trend"
+title: "Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 7: Introduction to time series analysis in the frequency domain"
 author: "Edward L. Ionides"
 output: html_document
 ---
@@ -8,9 +8,9 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture: Chapter 6, Part 1  | [Video ( mins)](https://youtu.be/) |
-| Lecture: Chapter 6, Part 2  | [Video ( mins)](https://youtu.be/) |
-| Lecture: Chapter 6, Part 3  | [Video ( mins)](https://youtu.be/) |
+| Lecture: Chapter 7, Part 1  | [Video ( mins)](https://youtu.be/) |
+| Lecture: Chapter 7, Part 2  | [Video ( mins)](https://youtu.be/) |
+| Lecture: Chapter 7, Part 3  | [Video ( mins)](https://youtu.be/) |
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
