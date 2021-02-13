@@ -355,9 +355,11 @@ where $\{\eta_n\}$ is a stationary, mean zero stochastic process, and $\mu_n$ is
 the signal plus ARMA noise model is known as \myemph{linear regression with ARMA errors}.
 
 \item Writing $Y$ for a column vector of $Y_{1:N}$, $\mu$ for a column vector of $\mu_{1:N}$, $\eta$ for a column vector of $\eta_{1:N}$, and $Z$ for the $N\times K$ matrix with $(n,k)$ entry $Z_{n,k}$, we have a general linear regression model with correlated ARMA errors,
-\begin{equation}
+\begin{equation} \label{eq:arma:reg}
 Y = Z\beta + \eta.
 \end{equation}
+
+\item From (\ref{eq:arma:reg}), $Y-Z\beta$ is ARMA so likelihood evaluation and numerical maximization can build on ARMA methods.
 
 \ei
 
@@ -415,12 +417,30 @@ fit0 <- arima(huron,order=c(1,0,0))
 fit0
 @
 
+\bi
+\item R drops trailing zeros which are useful for showing significant figures of accuracy. Here, this affects the likelihood. A solution is as follows:
+\ei
+\begin{columns}[T]
+\begin{column}{0.45\textwidth}
+<<round1>>=
+as.character(22.00)
+@
+\end{column}
+\begin{column}{0.45\textwidth}
+<<round2>>=
+library(broman)
+myround(22.00)
+@
+\end{column}
+\end{columns}
+
 \end{frame}
 
 \begin{frame}[fragile]
 
 \bi
 \item We compare \code{fit0} with a linear trend model, coded as \code{fit1}.
+\item The covariate is included via the \code{xreg} argument.
 \ei
 
 \vspace{-1mm}
@@ -467,9 +487,8 @@ H^{\langle 1\rangle}: \beta\neq 0.
 \bi
 \item Construct two different tests using the R output above.
 
-\item Which test do you prefer, and why?
+\item Which test do you think is more accurate, and why?
 
-\item How would you check whether your preferred test is indeed better?
 \ei
 
 \answer{\vspace{50mm}}{todo}
@@ -478,7 +497,8 @@ H^{\langle 1\rangle}: \beta\neq 0.
  
 \begin{frame}[fragile]
 
-\myquestion. What other supplementary analysis could you do to strengthen your conclusions?
+\myquestion. How would you check whether your preferred test is indeed better?
+What other supplementary analysis could you do to strengthen your conclusions?
 
 \answer{\vspace{50mm}}{todo}
 

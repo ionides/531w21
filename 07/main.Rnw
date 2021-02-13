@@ -204,7 +204,7 @@ e^{i\omega m} \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}
 \\
 &=&
 \textstyle
-\ev_m \lambda \hspace{3mm} \mbox{ for } \lambda= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}
+\ev_m \lambda(\omega) \hspace{3mm} \mbox{ for } \lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}
 \end{eqnarray*}
 
 \myquestion. Why does this calculation show that 
@@ -219,13 +219,28 @@ is an eigenvector for $\Gamma$ for any choice of $\omega$.
 \bi
 \item 
 The corresponding eigenvalue function,
-\begin{equation}\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h},\end{equation}
-is called the \myemph{spectral density function}.  It is calculated as the \myemph{Fourier transform} of $\gamma_h$ at frequency $\omega$.
+\begin{equation}
+\label{eq:ft1}
+\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h},\end{equation}
+is called the \myemph{spectral density function}.  It is the \myemph{Fourier transform} of $\gamma_h$ at frequency $\omega$.
 
+\item An integral version of (\ref{eq:ft1}) is used in applied math and engineering:
+\begin{equation}
+\label{eq:ft2}
+\lambda(\omega) = \int_{-\infty}^{\infty} \gamma(x) e^{-i\omega x}\, dx.
+\end{equation}
+We obtain (\ref{eq:ft1}) from (\ref{eq:ft2}) when $\gamma(x)$ is a function with point mass $\gamma_h$ at integer value $x=h$.
+\item We can add a factor of $2\pi$  in the exponent of (\ref{eq:ft2}) to change units of frequency from radians per unit time to cycles per unit time. 
+\ei
+
+\end{frame}
+
+\begin{frame}
+
+\bi
 \item  It was convenient to do this calculation with complex exponentials. However, writing
-\begin{equation} e^{i\omega n} = \cos(\omega n) + i \sin(\omega n)\end{equation}
-we see that the real and imaginary parts of this calculation in fact give us two real eigenvectors, $\cos(\omega n)$ and $\sin(\omega n)$.
-
+\begin{equation} e^{i\omega n} = \cos(\omega n) + i \sin(\omega n),\end{equation}
+and noting that $\gamma_h$ is real, we see that the real and imaginary parts of $\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}$ give us two real eigenvectors, $\cos(\omega n)$ and $\sin(\omega n)$.
 \ei
 
 \vspace{2mm}
@@ -241,7 +256,7 @@ $e^{i\omega} = \cos(\omega)+i\,\sin(\omega)$.
 
 \bi
 
-\item  Assuming that this computation for an infinite sum represents a limit of increasing dimension for finite matrices, we have found that the eigenfunctions for any long, stationary time series model are approximately sinusoidal.
+\item  Assuming that this computation for an infinite sum represents a limit of increasing dimension for finite matrices, we have found that the eigenvectors for any long, stationary time series model are approximately sinusoidal.
 
 \item  For the finite time series situation, we only expect $N$ eigenvectors for a time series of length $N$. We have one eigenvector for $\omega=0$, two eigenvectors corresponding to sine and cosine functions with frequency
 \begin{equation}\omega_{n} = 2\pi n/N, \mbox{ for $0<n<N/2$},\end{equation}
