@@ -325,7 +325,7 @@ S_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\sin(2\pi \omega_n k) \mbox{ for $1\le
 
 \item  The first frequency component, $C_0$, is a special case, since it has mean $\mu=\E[Y_n]$ whereas the other components have mean zero.
 
-\item  In practice, we subtract a mean before computing the periodogram, which is equivalent to removing the frequency component for frequency zero.
+\item  In practice, we subtract a mean before computing the frequency components, which is equivalent to removing the frequency component for frequency zero.
 
 \item  The frequency components $(C_{0:N/2},S_{1:N/2})$ are asymptotically uncorrelated. They are constructed as a sum of a large number of terms, with the usual  $1/\sqrt{N}$ scaling for a central limit theorem. So, it may not be surprising that a central limit theorem applies, giving asymptotic justification for the following normal approximation. 
 
@@ -349,27 +349,33 @@ S_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\sin(2\pi \omega_n k) \mbox{ for $1\le
 
 
 \item  It follows from the normal approximation that, for $1\le n\le N/2$,
-\begin{equation} C_n^2 + S_n^2 \approx \lambda(\omega_n) \frac{\chi^2_2}{2},\end{equation}
+\begin{equation}
+\label{eq:cs:chi-squared}
+C_n^2 + S_n^2 \approx \lambda(\omega_n) \frac{\chi^2_2}{2},\end{equation}
 where $\chi^2_2$ is a chi-squared random variable on two degrees of freedom.
 
 \item  Taking logs, we have
-\begin{equation} \log\big(C_n^2 + S_n^2 \big) \approx \log \lambda(\omega_n) + \log(\chi^2_2/2).\end{equation}
+\begin{equation}
+\label{eq:cs:log-chi-squared}
+\log\big(C_n^2 + S_n^2 \big) \approx \log \lambda(\omega_n) + \log(\chi^2_2/2).\end{equation}
 
 \ei
 \end{frame}
 
 \section{The periodogram to estimate the spectral density}
 
-\begin{frame}[fragile]
+\begin{frame}{The periodogram}
 
 \bi
-\item  These results motivate consideration of the \myemph{periodogram},
+\item  The chi-squared property in (\ref{eq:cs:chi-squared}) motivates the \myemph{periodogram},
 \begin{equation} I_n = {{c_n}}^2 + {{s_n}}^2 = \big|  {d_n}\big|^2\end{equation}
 as an estimator of the spectral density. 
 
-\item  $\log I_n$ can be modeled as an estimator of the log spectral density with independent, identically distributed errors. 
+\item  From (\ref{eq:cs:log-chi-squared}), $\log I_n$ is as an estimator of the log spectral density with a convenient statistical property: asymptotically independent, identically distributed errors at each Fourier frequency.
 
-\item  We see from the normal approximation that a signal-plus-white-noise model is appropriate for estimating the log spectral density using the log periodogram. 
+\item  Therefore, a signal-plus-white-noise model is appropriate for estimating the log spectral density using the log periodogram.
+
+\item The periodogram is an \myemph{inconsistent estimator} of the spectrum. We can smooth the periodogram to borrow strength between nearby frequencies.
 
 \ei
 
@@ -465,18 +471,23 @@ spectrum(low, main="Unsmoothed periodogram")
 
 \begin{frame}[fragile]
 
+\vspace{-3mm}
+
 <<smoothed_periodogram_code,echo=T,eval=F>>=
 spectrum(low, spans=c(3,5,3), main="Smoothed periodogram",
   ylim=c(15,100))
 @
 
-\vspace{-3mm}
+\vspace{-4mm}
 
-<<smoothed_periodogram,echo=F,fig.width=6,fig.height=3,out.width="12cm">>=
+<<smoothed_periodogram,echo=F,fig.width=6,fig.height=3,out.width="10cm">>=
 par(mai=c(0.8,0.8,0.5,0.1))
 <<smoothed_periodogram_code>>
 @
-
+\bi
+\item The bar is a 95\% pointwise confidence interval which we can slide to any frequency of interest.
+\item The chi-squared property (\ref{eq:cs:log-chi-squared}) means this CI is the same width for each frequency, on the log scale. Note it is asymmetric.
+\ei
 \end{frame}
 
 
@@ -534,7 +545,7 @@ The default taper in {\Rlanguage} smooths the first and last $p=0.1$ fraction of
 
 <<taper_plot_code,echo=T,eval=F>>=
 plot(spec.taper(rep(1,100)),type="l",
-  main="Default taper in {\\Rlanguage}, for a time series of length 100")
+  main="Default taper in R, for a time series of length 100")
 abline(v=c(10,90),lty="dotted",col="red") 
 @
 
