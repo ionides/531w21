@@ -176,8 +176,10 @@ round(V_eigen$values[1:9],2)
 or, writing out the matrix multiplication explicitly,
 \begin{equation}\sum_{n=-\infty}^\infty \Gamma_{m,n} \ev_n = \lambda \ev_m\quad \mbox{for all $m$}.\end{equation}
 
-\item  We look for a sinusoidal solution, $\ev_n = e^{i\omega n}$.
+\item  We look for a sinusoidal solution, $\ev_n = e^{2\pi i\omega n}$, where $\omega$ is cycles per unit time.
+
 \ei
+
 \end{frame}
 
 \begin{frame}[fragile]
@@ -196,19 +198,19 @@ or, writing out the matrix multiplication explicitly,
 \\
 &=&
 \textstyle
-\sum_{h=-\infty}^\infty \gamma_{h}  e^{i\omega(m-h)}
+\sum_{h=-\infty}^\infty \gamma_{h}  e^{2\pi i\omega(m-h)}
 \\
 &=&
 \textstyle
-e^{i\omega m} \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}
+e^{2\pi i\omega m} \sum_{h=-\infty}^\infty \gamma_{h}  e^{-2\pi i\omega h}
 \\
 &=&
 \textstyle
-\ev_m \lambda(\omega) \hspace{3mm} \mbox{ for } \lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}
+\ev_m \lambda(\omega) \hspace{3mm} \mbox{ for } \lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-2\pi i\omega h}
 \end{eqnarray*}
 
 \myquestion. Why does this calculation show that 
-$\ev_n(\omega) = e^{i\omega n}$
+$\ev_n(\omega) = e^{2\pi i\omega n}$
 is an eigenvector for $\Gamma$ for any choice of $\omega$.
 
 \answer{\vspace{40mm}}{todo}
@@ -218,19 +220,20 @@ is an eigenvector for $\Gamma$ for any choice of $\omega$.
 
 \bi
 \item 
-The corresponding eigenvalue function,
+The eigenvalue at frequency $\omega$ is
 \begin{equation}
 \label{eq:ft1}
-\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h},\end{equation}
-is called the \myemph{spectral density function}.  It is the \myemph{Fourier transform} of $\gamma_h$ at frequency $\omega$.
+\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h} \,  e^{-2\pi i\omega h}\end{equation}
+\item Viewed as a function of $\omega$, this is called the \myemph{spectral density function}.
+
+\item $\lambda(\omega)$ is the \myemph{Fourier transform} of $\gamma_h$.
 
 \item An integral version of (\ref{eq:ft1}) is used in applied math and engineering:
 \begin{equation}
 \label{eq:ft2}
-\lambda(\omega) = \int_{-\infty}^{\infty} \gamma(x) e^{-i\omega x}\, dx.
+\lambda(\omega) = \int_{-\infty}^{\infty} \gamma(x) \, e^{-2\pi i\omega x}\, dx.
 \end{equation}
-We obtain (\ref{eq:ft1}) from (\ref{eq:ft2}) when $\gamma(x)$ is a function with point mass $\gamma_h$ at integer value $x=h$.
-\item We can add a factor of $2\pi$  in the exponent of (\ref{eq:ft2}) to change units of frequency from radians per unit time to cycles per unit time. 
+\item We obtain (\ref{eq:ft1}) from (\ref{eq:ft2}) when $\gamma(h)$ has a point mass $\gamma_h$ when $h$ is an integer, and $\gamma(x)=0$ for non-integer $x$.
 \ei
 
 \end{frame}
@@ -239,14 +242,14 @@ We obtain (\ref{eq:ft1}) from (\ref{eq:ft2}) when $\gamma(x)$ is a function with
 
 \bi
 \item  It was convenient to do this calculation with complex exponentials. However, writing
-\begin{equation} e^{i\omega n} = \cos(\omega n) + i \sin(\omega n),\end{equation}
-and noting that $\gamma_h$ is real, we see that the real and imaginary parts of $\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-i\omega h}$ give us two real eigenvectors, $\cos(\omega n)$ and $\sin(\omega n)$.
+\begin{equation} e^{2\pi i\omega n} = \cos(2\pi\omega n) + i \sin(2\pi\omega n),\end{equation}
+and noting that $\gamma_h$ is real, we see that the real and imaginary parts of $\lambda(\omega)= \sum_{h=-\infty}^\infty \gamma_{h}  e^{-2\pi i\omega h}$ give us two real eigenvectors, $\cos(2\pi\omega n)$ and $\sin(2\pi\omega n)$.
 \ei
 
 \vspace{2mm}
 
 \myquestion. Review: how would you demonstrate the correctness of the identity
-$e^{i\omega} = \cos(\omega)+i\,\sin(\omega)$.
+$e^{2\pi i\omega} = \cos(2\pi\omega)+i\,\sin(2\pi\omega)$.
 
 \answer{\vspace{20mm}}{todo}
 
@@ -259,10 +262,10 @@ $e^{i\omega} = \cos(\omega)+i\,\sin(\omega)$.
 \item  Assuming that this computation for an infinite sum represents a limit of increasing dimension for finite matrices, we have found that the eigenvectors for any long, stationary time series model are approximately sinusoidal.
 
 \item  For the finite time series situation, we only expect $N$ eigenvectors for a time series of length $N$. We have one eigenvector for $\omega=0$, two eigenvectors corresponding to sine and cosine functions with frequency
-\begin{equation}\omega_{n} = 2\pi n/N, \mbox{ for $0<n<N/2$},\end{equation}
+\begin{equation}\omega_{n} = n/N, \mbox{ for $0<n<N/2$},\end{equation}
 and, if $N$ is even,  a final eigenvector with frequency
 \begin{equation}
-\omega_{(N/2)} = \pi.
+\omega_{(N/2)} = 1/2.
 \end{equation}
 
 \item  These sine and cosine vectors are the \myemph{Fourier basis}.
@@ -279,18 +282,18 @@ and, if $N$ is even,  a final eigenvector with frequency
 \frametitle{Frequency components and the Fourier transform}
 
 \bi
-\item  The \myemph{frequency components} of $Y_{1:N}$ are the components in the directions of these eigenvectors. Equivalently, we could say they are the representation of $Y_{1:N}$ in the Fourier basis. Specifically, we write
+\item  The \myemph{frequency components} of $Y_{1:N}$ are the components in the directions of these eigenvectors, given by
 \begin{eqnarray*}
-C_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\cos(\omega_n k) \mbox{ for $0\le n\le N/2$},
+C_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\cos(2\pi \omega_n k) \mbox{ for $0\le n\le N/2$},
 \\
-S_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\sin(\omega_n k) \mbox{ for $1\le n\le N/2$}.
+S_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\sin(2\pi \omega_n k) \mbox{ for $1\le n\le N/2$}.
 \end{eqnarray*}
 
 \item  Similarly, the \myemph{frequency components} of data $\data{y_{1:N}}$ are 
 \begin{eqnarray*}
-{c_n} &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N \data{y_k}\cos(\omega_n k) \mbox{ for $0\le n\le N/2$},
+{c_n} &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N \data{y_k}\cos(2\pi \omega_n k) \mbox{ for $0\le n\le N/2$},
 \\
-{s_n} &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N \data{y_k}\sin(\omega_n k) \mbox{ for $1\le n\le N/2$}.
+{s_n} &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N \data{y_k}\sin(2\pi \omega_n k) \mbox{ for $1\le n\le N/2$}.
 \end{eqnarray*}
 
 \ei
@@ -299,18 +302,18 @@ S_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\sin(\omega_n k) \mbox{ for $1\le n\le
 
 \begin{frame}[fragile]
 \bi
-\item  The frequency components of the data are often written as real and imaginary parts of the \myemph{discrete Fourier transform},
+\item  The frequency components of the data can be written as real and imaginary parts of the \myemph{discrete Fourier transform},
 \begin{eqnarray*}
-{d_n} &=& \frac{1}{\sqrt{N}} \sum_{k=1}^N \data{y_k} e^{2\pi i n/N}
+{d_n} &=& \frac{1}{\sqrt{N}} \sum_{k=1}^N \data{y_k} e^{-2\pi i n/N}
 \\
-&=&{c_n} + i{s_n}
+&=&{c_n} - i{s_n}
 \end{eqnarray*}
 
-\item  Here, we have introduced a normalizing constant of $1/\sqrt{N}$. There are various choices about signs and factors of $2\pi$, $\sqrt{2\pi}$ and $\sqrt{N}$ that can---and are---made in the definition of the Fourier transform in various situations.
+\item  The normalizing constant of $1/\sqrt{N}$ is convenient for a central limit theorem.
 
-\item One should try to be consistent, and also be careful: the \code{fft} command in R, for example, does not include this constant. 
+\item Various choices about signs and factors of $2\pi$, $\sqrt{2\pi}$ and $\sqrt{N}$ can be made in the definition of the Fourier transform. For example, the \code{fft} command in {\Rlanguage} does not include this constant. 
 
-\item  \code{fft} is an implementation of the fast Fourier transform algorithm, which enables computation of all the frequency components with order $N\log(N)$ computation. At first consideration, computing the frequency components appears to require a matrix multiplication involving order $N^3$ additions and multiplications. When $N=10^5$ or $N=10^6$ this difference becomes important!
+\item  \code{fft} is an implementation of the fast Fourier transform algorithm, which enables computation of all the frequency components with order $N\log(N)$ computation. Computing the frequency components may appear to require a matrix multiplication involving order $N^3$ additions and multiplications. When $N=10^5$ or $N=10^6$ this difference becomes important!
 
 \ei
 
@@ -320,7 +323,7 @@ S_n &=& \frac{1}{\sqrt{N}}\sum_{k=1}^N Y_k\sin(\omega_n k) \mbox{ for $1\le n\le
 
 \bi
 
-\item  The first frequency component, $C_0$, is something of a special case, since it has mean $\mu=\E[Y_n]$ whereas the other components have mean zero.
+\item  The first frequency component, $C_0$, is a special case, since it has mean $\mu=\E[Y_n]$ whereas the other components have mean zero.
 
 \item  In practice, we subtract a mean before computing the periodogram, which is equivalent to removing the frequency component for frequency zero.
 
@@ -387,21 +390,31 @@ as an estimator of the spectral density.
 
 \ei
 
-\myquestion. compute the spectrum of an AR(1) model.
+\end{frame}
 
-\answer{\vspace{40mm}}{todo}
+\begin{frame}
+\myquestion. Consider the AR(1) model, $\phi(B)Y_n = \epsilon_n$ with $\phi(B)=1-\phi_1B$ and $\epsilon_n \sim \mathrm{WN}(\sigma^2)$, i.e., white noise with variance $\sigma^2$. Show that the spectrum of $Y$ is
+\begin{equation}
+\lambda(\omega)=\frac{\sigma^2}{\big|\phi\big( e^{2\pi i \omega}\big)\big|^2}
+= \frac{\sigma^2}{1+\phi^2 - 2\phi\cos(2\pi\omega)}.
+\end{equation}
+
+\answer{\vspace{60mm}}{todo}
 
 \end{frame}
 
-\begin{frame}[fragile]
-
-\myquestion. compute the spectrum of the MA(q) moving mean,
-\begin{equation} Y_n = \frac{1}{q+1} \sum_{k=0}^q \epsilon_{n-k},\end{equation}
-where $\{\epsilon_n\}$ is white noise with variance $\sigma^2$.
-\answer{\vspace{40mm}}{todo}
+\begin{frame}{ARMA models have a rational spectrum}
+\bi
+\item The calculation for the AR(1) model generalizes. We give the result without proof.
+\item Let $Y_n$ be an ARMA(p,q) model, $\ar(B)Y_n = \ma(B)\epsilon_n$ with $\epsilon_n\sim \mathrm{WN}(\sigma^2)$. The spectrum of $Y$ is
+\begin{equation} \label{eq:arma_spec}
+\lambda(\omega) = \sigma^2 \left| \frac{\psi\big( e^{2\pi i \omega} \big)}{\phi\big( e^{2\pi i \omega} \big)} \right|^2.
+\end{equation}
+\item The so-called \myemph{rational spectrum} of ARMA models is computationally convenient.
+\item A stationary, causal ARMA model cannot have roots on the unit circle. If a root approaches the unit circle, the denominator in (\ref{eq:arma_spec}) becomes close to zero.
+\ei
 
 \end{frame}
-
 
 \section{Frequency domain data analysis}
 
@@ -444,7 +457,7 @@ spectrum(low, main="Unsmoothed periodogram")
 @
 
 \bi
-\item  To smooth, we use the default periodogram smoother in R
+\item  To smooth, we use the default periodogram smoother in {\Rlanguage}
 \ei
 
 \end{frame}
@@ -469,7 +482,7 @@ par(mai=c(0.8,0.8,0.5,0.1))
 
 \begin{frame}[fragile]
 
-\myquestion.  What is the default periodogram smoother in R?
+\myquestion.  What is the default periodogram smoother in {\Rlanguage}?
 
 \answer{\vspace{20mm}}{todo}
 
@@ -488,13 +501,13 @@ par(mai=c(0.8,0.8,0.5,0.1))
 \begin{frame}[fragile]
 \frametitle{More details on computing and smoothing the periodogram}
 \bi
-\item  To see what R actually does to compute and smooth the periodogram, type \code{?spectrum}. 
+\item  To see what {\Rlanguage} actually does to compute and smooth the periodogram, type \code{?spectrum}. 
 
 \item  This will lead you to type \code{?spec.pgram}.
 
-\item  You will see that, by default, R removes a linear trend, fitted by least squares. This may often be a sensible thing to do. Why?
+\item  You will see that, by default, {\Rlanguage} removes a linear trend, fitted by least squares. This may often be a sensible thing to do. Why?
 
-\item  You will see that R then multiplies the data by a quantity called a \myemph{taper}, computed by \code{spec.taper}. 
+\item  You will see that {\Rlanguage} then multiplies the data by a quantity called a \myemph{taper}, computed by \code{spec.taper}. 
 
 \item The taper smooths the ends of the time series and removes high-frequency artifacts arising from an abrupt start and end to the time series.
 
@@ -506,9 +519,7 @@ par(mai=c(0.8,0.8,0.5,0.1))
 
 \begin{frame}[fragile]
 
-%\frametitle{}
-
-The default taper in R smooths the first and last $p=0.1$ fraction of the time points, by modifying the detrended data $\data{y_{1:N}}$ to tapered version ${z_{1:N}}$ defined by
+The default taper in {\Rlanguage} smooths the first and last $p=0.1$ fraction of the time points, by modifying the detrended data $\data{y_{1:N}}$ to tapered version ${z_{1:N}}$ defined by
 \begin{equation} \nonumber
 {z_n} =
   \left\{
@@ -523,7 +534,7 @@ The default taper in R smooths the first and last $p=0.1$ fraction of the time p
 
 <<taper_plot_code,echo=T,eval=F>>=
 plot(spec.taper(rep(1,100)),type="l",
-  main="Default taper in R, for a time series of length 100")
+  main="Default taper in {\\Rlanguage}, for a time series of length 100")
 abline(v=c(10,90),lty="dotted",col="red") 
 @
 
@@ -561,29 +572,18 @@ par(mai=c(0.4,0.8,0.5,0.4))
 
 \begin{frame}[fragile]
 
-\frametitle{Units of frequency}
+\frametitle{Units of frequency and period}
 
 \bi
 
-\item  It is always good practice to be explicit about the units of quantities. For frequency domain analysis there are different options for units of frequency.
+\item When we call $\omega$ the frequency in cycles per unit time, we really mean \myemph{cycles per unit observation}.
 
-\item  For a frequency component corresponding to  $\sin(2\pi\omega n)$ or $\cos(2\pi\omega n)$, we say that the frequency is $\omega$ \myemph{cycles per unit time}.
+\item  Suppose the time series consists of equally spaced observations, with $t_{n}-t_{n-1}=\Delta$ years. Then, the frequency is $\omega/\Delta$ \myemph{cycles per year}. 
 
-\item  Suppose the time series consists of equally spaced observations, with $t_{n}-t_{n-1}=\Delta$ years. Then we say that the frequency is $\omega/\Delta$ \myemph{cycles per year}. 
-
-\item  For a frequency component corresponding to  $\sin(\nu t)$ or $\cos(\nu t)$, we say that the frequency is $\nu$ \myemph{radians per unit time}.
-
-\ei
-\end{frame}
-
-\begin{frame}[fragile]
-\frametitle{Units for the period}
-\bi
-\item  The \myemph{period} of an oscillation is the time for one cycle. So, when frequency is measured in cycles per time, we have
+\item  The \myemph{period} of an oscillation is the time for one cycle,
 \begin{equation} \mbox{period} = \frac{1}{\mbox{frequency}}.\end{equation}
-Thus, for a frequency component corresponding to  $\sin(2\pi\omega n)$ or $\cos(2\pi\omega n)$, the period is $1/\omega$ observation intervals.
 
-\item  When the observation intervals have constant time length (years, seconds, etc) we usually use those units for the period.
+\item  When the observation intervals have a time unit (years, seconds, etc) we usually use that unit for the period, and its inverse for the frequency.
 
 \ei
 
@@ -609,7 +609,7 @@ Thus, for a frequency component corresponding to  $\sin(2\pi\omega n)$ or $\cos(
 
 \item The materials builds on \link{../acknowledge.html}{previous courses}.
 
-  \item  Compiled on {\today} using \Rlanguage version \Sexpr{getRversion()}.
+  \item  Compiled on {\today} using {\Rlanguage} version \Sexpr{getRversion()}.
     
 \end{itemize}
 
