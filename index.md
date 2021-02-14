@@ -35,12 +35,9 @@ A course outline, course information and grading policies are described in the [
 
 6. [Extending the ARMA model: Seasonality, integration and trend](06/index.html)
 
-<!--
+7. [Introduction to time series analysis in the frequency domain](07/index.html).
 
-7. Introduction to the frequency domain.
-[ pdf. ](07/notes07.pdf)
-[ R script. ](07/notes07.R)
-[ annotations. ](07/notes07-annotated.pdf)
+<!--
 
 8. Smoothing in the time and frequency domains.
 [ pdf. ](08/notes08.pdf) 
