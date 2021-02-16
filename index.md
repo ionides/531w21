@@ -99,12 +99,7 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 [Solution](hw01/sol01.html).
 
 * [Homework 2](hw02/hw02.html), due Mon Feb 8, 11:59pm.
-
-<!--
-
 [Solution](hw02/sol02.html).
-
--->
 
 * [Homework 3](hw03/hw03.html), due Mon Feb 22, 11:59pm.
 
