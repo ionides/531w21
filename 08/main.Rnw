@@ -51,22 +51,18 @@ set.seed(2050320976)
 \section{Smoothing a time series}
 %\subsection{}
 
-\begin{frame}{Introduction to smoothing}
+\begin{frame}{Introduction to smoothing in time series analysis}
 
 
-\hspace{3cm} {\large \bf Objectives}
 
-\vspace{3mm}
-
-\begin{enumerate}
+\bi
 \item   Estimating a nonparametric trend from a time series is known as smoothing. We will review some standard smoothing methods.
 
-\item We can also smooth the periodogram to estimate a spectral density.
+\item We also smooth the periodogram to estimate a spectral density.
 
-\item Many smoothers can be represented as linear filters. We will see that the statistical properties of linear filters for dependent (time-domain) stationary models can be conveniently studied in the frequency domain.
+\item Smoothers have convenient interpretation in the frequency domain. A smoother typically shrinks high frequency components and preserves low frequency components.
 
-
-\end{enumerate}
+\ei
 
 \end{frame}
 
@@ -220,7 +216,7 @@ par(mai=c(1,1,0.6,0.1))
 
 \vspace{1mm}
 
-\myquestion. What are the x-axis units?
+\myquestion. Why does the unadjusted spectrum have peaks at 2,3,4,5,6 cycles per year as well as 1 cycle per year?
 
 \answer{\vspace{20mm}}{todo}
 
@@ -231,7 +227,7 @@ par(mai=c(1,1,0.6,0.1))
 
 \end{frame}
 
-\subsection{The frequency response function}
+\subsection{The frequency response function of a smoother}
 
 \begin{frame}{The frequency response function}
 
@@ -341,8 +337,6 @@ par(mai=c(0.8,0.8,0.1,0.1))
 @
 \end{frame}
 
-\subsection{The frequency response function for loess}
-
 \begin{frame}[fragile]
 
 Now, we compute the frequency response function for what we have done.
@@ -359,15 +353,17 @@ plot(s2$freq,s2$spec[,2]/s$spec[,1],type="l",log="y",
 abline(h=1,lty="dashed",col="red")
 @
 
-\vspace{-5mm}
-
-<<loess_transfer,eval=T,echo=F,out.width="10cm">>=
-<<loess_transfer_code>>
-@
 
 \end{frame}
 
 \begin{frame}[fragile]
+
+\vspace{-2mm}
+
+<<loess_transfer,eval=T,echo=F,out.width="10cm">>=
+par(mai=c(0.8,0.8,0.6,0.1))
+<<loess_transfer_code>>
+@
 
 \myquestion. Describe the frequency domain behavior of this filter.
 
@@ -385,7 +381,7 @@ abline(h=1,lty="dashed",col="red")
 
 \item A band of mid-range frequencies might be considered to correspond to the business cycle.
 
-\item Let's build a smoothing operation in the time domain to extract business cycles, and then look at its frequency response function.
+\item We build a smoothing operation in the time domain to extract business cycles, and then look at its frequency response function.
 \ei
 
 <<cycles_code,echo=T,eval=F>>=
@@ -407,7 +403,7 @@ plot(ts.union(u1, u_low,u_hi,u_cycles),
 
 \begin{frame}[fragile]
 
-<<cycles,echo=F,eval=T,fig.width=7,fig.height=5,out.width="10cm">>=
+<<cycles,echo=F,eval=T,fig.width=7,fig.height=5,out.width="11cm">>=
 par(mai=c(0.8,0.8,0.5,0.1))
 <<cycles_code>>
 @
@@ -416,75 +412,54 @@ par(mai=c(0.8,0.8,0.5,0.1))
 
 \begin{frame}[fragile]
 
-\vspace{-3mm}
-
 <<freq_response,echo=F,out.width="10cm">>=
 spec_cycle <- spectrum(ts.union(u1_ts,u_cycles),
   spans=c(3,3),
   plot=FALSE)
 freq_response_cycle <- spec_cycle$spec[,2]/spec_cycle$spec[,1]
-plot(spec_cycle$freq,freq_response_cycle,
-  type="l",log="y",
-  ylab="frequency ratio", xlab="frequency", xlim=c(0,1.2), ylim=c(5e-6,1.1),
-  main="frequency response (dashed line at 1.0)")
-abline(h=1,lty="dashed",col="red")  
+#plot(spec_cycle$freq,freq_response_cycle,
+#  type="l",log="y",  ylab="spectrum ratio", xlab="frequency", xlim=c(0,1.2), ylim=c(5e-6,1.1), main="frequency response (dashed line at 1.0)")
+# abline(h=1,lty="dashed",col="red")  
 
 @
 
-\vspace{-3mm}
-
-\myquestion. Describe the frequencies (and corresponding periods) that this decomposition identifies as business cycles. Note: Usually, we should specify units for frequency and period. Here, the units are omitted to give you an exercise!
-
-
-\answer{\vspace{15mm}}{todo}
-
-
-\end{frame}
-
-\begin{frame}[fragile]
-
-
- To help answer this question, let's add some lines to the previous plot
-
-<<show_range,echo=F,out.width="10cm">>=
+<<find_range,echo=F,out.width="10cm">>=
 cut_fraction <- 0.5
+hi <- freq_response_cycle>cut_fraction
+hi_range <- range(seq_along(hi)[hi])
+l_frac <-(freq_response_cycle[hi_range[1]]-cut_fraction)/(freq_response_cycle[hi_range[1]]-freq_response_cycle[hi_range[1]-1])
+r_frac <-(freq_response_cycle[hi_range[2]]-cut_fraction)/(freq_response_cycle[hi_range[2]]-freq_response_cycle[hi_range[2]+1])
+l_interp <- spec_cycle$freq[hi_range[1]] * (1-l_frac) +  spec_cycle$freq[hi_range[1]-1] * l_frac
+r_interp <- spec_cycle$freq[hi_range[2]] * r_frac +  spec_cycle$freq[hi_range[2]+1] * (1-r_frac)
+@
+
+<<print_range,echo=F>>=
+kable(matrix(c(l_interp,r_interp),nrow=1,
+  dimnames=list("frequency range, region for ratio greater than 0.5",c("low","hi"))), digits=3)
+@
+
+<<show_range,echo=F,fig.width=7,fig.height=3,out.width="10cm">>=
+par(mai=c(0.8,0.8,0.3,0.1))
 plot(spec_cycle$freq,freq_response_cycle,
   type="l",log="y",
-  ylab="frequency ratio", xlab="frequency", xlim=c(0,0.9), ylim=c(1e-4,1.1),
-  main=paste("frequency response, showing region for ratio >", cut_fraction))
-abline(h=1,lty="dashed",col="blue")  
-freq_cycles <- range(spec_cycle$freq[freq_response_cycle>cut_fraction]) 
-abline(v=freq_cycles,lty="dashed",col="blue") 
+  ylab="spectrum ratio", xlab="frequency", xlim=c(0,1.2), ylim=c(1e-5,1.1),
+  main="")
+abline(h=1,lty="dashed",col="blue")
+abline(v=c(l_interp,r_interp),lty="dashed",col="blue") 
 abline(h=cut_fraction,lty="dashed",col="blue")
 @
 
-\vspace{-3mm}
+\myquestion. Describe the frequencies (and corresponding periods) that this decomposition identifies as business cycles. Note: units of frequency are omitted to give you an exercise!
 
-<<print_range>>=
-kable(matrix(freq_cycles,nrow=1,
-  dimnames=list("frequency",c("low","hi"))),digits=3)
-@
+\answer{\vspace{15mm}}{todo}
 
 \end{frame}
 
 \begin{frame}[fragile]
-
-
-\myquestion. So far as we have opinions on business cycles, use them to comment on this decomposition.
-
-\answer{\vspace{50mm}}{todo}
-
-\end{frame}
-
-\begin{frame}[fragile]
-
-\frametitle{Looking for business cycles}
 
 \vspace{-2mm}
 
-We plot a smoothed periodogram for the raw unemployment data. We cut out higher frequencies to zoom in on frequencies relevant to our business cycle investigation. 
-
-\vspace{-1mm}
+Below is a smoothed periodogram for the raw unemployment data, plotted up to 0.7 cycles per year to focus on relevant frequencies.
 
 <<zoomed_spectrum,echo=F,fig.width=6,fig.height=3,out.width="9cm">>=
 s1 <- spectrum(u1_ts,spans=c(3),plot=FALSE)
@@ -492,11 +467,11 @@ par(mai=c(1,0.8,0.1,0.1))
 plot(s1,xlim=c(0,0.7),ylim=c(1e-2,max(s1$spec)),main="")
 @
 
-\vspace{-2mm}
+\vspace{-1mm}
 
 \myquestion. Comment on the evidence for and against the concept of a business cycle in the above figure.
 
-\answer{\vspace{20mm}}{todo}
+\answer{\vspace{30mm}}{todo}
 
 \end{frame}
 
@@ -506,16 +481,14 @@ plot(s1,xlim=c(0,0.7),ylim=c(1e-2,max(s1$spec)),main="")
 
 \bi
 
-\item Above, we have used the \myemph{local regression smoother} \code{loess} but there are other options.
-
-\item Our immediate goal is to get practical experience using a smoother and then statistically assessing what we have done. 
-
-\item You can learn about alternative smoothers, and try them out, if you like.
+\item Above, we have used the \myemph{local regression smoother} \code{loess} but there are other similar options.
 
 \item \code{ksmooth} is a \myemph{kernel smoother}. The default periodogram smoother in \code{spectrum} is also a kernel smoother. See \url{https://en.wikipedia.org/wiki/Kernel_smoother}
 
 \item \code{smooth.spline} is a \myemph{spline smoother}.
 \url{https://en.wikipedia.org/wiki/Smoothing_spline}
+
+\item You can learn about alternative smoothers, and try them out if you like, but \code{loess} is a good practical choice for many smoothing applications.
 
 \ei
 \end{frame}
@@ -529,7 +502,7 @@ plot(s1,xlim=c(0,0.7),ylim=c(1e-2,max(s1$spec)),main="")
 
 \item We usually only interpret bandwidth up to a constant. For a particular smoothing algorithm and software implementation, you learn by experience to interpret the comparative value. Smaller bandwidth means less smoothing. 
 
-\item Typically, when writing reports, it makes sense to focus on the tuning parameter for the smoother in question, which is not the bandwidth except for a kernel smoother.
+\item Typically, when writing reports, it makes sense to focus on the tuning parameter for the smoother in question, which is not the bandwidth unless you are going kernel smoothing.
 
 \ei
 \end{frame}
