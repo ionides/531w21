@@ -37,12 +37,9 @@ A course outline, course information and grading policies are described in the [
 
 7. [Introduction to time series analysis in the frequency domain](07/index.html).
 
-<!--
+8. [Smoothing in the time and frequency domains](08/index.html).
 
-8. Smoothing in the time and frequency domains.
-[ pdf. ](08/notes08.pdf) 
-[ R script. ](08/notes08.R)
-[ annotations. ](08/notes08-annotated.pdf)
+<!--
 
 9. Introduction to partially observed Markov process models.
 [ pdf. ](09/notes09.pdf)

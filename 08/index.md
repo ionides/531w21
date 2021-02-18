@@ -8,16 +8,16 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture: Chapter 8, Part 1  | [Video ( mins)](https://youtu.be/) |
-| Lecture: Chapter 8, Part 2  | [Video ( mins)](https://youtu.be/) |
+| Lecture: Chapter 8, Part 1  | [Video (22 mins)](https://youtu.be/ETxrsVnXnXI) |
+| Lecture: Chapter 8, Part 2  | [Video (17 mins)](https://youtu.be/nZNybbV_WYA) |
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
 ----------------------
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/ETxrsVnXnXI" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/nZNybbV_WYA" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 
 ----------------------
