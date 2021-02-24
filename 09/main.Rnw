@@ -86,6 +86,8 @@ set.seed(2050320976)
 
 \end{frame}
 
+\section{Data}
+
 \begin{frame}[fragile]{A time series of life expectancy in the USA}
 
 
@@ -157,6 +159,8 @@ plot(ts(cbind(e,u),start=1948),main="",xlab="")
 \ei
 
 \end{frame}
+
+\section{Detrending the data}
 
 \begin{frame}[fragile]{The Hodrick-Prescott filter}
 
@@ -232,6 +236,9 @@ Detrended unemployment (black; left axis) and detrended life expectancy at birth
 
 \end{frame}
 
+\section{Hypothesis testing: regression with ARMA errors}
+
+
 \begin{frame}[fragile]{A regression with ARMA errors model}
 
 
@@ -246,9 +253,17 @@ We use an ARMA(1,0) model, as discussed in the supplementary analysis.
 
 \ei
 
-<<hp_b,size="footnotesize">>=
-arima(e_hp,xreg=u_hp,order=c(1,0,0))
+<<hp_b>>=
+a0 <- arima(e_hp,xreg=u_hp,order=c(1,0,0))
 @
+\vspace{-2mm}
+
+<<hp_b_summary,echo=F>>=
+z1 <- a0$coef["u_hp"]
+z2 <- sqrt(a0$var.coef["u_hp","u_hp"])
+mysummary(a0,print.sigma=T,loglik=T,coef.label=T)
+@
+
 
 \end{frame}
 
@@ -256,7 +271,7 @@ arima(e_hp,xreg=u_hp,order=c(1,0,0))
 
 \bi
 
-\item The standard errors, computed from the observed Fisher information approximation, suggest a statistically significant association between cyclical variation in unemployment and mortality.
+\item The standard error (computed via observed Fisher information) gives a $z$-statistic of $\Sexpr{myround(z1,4)}/\Sexpr{myround(z2,4)} = \Sexpr{myround(z1/z2,2)}$ for the coefficient of detrended unemployment.
 
 \item We can also compute a p-value from a likelihood ratio test,
 
@@ -274,13 +289,15 @@ LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
 
 \item This gives a p-value of \Sexpr{myround(LRT_pval,5)}.
 
-\item This is clear statistical evidence for a positive association between unemployment and life expectancy.
+\item We have clear statistical evidence for a positive association between detrended unemployment and detrended life expectancy.
 
-\item As with all observational studies, interpretation of association need care.
+\item For all observational studies, interpretation of association needs care.
 
 \ei
 
 \end{frame}
+
+\section{Association and causation}
 
 \begin{frame}{Association and causation}
 
@@ -298,8 +315,7 @@ LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
 
 \item Here, it is not considered plausible that mortality fluctations drive economic fluctuations (the \myemph{reverse causation} possibility).
 
-\item We think of unemployment as a \myemph{proxy variable} for economic fluctuations. We do not claim that increased unemployment itself is necessarily directly causing reduced mortality. Any other omitted variable that fluctuates with levels of economic activity should show similar associations.
-
+\item We think of unemployment as a \myemph{proxy variable} for economic fluctuations. We do not claim that increased unemployment itself is necessarily directly causing reduced mortality. All proxy variables for economic activity are confounded in this analysis.
 
 \ei
 
@@ -309,42 +325,19 @@ LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
 
 \bi
 
-\item A problematic potential confounding variable is lagged economic activity. 
-One could potentially find a pattern where the reduction in mortality for the current economic down-turn is actually caused by the previous economic boom.
+\item A potential confounding variable is lagged economic activity. 
+Theoretically, reduction in mortality for an current economic down-turn could result from delayed health progress caused by the previous economic boom.
 
-\item It is hard to entirely dismiss this possibility. However, the association we have found is clearest with no time lag, and (as we have seen previously) economic fluctuations between periods of boom and bust have historically had quite variable duration. A stable lagged relationship between economic activity and life expectancy has not yet been discovered.
+\item  Researchers have searched unsuccessfully for a stable lagged relationship between economic activity and life expectancy.
 
 \item We have found empirical evidence to support a claim that above-trend economic growth CAUSES above-trend mortality.
 
-\item We have NOT found evidence that above-trend unemployment causes above-trend mortality, since all cyclical economic phenomena are confounded in this analysis.
+\item We have NOT found evidence that unemployment reduces mortality for those who lose their jobs. Adverse individual-level effects of unemployment can be reconciled with our result \citep{tapia14}.
 
 \ei
 
 \end{frame}
 
-\begin{frame}[fragile]
-
-
-\bi
-
-\item We may also notice from the plot that the relationship seems clearer before the mid 1990s, say in the first 45 years of the time series.
-
-\ei
-
-<<hp_early_fit>>=
-tt <- 1:45
-arima(e_hp[tt],xreg=u_hp[tt],order=c(1,0,0))
-@
-
-\bi
-
-\item There is some suggestion that the association is stronger in the time period 1948--1992, but the difference is not large compared to the standard error on the coefficient.
-
-\item It is quite plausible that the relationship between health, mortality, and the economy is changing over time.
-
-\ei
-
-\end{frame}
 
 \begin{frame}{Conclusions}
 
@@ -354,22 +347,23 @@ arima(e_hp[tt],xreg=u_hp[tt],order=c(1,0,0))
 
 \item For example, the Great Recession of 2009-2010 led to high unemployment, but these two years had above-trend values of life expectancy at birth.
 
-\item More data, perhaps a state-level or international \myemph{panel analysis} combining many time series, might be able to improve the signal to noise ratio and lead to clearer results.
-This might give us the statistical precision to compare time periods and sub-populations more accurately than can be done with just one national-level dataset. 
+\item More data might give statistical precision to investigate sub-populations more accurately than can be done with a national-level dataset. For example, \myemph{panel data analysis} combining time series for each state \citep{ionides13-aoas}.
 
 \ei
 
 \end{frame}
 
-%\begin{frame}
-
 \section{Supplementary analysis}
 
-\subsection{AIC}
+\subsection{Model selection by AIC}
 
 \begin{frame}[fragile]{Model selection by AIC}
 
-<<aic_table>>=
+\bi
+\item Model selection by AIC for regression with ARMA errors follows the same approach as for ARMA models.
+\ei
+
+<<aic_table_code,echo=T,eval=F>>=
 aic_table <- function(data,P,Q,xreg=NULL){
   table <- matrix(NA,(P+1),(Q+1))
   for(p in 0:P) {
@@ -377,7 +371,8 @@ aic_table <- function(data,P,Q,xreg=NULL){
        table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg=xreg)$aic
     }
   }
-  dimnames(table) <- list(paste("<b> AR",0:P, "</b>", sep=""),paste("MA",0:Q,sep=""))
+  dimnames(table) <- list(paste("AR",0:P, sep=""),
+    paste("MA",0:Q,sep=""))
   table
 }
 e_aic_table <- aic_table(e_hp,4,5,xreg=u_hp)
@@ -385,43 +380,113 @@ require(knitr)
 kable(e_aic_table,digits=2)
 @
 
+\end{frame}
+
+\begin{frame}[fragile]
+
+<<aic_table_eval,echo=F,eval=T>>=
+<<aic_table_code>>
+@
+
+\vspace{1mm}
+
 \bi
 
-\item This suggests that the model with ARMA(1,0) errors is the best small model. 
+\item ARMA(1,0) gives the best AIC among small models.
 
-\item There are some larger models with impressive AIC values. For example, let's look at the fitted model with ARMA(3,1) errors.
+\item Some larger models have better AIC, but notice inconsistencies in the AIC table.  For example, consider ARMA(3,1) errors:
 
 \ei
 
 <<arma31>>=
-arima(e_hp,xreg=u_hp,order=c(3,0,1))
+a3 <- arima(e_hp,xreg=u_hp,order=c(3,0,1))
 @
+
+\vspace{-2mm}
+
+<<arma31_summary,echo=F>>=
+mysummary(a3,print.sigma=T,loglik=T,coef.label=F)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]
 
 \bi
 
-\item We have a non-invertible solution, with a regression coefficient for $U_{1:N}$ that is apparently statistically significant (according to the Fisher information standard errors).
+\item The estimated ARMA(3,1) is at the boundary of invertiblity, with an MA1 coefficient on the unit circle.
 
-\item Probably, the ARMA(3,1) analysis is not very stable, meaning that we might not expect to find a similar fit for similar data. 
+\item This is reminiscent of our earlier analysis of the Lake Huron depth data.
 
-\item Note the inconsistencies in the AIC table.
-
+\item Likely the ARMA(3,1) analysis is not very stable. A simulation study might find that the Fisher confidence intervals are not reliable.
 
 \ei
 
 \end{frame}
 
-\begin{frame}[fragile]{Residual analysis}
+
+\subsection{Consistency through time}
+
+\begin{frame}[fragile]
 
 \bi
 
-\item We should check the residuals for the fitted model, and look at their sample autocorrelation.
+\item A useful relationship should be consistent through time. We check this by repeating the analysis on temporal subsets.
 
 \ei
 
-<<resid>>=
+<<hp_t1>>=
+t1 <- 1:35 
+a1 <- arima(e_hp[t1],xreg=u_hp[t1],order=c(1,0,0))
+@
+
+\vspace{-2mm}
+
+<<hp_t1_summary,echo=F>>=
+mysummary(a1,print.sigma=F,loglik=F,coef.label=F)
+@
+
+<<hp_t2>>=
+t2 <- 37:71
+a2 <- arima(e_hp[t2],xreg=u_hp[t2],order=c(1,0,0))
+@
+
+\vspace{-2mm}
+
+<<hp_t2_summary,echo=F>>=
+mysummary(a2,print.sigma=F,loglik=F,coef.label=F)
+@
+
+\bi
+
+\item The difference is small compared to the standard error. Overall there is consistency through this 71 year interval, though the pattern is weak in the 1990s.
+
+\ei
+
+\end{frame}
+
+\subsection{Residual analysis}
+
+\begin{frame}[fragile]{Residual analysis}
+
+\vspace{-2mm}
+
+\bi
+
+\item We inspect the residuals for the fitted model, and look at their sample autocorrelation.
+
+\ei
+
+<<resid_code,eval=F,echo=T>>=
 r <- resid(arima(e_hp,xreg=u_hp,order=c(1,0,0)))
 plot(r)
 @
+
+<<resid_eval,eval=T,echo=F,out.width="9cm",fig.width=7,fig.height=3>>=
+par(mai=c(0.5,0.8,0.1,0.1))
+<<resid_code>>
+@
+
 
 \bi
 
@@ -429,15 +494,28 @@ plot(r)
 
 \ei
 
-<<acf>>=
+\end{frame}
+
+\begin{frame}[fragile]
+
+\vspace{-2mm}
+
+<<acf_code,eval=F,echo=T>>=
 acf(r)
+@
+
+\vspace{-1mm}
+
+<<acf_eval,eval=T,echo=F,out.width="9cm",fig.width=5,fig.height=2.5>>=
+par(mai=c(0.8,0.8,0.1,0.1))
+<<acf_code>>
 @
 
 \bi
 
-\item It is not disasterous to have one out of 18 lags narrowly outside the dashed lines showing pointwise acceptance regions at the 5\% level under a null hypothesis of Gaussian white noise.
+\item It is not a major model violation to have one out of 18 lags narrowly outside the dashed lines showing pointwise acceptance regions at the 5\% level under a null hypothesis of Gaussian white noise.
 
-\item The presence of some small amount of sample autocorrelation is consistent with the AIC table, which finds the possibility of small gains by fitting some larger models to the regression errors.
+\item The presence of some small amount of sample autocorrelation is consistent with the AIC table, which finds the possibility of gains by fitting larger models to the regression errors.
 
 \ei
 
@@ -448,22 +526,29 @@ acf(r)
 \bi
 
 \item One might model annual changes in life expectancy, rather than difference from a trend. In this case, we consider the variable 
-\begin{equation} \Delta \data{e_n} = \data{e_n} - \data{e_{n-1}}.\end{equation}
-
-\item We compute this as
-
-\ei
-
+\begin{equation}
+\Delta {e_n} = {e_n} - {e_{n-1}},
+\end{equation}
+compute as
 <<clean_data_again>>=
 delta_e <- e - e_data$e0[e_data$Year %in% (t-1)]
 @
 
-<<plots, fig.cap="unemployment (black; left axis) and differenced life expectancy (red; right axis).">>=
-plot(t,u,type="l",xlab="Year",ylab="")
+\ei
+
+<<plot_diff,echo=F,fig.height=3,fig.width=7,out.width="11cm">>=
+par(mai=c(0.5,0.8,0.2,0.8))
+plot(t,u_hp,type="l",xlab="",ylab="detrended unemployment")
 par(new=TRUE)
 plot(t,delta_e,col="red",type="l",axes=FALSE,xlab="",ylab="")
-axis(side=4,col="red")
+axis(side=4, col="red",col.ticks="red",col.axis="red")
+mtext("differenced e0",side=4,col="red",line=3)
 @
+
+
+\end{frame}
+
+\begin{frame}[fragile]
 
 \bi
 
@@ -473,19 +558,36 @@ axis(side=4,col="red")
 
 \ei
 
-<<arma>>=
-arima(delta_e,xreg=u,order=c(1,0,1))
+<<arma_diff>>=
+a4 <- arima(delta_e,xreg=u_hp,order=c(1,0,1))
+@
+
+\vspace{-2mm}
+
+<<arma_diff_summary,echo=F>>=
+mysummary(a4,print.sigma=T,loglik=T,coef.label=F)
 @
 
 \bi
+\item Temporal differencing has destroyed much of the evidence we were hoping it might clarify.
 
-\item Here, we do not see evidence for the relationship.
+\ei
 
-\item A scientific principle for interpreting experimental results is as follows: An experiment which finds evidence of an effect is usually a better foundation for future investigations than one which fails to find evidence. The experiment which found no evidence of an effect might have been a bad choice of experiment, or might have been carried out poorly. 
+\end{frame}
 
-\item The principle of giving preference to methods giving positive results must be balanced with consideration of \myemph{multiple testing}. There is a danger in trying many analyses and settling on the first that claims statistical significance. The generalizability of any result is tentative until confirmed in other studies. 
+\subsection{Multiple testing considerations}
 
-\item It appears that temporal differencing has destroyed too much of the evidence we were hoping it would clarify.
+\begin{frame}
+
+\bi
+
+\item A scientific principle for interpreting experimental results is as follows: \myemph{An experiment which finds evidence of an effect is usually a better foundation for future investigations than one which fails to find evidence.}
+
+\item The experiment which found no evidence of an effect might have been a bad choice of experiment, or might have been carried out poorly. 
+
+\item The principle of preference for methods giving positive results must be balanced with consideration of \myemph{multiple testing}.  If we make 20 hypothesis tests, we expect one to be significant at the 5\% level just by chance. There is a danger in trying many approaches and settling on one that claims statistical significance.
+
+\item The generalizability of any result is tentative until confirmed in other studies.  
 
 \ei
 
