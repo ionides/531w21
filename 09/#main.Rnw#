@@ -1,0 +1,522 @@
+\input{../header}
+
+\newcommand\eqspace{\hspace{3mm}}
+\newcommand\eqvspace{\vspace{1mm}}
+\newcommand\negListSpace{\hspace{-4mm}}
+
+\newcommand\ev{u}
+
+\mode<beamer>{\usetheme{AnnArbor}}
+\mode<beamer>{\setbeamertemplate{footline}}
+\mode<beamer>{\setbeamertemplate{footline}[frame number]}
+\mode<beamer>{\setbeamertemplate{frametitle continuation}[from second][\insertcontinuationcountroman]}
+\mode<beamer>{\setbeamertemplate{navigation symbols}{}}
+
+\mode<handout>{\pgfpagesuselayout{2 on 1}[letterpaper,border shrink=5mm]}
+
+\newcommand\CHAPTER{9}
+% \newcommand\answer[2]{\textcolor{blue}{#2}} % to show answers
+% \newcommand\answer[2]{\textcolor{red}{#2}} % to show answers
+ \newcommand\answer[2]{#1} % to show blank space
+\usepackage{bbm} % for blackboard bold 1
+
+
+\title{\vspace{2mm} \link{https://ionides.github.io/531w21/}{Analysis of Time Series}\\ \vspace{2mm}
+Chapter \CHAPTER: Case study: An association between unemployment and mortality?}
+\author{Edward L. Ionides}
+\date{}
+
+\setbeamertemplate{footline}[frame number]
+
+<<setup,include=FALSE,cache=FALSE,purl=FALSE,child="../setup.Rnw">>=
+@
+
+\begin{document}
+
+\maketitle
+
+\mode<article>{\tableofcontents}
+
+\mode<presentation>{
+  \begin{frame}{Outline}
+    \tableofcontents
+  \end{frame}
+}
+
+
+<<,echo=F>>=
+set.seed(2050320976)
+@
+
+
+\section{Historical background}
+
+\begin{frame}{Historical investigations linking business cycles to mortality}
+
+\vspace{-2mm}
+
+\bi
+
+\item \citet{ogburn22} were among the first to report \myemph{pro-cyclical} mortality: death rates are statistically above trend when economic activity is above trend.
+
+\item  Procyclical mortality, if it exists, shows that a key measure of population health is worse in economic booms than in recessions.
+
+\item Both the economy and life expectancy have grown over the last century. However, these phenomena have not always occurred simultaneously. For example, 1950--1980 saw rapid growth in life expectancy in India and China, combined with relatively slow economic growth. Improvement in life expectancy has slowed during their recent economic surges.
+
+
+\item The link between economic growth and health improvement is controversial, since it has political implications. Economists and epidemiologists have argued both sides of this debate, using time series methods.
+
+\ei
+
+\end{frame}
+
+\begin{frame}{Implications of pro-cyclical mortality}
+
+\vspace{-1mm}
+
+\bi
+
+\item If our goal is population health and happiness, how much should our policies focus on gross domestic product (GDP) growth? 
+
+    \item Evidence supporting the view that economic growth is the critical engine for other improvements in living conditions would make a moral argument in favor of economic growth.
+
+    \item Evidence that there are other major factors involved in improving living conditions suggest that economic growth should be only one political consideration, among others.
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{A time series of life expectancy in the USA}
+
+
+<<read_data_e>>=
+e_data <- read.table(file="life_expectancy_usa.csv",header=TRUE)
+head(e_data,n=4)
+@
+
+\bi
+\item \link{life_expectancy_usa.csv}{Data} are from the \link{https://www.mortality.org/hmd/USA/STATS/E0per.txt}{Human Mortality Database}.
+
+\item \code{e0} is \myemph{life expectancy at birth (LEB)} for civilians, 
+
+\item \code{e0F} and \code{e0M} are LEB for females and males, but we focus on \code{e0}.
+
+\item LEB is an actuarial calculation based on a fictitious individual having mortality rates at each age matching census age-specific mortality rates for the current year.
+
+\item LEB is a standard way to combine all the age-specific mortality rates into a single number.
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+<<read_data_u>>=
+u_data <- read.table(file="unadjusted_unemployment.csv",
+  sep=",",header=TRUE)
+head(u_data,4)
+@
+
+\bi
+
+\item We consider unadjusted unemployment from Bureau of Labor Statistics.
+
+\item Unemployment is just one component of the state of the economy. One could consider other measurements.
+
+\item Write ${e_n}$ for life expectancy in year $t_n=1947+n$. 
+
+
+\item Write ${u_n}$ for mean unemployment in year $t_n$.
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{A time plot of the raw data}
+
+\vspace{-2mm}
+
+<<clean_data>>=
+t <- intersect(e_data$Year,u_data$Year)
+e <- e_data$e0[e_data$Year %in% t]
+u <- apply(u_data[u_data$Year %in% t, 2:13],1,mean)
+@
+
+\vspace{-10mm}
+
+<<data_plots,fig.height=5,fig.width=6,out.width="8cm",echo=F>>=
+plot(ts(cbind(e,u),start=1948),main="",xlab="")
+@
+
+\vspace{-10mm}
+
+\bi
+
+\item We are interested in changes over business cycle timescales, once trends have been removed. 
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{The Hodrick-Prescott filter}
+
+\bi
+\item To extract the cyclical component, we use an econometric method: the \myemph{Hodrick-Prescott (HP) filter} \citep{hodrick97}.
+
+
+\item Specifically, for a time series $\data{y_{1:N}}$, the HP filter is the time series $\data{s_{1:N}}$ constructed as
+\begin{equation}
+\negListSpace \data{s_{1:N}} =  \argmin_{s_{1:N}}
+  \left\{ 
+    \sum^{N}_{n=1}\big(\data{y_n}-s_{n}\big)^2 + \lambda\sum^{N-1}_{n=2}\big(s_{n+1}-2s_{n}+s_{n-1}\big)^2 
+  \right\}.\end{equation}
+
+\item The HP filter is a \myemph{smoothing spline}. 
+Later, we see it can also be viewed as a state space model.
+
+\item A standard econometric choice of $\lambda$ for removing nonlinear trend, for extracting the business cycle component, in annual data is $\lambda=100$.
+
+\item An R implementation of the Hodrick-Prescott filter is \code{hpfilter} in the R package \code{mFilter}.
+
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+\bi
+
+\item We use the Hodrick-Prescott filter to define the HP-detrended life expectancy, $e^{HP}_{1:N}$, and unemployment, $u^{HP}_{1:N}$.
+
+
+\ei
+
+<<hp>>=
+library(mFilter)
+e_hp <- hpfilter(e, freq=100,type="lambda",drift=F)$cycle
+u_hp <- hpfilter(u, freq=100,type="lambda",drift=F)$cycle
+@
+
+\bi
+
+\item Plotting two time series on a single graph is not always advisable, but here it is helpful.
+
+\ei
+
+<<hpplots-code,eval=F,echo=T>>=
+plot(t,u_hp,type="l",xlab="",ylab="detrended unemployment")
+par(new=TRUE)
+plot(t,e_hp,col="red",type="l",axes=FALSE,xlab="",ylab="")
+axis(side=4, col="red",col.ticks="red",col.axis="red")
+mtext("detrended e0",side=4,col="red",line=3)
+@
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+<<hpplots,echo=F,eval=T, fig.width=7,fig.height=3,out.width="11cm">>=
+par(mai=c(0.8,0.8,0.1,0.8))
+<<hpplots-code>>
+@
+Detrended unemployment (black; left axis) and detrended life expectancy at birth (red; right axis).
+
+\bi
+
+\item Looking at this figure may suggest that detrended life expectancy and detrended unemployment cycle together. 
+
+\item We make a formal statistical test to check our eyes are not deceiving us.
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{A regression with ARMA errors model}
+
+
+\vspace{-1mm}
+
+\bi
+
+\item We can investigate the dependence of $e^{HP}_{1:N}$ on  $u^{HP}_{1:N}$ using a regression with ARMA errors model,
+\begin{equation} E^{HP}_n = \alpha + \beta u^{HP}_n + \epsilon_n,\end{equation}
+where $\{\epsilon_n\}$ is a Gaussian ARMA process. 
+We use an ARMA(1,0) model, as discussed in the supplementary analysis.
+
+\ei
+
+<<hp_b,size="footnotesize">>=
+arima(e_hp,xreg=u_hp,order=c(1,0,0))
+@
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+\bi
+
+\item The standard errors, computed from the observed Fisher information approximation, suggest a statistically significant association between cyclical variation in unemployment and mortality.
+
+\item We can also compute a p-value from a likelihood ratio test,
+
+\ei
+
+<<lrt>>=
+log_lik_ratio <- as.numeric(
+   logLik(arima(e_hp,xreg=u_hp,order=c(1,0,0))) -
+   logLik(arima(e_hp,order=c(1,0,0)))
+)
+LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
+@
+
+\bi
+
+\item This gives a p-value of \Sexpr{myround(LRT_pval,5)}.
+
+\item This is clear statistical evidence for a positive association between unemployment and life expectancy.
+
+\item As with all observational studies, interpretation of association need care.
+
+\ei
+
+\end{frame}
+
+\begin{frame}{Association and causation}
+
+\bi
+
+\item We have been careful to talk about \myemph{association}, since observational data giving firm statistical evidence of an assocation between $X$ and $Y$ cannot readily distinguish between three possibilities:
+
+\begin{enumerate}
+  \item  $X$ causes $Y$.
+
+  \item $Y$ causes $X$.
+
+  \item Both $X$ and $Y$ are caused by a third variable $Z$ that is unmeasured or has been omitted from the analysis. In this case, $Z$ is called a \myemph{confounding variable}.
+\end{enumerate}
+
+\item Here, it is not considered plausible that mortality fluctations drive economic fluctuations (the \myemph{reverse causation} possibility).
+
+\item We think of unemployment as a \myemph{proxy variable} for economic fluctuations. We do not claim that increased unemployment itself is necessarily directly causing reduced mortality. All proxy variables for economic activity are confounded in this analysis.
+
+\ei
+
+\end{frame}
+
+\begin{frame}{Evidence for causality}
+
+\bi
+
+\item A potential confounding variable is lagged economic activity. 
+Theoretically, reduction in mortality for an current economic down-turn could result from delayed health progress caused by the previous economic boom.
+
+\item  Researchers have searched unsuccessfully for a stable lagged relationship between economic activity and life expectancy.
+
+\item We have found empirical evidence to support a claim that above-trend economic growth CAUSES above-trend mortality.
+
+\item We have NOT found evidence that unemployment reduces mortality for those who lose their jobs. Adverse individual-level effects of unemployment can be reconciled with our result \citep{
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+
+\bi
+
+\item We may also notice from the plot that the relationship seems clearer before the mid 1990s, say in the first 45 years of the time series.
+
+\ei
+
+<<hp_early_fit>>=
+tt <- 1:45
+arima(e_hp[tt],xreg=u_hp[tt],order=c(1,0,0))
+@
+
+\bi
+
+\item There is some suggestion that the association is stronger in the time period 1948--1992, but the difference is not large compared to the standard error on the coefficient.
+
+\item It is quite plausible that the relationship between health, mortality, and the economy is changing over time.
+
+\ei
+
+\end{frame}
+
+\begin{frame}{Conclusions}
+
+\bi
+
+\item There is clear evidence of pro-cyclical mortality at a national level in the USA from 1948 to 2018.
+
+\item For example, the Great Recession of 2009-2010 led to high unemployment, but these two years had above-trend values of life expectancy at birth.
+
+\item More data, perhaps a state-level or international \myemph{panel analysis} combining many time series, might be able to improve the signal to noise ratio and lead to clearer results.
+This might give us the statistical precision to compare time periods and sub-populations more accurately than can be done with just one national-level dataset. 
+
+\ei
+
+\end{frame}
+
+%\begin{frame}
+
+\section{Supplementary analysis}
+
+\subsection{AIC}
+
+\begin{frame}[fragile]{Model selection by AIC}
+
+<<aic_table>>=
+aic_table <- function(data,P,Q,xreg=NULL){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+       table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg=xreg)$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b> AR",0:P, "</b>", sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+e_aic_table <- aic_table(e_hp,4,5,xreg=u_hp)
+require(knitr)
+kable(e_aic_table,digits=2)
+@
+
+\bi
+
+\item This suggests that the model with ARMA(1,0) errors is the best small model. 
+
+\item There are some larger models with impressive AIC values. For example, let's look at the fitted model with ARMA(3,1) errors.
+
+\ei
+
+<<arma31>>=
+arima(e_hp,xreg=u_hp,order=c(3,0,1))
+@
+
+\bi
+
+\item We have a non-invertible solution, with a regression coefficient for $U_{1:N}$ that is apparently statistically significant (according to the Fisher information standard errors).
+
+\item Probably, the ARMA(3,1) analysis is not very stable, meaning that we might not expect to find a similar fit for similar data. 
+
+\item Note the inconsistencies in the AIC table.
+
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{Residual analysis}
+
+\bi
+
+\item We should check the residuals for the fitted model, and look at their sample autocorrelation.
+
+\ei
+
+<<resid>>=
+r <- resid(arima(e_hp,xreg=u_hp,order=c(1,0,0)))
+plot(r)
+@
+
+\bi
+
+\item There is some evidence for fluctuations decreasing in amplitude over time. This is an example of \myemph{heteroskedasticity}. It is not extreme here, but could be studied in a future analysis.
+
+\ei
+
+<<acf>>=
+acf(r)
+@
+
+\bi
+
+\item It is not disasterous to have one out of 18 lags narrowly outside the dashed lines showing pointwise acceptance regions at the 5\% level under a null hypothesis of Gaussian white noise.
+
+\item The presence of some small amount of sample autocorrelation is consistent with the AIC table, which finds the possibility of small gains by fitting some larger models to the regression errors.
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{Analysis of temporal differences}
+
+\bi
+
+\item One might model annual changes in life expectancy, rather than difference from a trend. In this case, we consider the variable 
+\begin{equation} \Delta \data{e_n} = \data{e_n} - \data{e_{n-1}}.\end{equation}
+
+\item We compute this as
+
+\ei
+
+<<clean_data_again>>=
+delta_e <- e - e_data$e0[e_data$Year %in% (t-1)]
+@
+
+<<plots, fig.cap="unemployment (black; left axis) and differenced life expectancy (red; right axis).">>=
+plot(t,u,type="l",xlab="Year",ylab="")
+par(new=TRUE)
+plot(t,delta_e,col="red",type="l",axes=FALSE,xlab="",ylab="")
+axis(side=4,col="red")
+@
+
+\bi
+
+\item The relationship between unemployment and differenced life expectancy is harder to see than when HP-detrended.
+
+\item The relationship is also harder to find by statistical methods. For example,
+
+\ei
+
+<<arma>>=
+arima(delta_e,xreg=u,order=c(1,0,1))
+@
+
+\bi
+
+\item Here, we do not see evidence for the relationship.
+
+\item A scientific principle for interpreting experimental results is as follows: An experiment which finds evidence of an effect is usually a better foundation for future investigations than one which fails to find evidence. The experiment which found no evidence of an effect might have been a bad choice of experiment, or might have been carried out poorly. 
+
+\item The principle of giving preference to methods giving positive results must be balanced with consideration of \myemph{multiple testing}. There is a danger in trying many analyses and settling on the first that claims statistical significance. The generalizability of any result is tentative until confirmed in other studies. 
+
+\item It appears that temporal differencing has destroyed too much of the evidence we were hoping it would clarify.
+
+\ei
+
+\end{frame}
+
+\begin{frame}{License, acknowledgments, and links}
+  \begin{itemize}
+  \item
+  \parbox[t]{0.75\textwidth}{Licensed under the \link{https://creativecommons.org/licenses/by-nc/4.0/}{Creative Commons Attribution-NonCommercial license}.
+    Please share and remix non-commercially, mentioning its origin.}
+    \parbox[c]{1.5cm}{\includegraphics[height=12pt]{../graphics/cc-by-nc}}
+
+\item The materials builds on \link{../acknowledge.html}{previous courses}.
+
+  \item  Compiled on {\today} using {\Rlanguage} version \Sexpr{getRversion()}.
+    
+\end{itemize}
+
+\link{../index.html}{Back to course homepage}
+
+\end{frame}
+
+\mode<presentation>{
+  \begin{frame}[allowframebreaks=0.8]{References}
+    \bibliography{../bib531}
+  \end{frame}
+}
+\mode<article>{
+  \bibliography{../bib531}
+}
+
+
+\end{document}
+
+

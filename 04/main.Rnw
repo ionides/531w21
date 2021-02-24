@@ -480,7 +480,7 @@ Y_n = \frac{\ar(B)}{\ma(B)} \epsilon_n.
 
 \item If the two polynomials $\ar(x)$ and $\ma(x)$ share a common factor, it can be canceled out without changing the model. 
 
-\item The \myemph{fundamental theorem of algebra} says that every polynomial $\ar(x) = 1-\ar_1 x - \dots - \ar_p x^p$ of degree $p$ can be written in the form
+\item The \link{https://en.wikipedia.org/wiki/Fundamental_theorem_of_algebra}{\myemph{fundamental theorem of algebra}} says that every polynomial $\ar(x) = 1-\ar_1 x - \dots - \ar_p x^p$ of degree $p$ can be written in the form
 \begin{equation}
 (1-x/\lambda_1) \times (1-x/\lambda_2) \times \dots \times (1-x/\lambda_p),
 \end{equation}

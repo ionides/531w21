@@ -592,7 +592,8 @@ aic_table <- function(data,P,Q){
        table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
     }
   }
-  dimnames(table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+  dimnames(table) <- list(paste("AR",0:P, sep=""),
+    paste("MA",0:Q,sep=""))
   table
 }
 huron_aic_table <- aic_table(huron_depth,4,5)
@@ -635,7 +636,7 @@ kable(huron_aic_table,digits=2)
 \ei
 
 
-<<arma21fit>>=
+<<arma21fit,size="footnotesize">>=
 huron_arma21 <- arima(huron_depth,order=c(2,0,1))
 huron_arma21
 @
