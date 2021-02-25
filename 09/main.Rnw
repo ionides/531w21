@@ -49,7 +49,7 @@ set.seed(2050320976)
 @
 
 
-\section{Historical background}
+\section{Introduction to business cycles and mortality}
 
 \begin{frame}{Historical investigations linking business cycles to mortality}
 
@@ -304,7 +304,7 @@ LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
 \bi
 
 \item We have been careful to talk about \myemph{association}, since observational data giving firm statistical evidence of an assocation between $X$ and $Y$ cannot readily distinguish between three possibilities:
-
+\ei
 \begin{enumerate}
   \item  $X$ causes $Y$.
 
@@ -312,40 +312,132 @@ LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
 
   \item Both $X$ and $Y$ are caused by a third variable $Z$ that is unmeasured or has been omitted from the analysis. In this case, $Z$ is called a \myemph{confounding variable}.
 \end{enumerate}
-
+\bi
 \item Here, it is not considered plausible that mortality fluctations drive economic fluctuations (the \myemph{reverse causation} possibility).
 
-\item We think of unemployment as a \myemph{proxy variable} for economic fluctuations. We do not claim that increased unemployment itself is necessarily directly causing reduced mortality. All proxy variables for economic activity are confounded in this analysis.
+\item Unemployment is a \myemph{proxy variable} for economic fluctuations. Increased unemployment itself is necessarily directly causing reduced mortality: all proxy variables for economic activity are confounded in this analysis.
 
 \ei
 
 \end{frame}
 
-\begin{frame}{Evidence for causality}
+\section{Cross-correlation, coherence and phase}
+
+\begin{frame}{Potential lagged relationships}
 
 \bi
 
 \item A potential confounding variable is lagged economic activity. 
 Theoretically, reduction in mortality for an current economic down-turn could result from delayed health progress caused by the previous economic boom.
 
-\item  Researchers have searched unsuccessfully for a stable lagged relationship between economic activity and life expectancy.
+\item A lag relationship between two time series $x_{1:N}$ and $y_{1:N}$ can be identified from the \myemph{sample cross-correlation function (CCF)}
+\begin{equation}
+\hat\rho_{xy}(h) =
+  \frac{\sum_{n=1}^{N-h} (x_{n+h}-\bar x)(y_{n}-\bar y)}{\sqrt{\sum_{n=1}^{N} (x_{n}-\bar x)^2 \sum_{n=1}^N (y_{n}-\bar y)^2}}
+\end{equation}
 
-\item We have found empirical evidence to support a claim that above-trend economic growth CAUSES above-trend mortality.
-
-\item We have NOT found evidence that unemployment reduces mortality for those who lose their jobs. Adverse individual-level effects of unemployment can be reconciled with our result \citep{tapia14}.
+\item $\hat\rho_{xy}(h)$ estimates $\rho_{XY}(h)=\mathrm{Cor}\big(X_{n+h},Y_n\big)$, the cross-correlation at lag $h$ for a bivariate stationary time series model $\big(X_{1:N},Y_{1:N}\big)$.
 
 \ei
 
 \end{frame}
 
+\begin{frame}[fragile]
+
+<<ccf_code,eval=F,echo=T>>=
+ccf(e_hp,u_hp)
+@
+
+\vspace{-2mm}
+
+<<ccf_eval,eval=T,echo=F,fig.width=7,fig.height=3.5,out.width="10cm">>=
+par(mai=c(0.8,0.8,0.8,0.1))
+<<ccf_code>>
+@
+
+\bi
+\item The strong positive cross-correlation at lag zero supports pro-cyclical mortality.
+
+\item The oscillatory pattern is not significant pointwise but might be more evident in the frequency domain.
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]{Coherency, coherence and phase}
+
+\bi
+\item The Fourier transform of the sample cross-correlation is called the \myemph{coherency}.
+
+\item Coherency measures correlation between frequency components of two time series at each frequency $\omega$. It is complex-valued.
+
+\item The magnitude of the coherency is called the \myemph{coherence}. It measures whether a large amplitude at frequency $\omega$ for $x_{1:N}$ is associated with a large amplitude at $\omega$ for $y_{1:N}$.
+
+\item The angle of the coherency (in the complex plane) is called the \myemph{phase}. A phase of $0$ means that peaks at frequency $\omega$ tend to occur simultaneously for $x_{1:N}$ and $y_{1:N}$. A phase of $\pm\pi$ at frequency $\omega$ means that peaks for the frequency component of $x_{1:N}$ coincide with troughs for $y_{1:N}$
+
+\ei
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+\vspace{-2mm}
+
+<<coherency_code,echo=T,eval=F>>=
+s <- spectrum(cbind(e_hp,u_hp),spans=c(3,5,3),plot=F)
+plot(s,plot.type="coherency",main="")
+@
+
+\vspace{-1mm}
+
+
+<<coherency_eval,echo=F,eval=T,fig.width=7,fig.height=2.5,out.width="11cm">>=
+par(mai=c(0.8,0.8,0.1,0.1))
+<<coherency_code>>
+@
+
+\bi
+\item R calculates squared coherence, the squared absolute coherency. This is like reporting $r^2$ for regression, rather than $|r|$.
+\ei
+
+\myquestion. Interpret the squared coherence plot.
+
+\answer{\vspace{30mm}}{todo}
+
+\end{frame}
+
+\begin{frame}[fragile]
+
+\vspace{-2mm}
+
+<<phase_code,eval=F,echo=T>>=
+plot(s,plot.type="phase",main="")
+abline(h=0,col="red")
+@
+
+\vspace{-2mm}
+
+<<phase_eval,eval=T,echo=F,fig.width=7,fig.height=2.5,out.width="11cm">>=
+par(mai=c(0.8,0.8,0.1,0.1))
+<<phase_code>>
+@
+
+\myquestion. Interpret the phase plot.
+
+\answer{\vspace{30mm}}{todo}
+
+\end{frame}
+
+
 
 \begin{frame}{Conclusions}
 
 \bi
+\item There is strong evidence of pro-cyclical mortality at a national level in the USA from 1948 to 2018. For example, the Great Recession of 2009-2010 led to high unemployment, but these two years had above-trend values of life expectancy at birth.
 
-\item There is clear evidence of pro-cyclical mortality at a national level in the USA from 1948 to 2018.
+\item We have argued that this evidence supports a claim that above-trend economic growth CAUSES above-trend mortality.
 
-\item For example, the Great Recession of 2009-2010 led to high unemployment, but these two years had above-trend values of life expectancy at birth.
+\item We CANNOT infer that unemployment reduces mortality for those who lose their jobs. Adverse individual-level effects of unemployment can be reconciled with our result \citep{tapia14}.
 
 \item More data might give statistical precision to investigate sub-populations more accurately than can be done with a national-level dataset. For example, \myemph{panel data analysis} combining time series for each state \citep{ionides13-aoas}.
 
@@ -357,7 +449,7 @@ Theoretically, reduction in mortality for an current economic down-turn could re
 
 \subsection{Model selection by AIC}
 
-\begin{frame}[fragile]{Model selection by AIC}
+\begin{frame}[fragile]{Explaining the choice of an ARMA(1,0) error model}
 
 \bi
 \item Model selection by AIC for regression with ARMA errors follows the same approach as for ARMA models.
@@ -529,7 +621,7 @@ par(mai=c(0.8,0.8,0.1,0.1))
 \begin{equation}
 \Delta {e_n} = {e_n} - {e_{n-1}},
 \end{equation}
-compute as
+computed as
 <<clean_data_again>>=
 delta_e <- e - e_data$e0[e_data$Year %in% (t-1)]
 @
@@ -554,7 +646,7 @@ mtext("differenced e0",side=4,col="red",line=3)
 
 \item The relationship between unemployment and differenced life expectancy is harder to see than when HP-detrended.
 
-\item The relationship is also harder to find by statistical methods. For example,
+\item The relationship is also harder to find by statistical methods:
 
 \ei
 
@@ -565,19 +657,21 @@ a4 <- arima(delta_e,xreg=u_hp,order=c(1,0,1))
 \vspace{-2mm}
 
 <<arma_diff_summary,echo=F>>=
+z4.1 <- a4$coef["u_hp"]
+z4.2 <- sqrt(a4$var.coef["u_hp","u_hp"])
 mysummary(a4,print.sigma=T,loglik=T,coef.label=F)
 @
 
 \bi
-\item Temporal differencing has destroyed much of the evidence we were hoping it might clarify.
+\item Temporal differencing $z$-statistic of $\Sexpr{myround(z4.1,4)}/\Sexpr{myround(z4.2,4)} = \Sexpr{myround(z4.1/z4.2,2)}$ which is weaker evidence than the $z$-statistic of $\Sexpr{myround(z1/z2,2)}$ for HP-detrended LEB.
 
 \ei
 
 \end{frame}
 
-\subsection{Multiple testing considerations}
+\subsection{Multiple testing}
 
-\begin{frame}
+\begin{frame}{Multiple testing considerations}
 
 \bi
 
@@ -611,7 +705,7 @@ mysummary(a4,print.sigma=T,loglik=T,coef.label=F)
 \end{frame}
 
 \mode<presentation>{
-  \begin{frame}[allowframebreaks=0.8]{References}
+  \begin{frame}[allowframebreaks=0.9]{References}
     \bibliography{../bib531}
   \end{frame}
 }
