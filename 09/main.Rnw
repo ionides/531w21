@@ -57,7 +57,7 @@ set.seed(2050320976)
 
 \bi
 
-\item \citet{ogburn22} were among the first to report \myemph{pro-cyclical} mortality: death rates are statistically above trend when economic activity is above trend.
+\item \myemph{Pro-cyclical} mortality occurs if death rates are statistically above trend when economic activity is above trend. An early report was \citet{ogburn22}.
 
 \item  Procyclical mortality, if it exists, shows that a key measure of population health is worse in economic booms than in recessions.
 
@@ -321,7 +321,9 @@ LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
 
 \end{frame}
 
-\section{Cross-correlation, coherence and phase}
+\section{Looking for dependence in bivariate time series}
+
+\subsection{Cross-correlation}
 
 \begin{frame}{Potential lagged relationships}
 
@@ -336,11 +338,12 @@ Theoretically, reduction in mortality for an current economic down-turn could re
   \frac{\sum_{n=1}^{N-h} (x_{n+h}-\bar x)(y_{n}-\bar y)}{\sqrt{\sum_{n=1}^{N} (x_{n}-\bar x)^2 \sum_{n=1}^N (y_{n}-\bar y)^2}}
 \end{equation}
 
-\item $\hat\rho_{xy}(h)$ estimates $\rho_{XY}(h)=\mathrm{Cor}\big(X_{n+h},Y_n\big)$, the cross-correlation at lag $h$ for a bivariate stationary time series model $\big(X_{1:N},Y_{1:N}\big)$.
+\item $\hat\rho_{xy}(h)$ estimates $\rho_{XY}(h)=\mathrm{Cor}\big(X_{n+h},Y_n\big)$, the cross-correlation at lag $h$ for a \myemph{bivariate stationary time series model}, consisting of a pair of random variables $\big(X_n,Y_n\big)$ at each time $n$.
 
 \ei
 
 \end{frame}
+
 
 \begin{frame}[fragile]
 
@@ -364,16 +367,41 @@ par(mai=c(0.8,0.8,0.8,0.1))
 
 \end{frame}
 
+\subsection{The cross-spectrum, coherence and phase}
+
+\begin{frame}{Cross-covariance and the cross-spectrum}
+\bi
+\item The \myemph{cross-covariance function} of a stationary bivariate time series model, $\big(X_n,Y_n\big)$, is
+\begin{equation}
+\gamma_{XY}(h)=\mathrm{Cor}\big(X_{n+h},Y_n\big).
+\end{equation}
+
+\item The \myemph{cross-spectrum} is the Fourier transform of the cross-covariance,
+\begin{equation}
+\lambda_{XY}(\omega) = \sum_{h=-\infty}^{\infty} e^{-2\pi i \omega h} \gamma_{XY}(h).
+\end{equation}
+
+\item The cross-spectrum can be estimated by smoothing the bivariate periodogram, using \code{spectrum} in {\Rlanguage}.
+
+\ei
+
+\end{frame}
+
 \begin{frame}[fragile]{Coherency, coherence and phase}
 
 \bi
-\item The Fourier transform of the sample cross-correlation is called the \myemph{coherency}.
+\item The \myemph{coherency} is the normalized cross-spectrum,
+\begin{equation}
+\rho^2_{XY}(\omega)= \frac{\lambda_{XY}(\omega)}{\sqrt{\lambda_{XX}(\omega)\, \lambda_{YY}(\omega)}}.
+\end{equation}
 
 \item Coherency measures correlation between frequency components of two time series at each frequency $\omega$. It is complex-valued.
 
 \item The magnitude of the coherency is called the \myemph{coherence}. It measures whether a large amplitude at frequency $\omega$ for $x_{1:N}$ is associated with a large amplitude at $\omega$ for $y_{1:N}$.
 
 \item The angle of the coherency (in the complex plane) is called the \myemph{phase}. A phase of $0$ means that peaks at frequency $\omega$ tend to occur simultaneously for $x_{1:N}$ and $y_{1:N}$. A phase of $\pm\pi$ at frequency $\omega$ means that peaks for the frequency component of $x_{1:N}$ coincide with troughs for $y_{1:N}$
+
+\item The coherence and phase are estimated is estimated from the smoothed cross-periodogram and marginal periodograms.
 
 \ei
 
