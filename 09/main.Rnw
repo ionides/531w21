@@ -373,7 +373,7 @@ par(mai=c(0.8,0.8,0.8,0.1))
 \bi
 \item The \myemph{cross-covariance function} of a stationary bivariate time series model, $\big(X_n,Y_n\big)$, is
 \begin{equation}
-\gamma_{XY}(h)=\mathrm{Cor}\big(X_{n+h},Y_n\big).
+\gamma_{XY}(h)=\mathrm{Cov}\big(X_{n+h},Y_n\big).
 \end{equation}
 
 \item The \myemph{cross-spectrum} is the Fourier transform of the cross-covariance,
@@ -392,7 +392,7 @@ par(mai=c(0.8,0.8,0.8,0.1))
 \bi
 \item The \myemph{coherency} is the normalized cross-spectrum,
 \begin{equation}
-\rho^2_{XY}(\omega)= \frac{\lambda_{XY}(\omega)}{\sqrt{\lambda_{XX}(\omega)\, \lambda_{YY}(\omega)}}.
+\rho_{XY}(\omega)= \frac{\lambda_{XY}(\omega)}{\sqrt{\lambda_{XX}(\omega)\, \lambda_{YY}(\omega)}}.
 \end{equation}
 
 \item Coherency measures correlation between frequency components of two time series at each frequency $\omega$. It is complex-valued.

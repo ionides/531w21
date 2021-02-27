@@ -402,7 +402,7 @@ as an estimator of the spectral density.
 \myquestion. Consider the AR(1) model, $\phi(B)Y_n = \epsilon_n$ with $\phi(B)=1-\phi_1B$ and $\epsilon_n \sim \mathrm{WN}(\sigma^2)$, i.e., white noise with variance $\sigma^2$. Show that the spectrum of $Y$ is
 \begin{equation}
 \lambda(\omega)=\frac{\sigma^2}{\big|\phi\big( e^{2\pi i \omega}\big)\big|^2}
-= \frac{\sigma^2}{1+\phi^2 - 2\phi\cos(2\pi\omega)}.
+= \frac{\sigma^2}{1+\phi_1^2 - 2\phi_1\cos(2\pi\omega)}.
 \end{equation}
 
 \answer{\vspace{60mm}}{todo}
@@ -418,6 +418,8 @@ as an estimator of the spectral density.
 \end{equation}
 \item The so-called \myemph{rational spectrum} of ARMA models is computationally convenient.
 \item A stationary, causal ARMA model cannot have roots on the unit circle. If a root approaches the unit circle, the denominator in (\ref{eq:arma_spec}) becomes close to zero.
+\item The special case of $\phi(x)=\psi(x)=1$ gives $\lambda(\omega)=\sigma^2$. \myemph{White noise has a constant spectrum}, matching the analogy that white light has uniform intensity across the visible light spectrum.
+
 \ei
 
 \end{frame}

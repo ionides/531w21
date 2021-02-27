@@ -145,31 +145,39 @@ par(mai=c(0.8,0.8,0.2,0.2))
 
 \begin{frame}[fragile]
 
-\vspace{-2mm}
+\vspace{-3mm}
 
 \bi
-\item We see seasonal variation, and perhaps we see business cycles on top of a slower trend.
+\item We see seasonal variation and economic cycles on top of a trend.
 
 \item The seasonal variation looks like an additive effect, say an annual fluctation with amplitude around 1 percentage point. 
 
 \item Sometimes, we may prefer to look at monthly seasonally adjusted unemployment, \link{https://data.bls.gov/timeseries/LNS14000000}{also provided by BLS}.
-
 \ei
 
 \vspace{-2mm}
 
-<<data_adj_code,echo=F,eval=T,fig.width=7,fig.height=3.5,out.width="9cm">>=
-U2 <- read.table(file="adjusted_unemployment.csv",sep=",",header=TRUE)
+<<data_adj_read,echo=T>>=
+U2 <- read.table(file="adjusted_unemployment.csv",sep=",",
+  header=TRUE)
 u2 <- t(as.matrix(U2[2:13]))
+@
+
+\vspace{-4mm}
+
+<<data_adj_code,echo=F,eval=T,fig.width=7,fig.height=3.5,out.width="9cm">>=
 dim(u2) <- NULL
 par(mai=c(0.5,0.8,0.8,0.1))
 plot(date,u1,type="l",ylab="percent",xlab="",col="black")
 lines(date,u2,type="l",col="red")
 title("Unemployment. Raw (black) and seasonally adjusted (red)")
 @
+
+\vspace{-2mm}
+
 \bi
 \item
-We can wonder how the Bureau of Labor Statistics adjusts the data, and if this introduces any artifacts that a careful statistician should be aware of.
+We can wonder how the BLS adjusts the data, and if this introduces any artifacts that a careful statistician should be aware of.
 \ei
 \end{frame}
 
