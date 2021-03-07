@@ -8,17 +8,17 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture: Chapter 10, Part 1  | [Video (23 mins)](https://youtu.be/) |
-| Lecture: Chapter 10, Part 2  | [Video (25 mins)](https://youtu.be/) |
-| Lecture: Chapter 10, Part 3  | [Video (33 mins)](https://youtu.be/) |
+| Lecture: Chapter 10, Part 1  | [Video (22 mins)](https://youtu.be/gEx8qpqmTFE) |
+| Lecture: Chapter 10, Part 2  | [Video (22 mins)](https://youtu.be/nBxvbU7GkEc) |
+| Lecture: Chapter 10, Part 3  | [Video (TO DO)](https://youtu.be/) |
 | Lecture slides  | [PDF](slides.pdf) |
-| Annotated slides | [PDF](slides-annotated-revised.pdf) |
+| Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
 ----------------------
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/gEx8qpqmTFE" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/nBxvbU7GkEc" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 

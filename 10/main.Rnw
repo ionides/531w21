@@ -82,7 +82,7 @@ set.seed(2050320976)
 
 \item A model for a stochastic dynamic system has the \myemph{Markov property} if the future evolution of the system depends only on the current state, plus randomness introduced in future.
 
-\item A models with the Markov property may be called a \myemph{Markov chain} of a \myemph{Markov process}.
+\item A models with the Markov property may be called a \myemph{Markov chain} or a \myemph{Markov process}.
 
 \item We use the term Markov process since the term chain is often reserved for situations where either time or the latent state (or both) take discrete values.
 
@@ -105,8 +105,8 @@ f_{X_n|X_{1:n-1}}(x_n\given x_{1:n-1}) &= f_{X_n|X_{n-1}}(x_n\given x_{n-1}). &
 for all $n\in 1:N$
 \item We may suppose there is an underlying continuous time, $t$, such that $X_n$ occurs at time $t_n$.
 \item We write $X(t)$ for the continuous time model, setting $X_n=X(t_n)$.
-\item $t_{1:N}$ are \myemph{measurement times}
-\item $t_0$ is the \myemph{initialization time}
+\item $t_{1:N}$ are \myemph{measurement times}.
+\item $t_0$ is the \myemph{initialization time}.
 \ei
 
 \end{frame}
@@ -134,7 +134,7 @@ f_{X_0}(x_0).
 
 \begin{frame}[fragile]
 
-\frametitle{The process nodel}
+\frametitle{The process model}
 
 \bi
 
@@ -600,7 +600,7 @@ f_{Y_{n:N}|Y_{1:n-1}}(\data{y_{n:N}}\given \data{y_{1:n-1}})
 
 \item  Linear Gaussian partially observed Markov process (LG-POMP) models have many applications across science and engineering.
 
-\item Gassian ARMA models are LG-POMP models. The POMP recursion formulas give a computationally efficient way to obtain the likelihood of a Gaussian ARMA model. 
+\item Gaussian ARMA models are LG-POMP models. The POMP recursion formulas give a computationally efficient way to obtain the likelihood of a Gaussian ARMA model. 
 
 \item Smoothing splines (including the Hodrick-Prescott filter, which is a smoothing spline) can
 be written as an LG-POMP model.
