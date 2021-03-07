@@ -1226,7 +1226,7 @@ For data $\data{y}_{1:N}$, we call $\mu^P_n = \mu^P_n\big(\data{y}_{1:n-1}\big)=
   \big([\Sigma_n^P]^{-1} + \matB_n^\transpose\covmatY_n^{-1}\matB_n\big)^{-1},
 \vspace{3mm}
 \\
-\mbox{[KF6] } & 
+\mbox{[KF9] } & 
   \mu_{n}^F(y_{1:n}) &
   \!=\!&
   \mu_{n}^P(y_{1:n-1}) + \Sigma_n^F \matB^\transpose_n\covmatY_n^{-1}\big\{y_n - \matB_n\mu_n^P(y_{1:n-1})\big\}.
@@ -1264,7 +1264,7 @@ and completing the square in the exponent. The conditional density of $X_n$ give
 
 \vspace{2mm}
 
-\myexercise. The derivation of the Kalman algebra is not central to this course. However, working through the algebra to your own satisfaction is a good exercise.
+\myexercise. The derivation of the Kalman filter is not central to this course. However, working through the algebra to your own satisfaction is a good exercise.
 
 \vspace{5mm}
 
