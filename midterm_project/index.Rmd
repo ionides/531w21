@@ -17,23 +17,23 @@ csl: ecology.csl
 
 ----------
 
-1. [Bitcoin Historical Data](https://ionides.github.io/531w21/midterm_project/project1/project.html)
+1. [Bitcoin Historical Data](https://ionides.github.io/531w21/midterm_project/project01/project.html)
 
-2. [US Candy Production Data](https://ionides.github.io/531w21/midterm_project/project2/project.html)
+2. [US Candy Production Data](https://ionides.github.io/531w21/midterm_project/project02/project.html)
 
-3. [Seattle Weather](https://ionides.github.io/531w21/midterm_project/project3/project.html)
+3. [Seattle Weather](https://ionides.github.io/531w21/midterm_project/project03/project.html)
 
-4. [Crop Acreage and Warming Temperature in US](https://ionides.github.io/531w21/midterm_project/project4/project.html)
+4. [Crop Acreage and Warming Temperature in US](https://ionides.github.io/531w21/midterm_project/project04/project.html)
 
-5. [U.S. 10-year Treasury Bond Yield](https://ionides.github.io/531w21/midterm_project/project5/project.html)
+5. [U.S. 10-year Treasury Bond Yield](https://ionides.github.io/531w21/midterm_project/project05/project.html)
 
-6. [Vancouver Temperature](https://ionides.github.io/531w21/midterm_project/project6/project.html)
+6. [Vancouver Temperature](https://ionides.github.io/531w21/midterm_project/project06/project.html)
 
-7. [Climate in Delhi](https://ionides.github.io/531w21/midterm_project/project7/project.html)
+7. [Climate in Delhi](https://ionides.github.io/531w21/midterm_project/project07/project.html)
 
-8. [Lake Michigan-Huron Water Levels](https://ionides.github.io/531w21/midterm_project/project8/project.html)
+8. [Lake Michigan-Huron Water Levels](https://ionides.github.io/531w21/midterm_project/project08/project.html)
 
-9. [PM10 concentration from Wanliu station in Beijing](https://ionides.github.io/531w21/midterm_project/project9/project.html)
+9. [PM10 concentration from Wanliu station in Beijing](https://ionides.github.io/531w21/midterm_project/project09/project.html)
 
 10. [Bitcoin Price Forecast](https://ionides.github.io/531w21/midterm_project/project10/project.html)
 
