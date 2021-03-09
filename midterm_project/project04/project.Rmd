@@ -1,0 +1,174 @@
+---
+title: "Association between Crop Acreage and Warming Temperature in US"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center")
+library(mFilter)
+library(dplyr)
+library(knitr)
+
+```
+## 1. Introduction 
+U.S. agricultural sector is facing a changing production environment due to global climatic changes. V Our planet's average surface temperature has risen about 2.12 degrees Fahrenheit (1.18 degrees Celsius) since the late 19th century. These changes has broader impacts on crop yields, agricultural water supply and consumer welfare. Farmers and policy makers worked together to use different adaptive strategies for climate variability such as adjusting preseason planting, switching to crop types and implementing more efficient irrigation practices. \
+Corn and soybean are two primary crop types in U.S.. Corn is the most widely produced feed grain in the United States (U.S.), accounting for more than 95 percent of total production and use. 
+Soybeans comprise about 90 percent of U.S. oilseed production. In this study, I am interested in how corn&soybean acreage is changing across years under the impact of rising temperature. \
+The corn&soybean data are from National Agricultural Statistics Service (NASS). This database contains official published aggregate estimates related to U.S. agricultural production. Among the planted, harvested, and glazed acreage, I chose to use harvested acreage. The measuring unit is acre. The reason for using the harvested measurement is that harvested acreage could indicate not only how much grains are harvested but also how much areage farmers choose to grow crops. As for the temperature data, I used the global temperature anomalies in degree Celcius from datahub. The original data is from GISS Surface Temperature.\
+In general, my specific objectives are (1) how the acreage of these two types are changing differently to warming temperature (2) how to use time series model to describe the relationship between corn acreage and temperature & between soybean acreage and temperature.
+
+## 2. Data Exploration
+
+Our temperature data and acreage data has different time ranges. The first step is to intersect the overlapping years. This gives us yearly data from 1924-2016. \
+Firstly, I plot the corn acreage, soybean acreage and temperature anomalies against years.We could see from the plot that the corn acreage firstly decrease then increase. There are two sharp fluctuations in around 1935 and in around 1982. The 1930s fluctuation can be resulted from the Great Depression coupled with featured historic heat happened almost every years. The other fluctuation are from the 1980's intense heat wave and drought. The soybean acreage increase steadily since 1924. This is because since early 1900, soybean is exported from east to U.S. and during 1930s, soybean productions start to increase. The temperature plot shows the global average temperature is rising with slight fluctuations. \
+
+```{r echo=FALSE}
+# https://www.kaggle.com/milesius/usda-corn-and-soybean-growing-statistics
+
+soybeandf<- read.csv(file="./soybean_stats.csv")
+soybeandf<-soybeandf[c(2,19)]
+colnames(soybeandf) <- c("Year","soybean")
+soybeandf$soybean = as.numeric(gsub(",", "", soybeandf$soybean))
+
+
+corndf <- read.csv(file="./corn_stats.csv")
+corndf <- corndf[c(2,27)]
+colnames(corndf) <- c("Year","corn")
+corndf$corn = as.numeric(gsub(",", "", corndf$corn))
+
+temp <- read.csv("https://pkgstore.datahub.io/core/global-temp/annual_csv/data/a26b154688b061cdd04f1df36e4408be/annual_csv.csv")
+
+# only use the data that has intersected years
+temp<-temp[temp$Source == 'GISTEMP',]
+t <- intersect(temp$Year,soybeandf$Year)
+cornpdt<- corndf[c(corndf$Year %in% t),]
+soybeanpdt <- soybeandf[c(soybeandf$Year %in% t),]
+temp <- temp [c(temp$Year %in% t),]
+
+```
+
+```{r three_plot, echo=FALSE, fig.height=12, fig.width=12}
+par(mfrow=c(3,1))
+plot(cornpdt$Year, cornpdt$corn,type='l',main = 'Corn Acreage from 1924-2016',xlab='Year',ylab='Corn Acreage (in acre)',cex.axis=1.5)
+
+plot(soybeanpdt$Year, soybeanpdt$soybean,type='l',main = 'Soybean Acreage from 1924-2016',xlab='Year',ylab='Soybean Acreage (in acre)',cex.axis=1.5)
+plot(temp$Year,temp$Mean, type = 'l' ,main = 'Temperature Anomalies from 1924-2016',xlab='Year',ylab='Temperature Anomaly (in Celsius)',cex.axis=1.5)
+```
+We can tell there is a obvious trend in corn acreage and soybean acreage. These trends can be caused by the technology advancement in agricultural practices like automatic tillage tools. This trend can also be explained by land cover change. There is evidence from research that more and more forest areas are converted into agricultural lands.\
+In this case, I want to study the acreage growth rate rather than acreage because we'll definitely see a increasing trend of crop production. If we want to analyze how temperature is associated, we might want to study whether growth rate is stagnated by warming temperature.\
+From this plot, we could see soybean acreage growth rate (red) and corn acreage growth rate (green) concord with temperature anomaly(blue) in small fluctuations. When there is a temperature peak, there is usually a peak in soybean. This might result from these two types are both heat-tolerant crop types.
+```{r calculate_rate, echo=FALSE,fig.align='center'}
+
+growth_rate <- function(x)(x/lag(x)-1)*100 
+cornpdt$rate <- -growth_rate(cornpdt$corn) 
+soybeanpdt$rate <- -growth_rate(soybeanpdt$soybean) 
+
+plot(cornpdt$Year, cornpdt$rate,type='l',col='green',ylim=c(-40,50),ylab='Acreage Growth Rate',xlab='Year',main='Acreage Growth Rate and Temperature Anomalies across Years')
+lines(soybeanpdt$Year, soybeanpdt$rate,type='l',col='red')
+lines(temp$Year,temp$Mean * 30,type="l",col="blue")
+legend(x='topright', legend=c("Corn", "Soybean",'Temperature Anomalies x30'),
+       col=c("green", "red",'blue'), lty=1, cex=0.8)
+```
+
+
+## 3. Fit a model
+In the above plot, we could see a slight decreasing trend of corn as well as acreage growth rate. I think this could associate with the warming temperature. Before, fitting a time series model, I firstly analyze the time series structure of the residuals to determine if they have an AR structure.I plot the ACF and PACF of usual linear model. In the ACF and PACF of corn acreage growth rate model, the residuals spike and then cut off and we should compare AR(1), MA(1), and ARMA(1,1) for error. For soybean, there is no spike and no seasonality in residuals, it might be the case that we can use a simple linear model without any ARMA error.
+```{r echo=FALSE}
+library(astsa)
+df = data.frame(cornpdt$rate,soybeanpdt$rate,temp$Mean)
+df = df[2:nrow(df),]
+model_corn <- lm(cornpdt.rate ~ temp.Mean, data = df)
+model_soybean <- lm(soybeanpdt.rate ~ temp.Mean, data = df)
+acf2(residuals(model_corn))
+acf2(residuals(model_soybean))
+```
+
+
+
+
+After looking at residuals, we then fit the model with ARMA error. The linear model with ARMA error can be written in the following format. 
+$$ Y = X\beta + \eta$$
+In this equation, Y stands for corn/soybean acreage growth rate and X stands for temperature anomalies. And $\eta$ is a is a stationary, causal, invertible ARMA(p,q) process with mean zero. The trend $\mu_n$ has a linear specification:
+$$\mu_n = \sum_{k=1}^K X_{k}\beta_k$$
+In order to find the best models for corn and soybean, we plot the AIC table. From the AIC table, we can see the ARMA(0,1) has the lowest AIC value for corn. I also check the roots to make sure it satisfied the invertibility.  As for soybean, ARMA(0,0) has the lowest AIC value for soybean and this coincides with our residual plot. Then I keep the simple linear model for soybean.
+
+```{r echo=FALSE}
+
+aic_table <- function(data,P,Q, xreg){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+       table[p+1,q+1] <- arima(data,order=c(p,0,q), xreg=xreg)$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b> AR",0:P, "</b>", sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+aic_corn <- aic_table(df$cornpdt.rate,2,2,df$temp.Mean)
+kable(aic_corn,digits=2,caption = "Corn")
+
+aic_soybean <- aic_table(df$soybeanpdt.rate,2,2,df$temp.Mean)
+kable(aic_soybean,digits=2,caption = "Soybean")
+
+arma01_corn <- arima(x=df$cornpdt.rate, order = c(0,0,1), xreg=df$temp.Mean)
+arma01_corn
+MA_root = polyroot(c(1,-0.5443))
+abs(MA_root)
+
+```
+We also add a ARMA model without any temperature trend to compare the performance of our trend-with-error model. We got a p-value of 0.06981809, which is slightly higher than 0.05. If we relax the confidence interval of 95%, we believe we cannot reject the null hypothesis that our trend-with-error performs better.
+```{r echo=FALSE}
+arma <- arima(df$cornpdt.rate,order=c(0,0,1))
+arma
+dif <- arma01_corn$loglik - arma$loglik 
+p.val <- 1-pchisq(2*dif,df=1)
+
+```
+The spectrum analysis indicates there is no clear seasonality in the dataset. Thus, there is no need to use SARIMA model.
+```{r echo=FALSE}
+spectrum(residuals(model_corn), spans=c(10,10))
+```
+
+
+Finally, for corn, we have the model in this format:
+$$Y_n = -1.249 + 3.0961 x_n + -0.9837 + -0.5443 \epsilon_{n-1}$$
+where $Y_n$ represents the corn acreage growth rate at time $n,$ $x_n$ represents mean temperature anomaly. This indicates for an increase in 1 degree Celcius of mean temperature anomaly from the mean, we expect that the US corn acreage growth rate to increase by 3.0961%.\
+For soybean, we have the model:
+$$Y_n =  6.462  + -10.910 x_n$$
+where $Y_n$ represents the corn acreage growth rate at time $n,$ $x_n$ represents mean temperature anomaly. This indicates for an increase in 1 degree celcius of mean temperature anomaly from the mean, we expect that the US corn acreage growth rate to decrease by 10.910%.\
+
+
+## 4. Model Diagnostics
+### Corn 
+In ACF plot, the horizontal dashed lines are all within the band, indicating that we cannot reject the null hypothesis of iid residuals at the 95% confidence intervals.
+The residual plots show there are several outliers in the data, which are exactly the extreme hear events as I mentioned in the introduction part. The QQ plot suggest that the error generally shows normal distribution, maybe a little “heavy tails” which means there are more data in the tails of the histogram. 
+
+```{r, echo = FALSE}
+acf(arma01_corn$residuals, main = "ACF of Residual of Linear Model with ARMA Errors for Corn")
+plot(arma01_corn$residuals, ylab="Residuals", main="Residuals Over Time",type='p')
+qqnorm(arma01_corn$residuals)
+qqline(arma01_corn$residuals)
+```
+
+
+
+### Soybean
+As for the simple linear regression model, the residual plot and QQ plot show some outlier points from year 1935, 1936 and 1942, which is after 1936 heat wave. Apart from these outliers, the residuals generally have non-linear patterns and follow normal distributions. The scale-location plot shows the residuals appear randomly spread. As for the residuals-leverage plot, it is a typical look when there is no influential case since we can barely see Cook’s distance lines in the plot.
+```{r, echo = FALSE}
+par(mfrow = c(2,2))
+plot(model_soybean)
+```
+
+## 5. Conclusion
+From our above models, we could see corn acreage growth rate could be associated with temperature anomaly by a linear regression model with ARMA(0,1) errors and soybean acreage growth rate can be associated with temperature anomaly by a simple linear regression model. Both crop types are heat-tolerant. However, the soybean acreage will increase more slowly from linear model while corn acreage will increase more quickly if global temperature is increasing. I think this might result from corn is a feed grain, which it often provides energy for human and animal diets. Farmers may substitute corn for other feed grains. In order to study how temperature is influencing corn&soybean acreage, I think future work includes studying the ratio of corn/soybean acreage to all the agricultural acreage. Also, if crop yield data is available, then we could look at the relationship of crop yield growth and warming temperature.\
+
+## 6. Sources
+[1] 'Soybeans & Oil Crops' https://www.ers.usda.gov/topics/crops/soybeans-oil-crops/ \
+[2] https://ionides.github.io/531w21/ \
+[3] Marshall, Elizabeth, et al. Climate change, water scarcity, and adaptation in the US fieldcrop sector. No. 1477-2017-3969. 2015. \
+[4] 'Lesson 8: Regression with ARIMA errors, Cross correlation functions, and Relationships between 2 Time Series'. https://online.stat.psu.edu/stat510/book/export/html/669 \
+[5] Schnitkey, G. "Acre Changes in Crops from 1991 to 2016." farmdoc daily (7):76, Department of Agricultural and Consumer Economics, University of Illinois at Urbana-Champaign, April 25, 2017. \
+[6] 'Climate Change: How Do We Know?' https://climate.nasa.gov/evidence/

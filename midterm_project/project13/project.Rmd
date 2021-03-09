@@ -1,0 +1,229 @@
+---
+title: "STATS 531 Midterm Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F)
+```
+
+# 1 Pharma Sales Dataset
+
+[Pharma sales dataset](https://www.kaggle.com/milanzdravkovic/pharma-sales-data) is built from transactional data collected in six years (2014-2019) indicating the date and time of the sale and pharmaceutical drug brand and quantity.This dataset is from the Kaggle. The drugs are classified into eight groups by Anatomical Therapeutic Chemical (ATC) Classification System. For the purpose of this project, we focus on one specific group of drugs, R06, in which are antihistamines for systemic use. The main concern of this analysis is to find the connection between seasonal change and the difference in antihistamine sales across the year.
+
+# 2 Exploratory Data Analysis
+```{r, echo=F, warnings=F}
+library(ggplot2)
+library(tidyr)
+library(GGally)
+weekly <- read.csv("salesweekly.csv", header=TRUE)
+weekly$datum <- as.Date(weekly$datum, "%m/%d/%Y")
+```
+
+## 2.1 Basic Statistics
+
+Firstly, we want to look at the basic statistics of the drug sales.
+```{r, echo=F}
+summary(weekly)
+```
+
+From the following boxplots, we find that all of the drug sales have outliers.
+```{r, echo=F}
+weekly_long <- gather(weekly, drug_type, quantity, M01AB:R06, factor_key = TRUE)
+ggplot(weekly_long, aes(y=quantity)) + geom_boxplot(fill='slateblue', alpha=0.2) + facet_wrap(vars(drug_type), scales = 'free_y')
+```
+
+From the following pairwise scatterplot, we find that there is no sign of strong linear relationship between R06 and other variables
+```{r, echo=F, message=F, warning=F}
+ggpairs(weekly[, 2:9])
+```
+
+
+According to the coefficient of time-related attribute in the linear model, the mean is barely increasing in time, although we cannot trust the model statistics because of the violation of assumptions to the error term based on the residual acf plot.
+From the time plot of R06 sales against time, we find stationary model may not be appropriate for the data.
+
+```{r, echo=F}
+weekly$Day <- as.numeric(format(weekly$datum, format='%d'))
+weekly$Month <- as.numeric(format(weekly$datum, format='%m'))
+weekly$Year <- as.numeric(format(weekly$datum, format='%Y'))
+weekly$time <- weekly$Year+(weekly$Month*31+weekly$Day)/372
+lmod <- lm(R06~weekly$time+I(weekly$time^2), data=weekly)
+summary(lmod)
+acf(lmod$residuals)
+Z <- cbind(1, weekly$time, weekly$time^2)
+pred <- Z%*%lmod$coefficients
+plot(R06~datum, data=weekly, type='l', xlab='date', main='weekly R06 sales')
+lines(y=pred, x=weekly$datum, col='red')
+```
+
+
+## 2.2 Stationarility and Seasonality
+
+From the sample autocorrelation plot, we find that the sample ACF has a peak at around 52, indicating strong evidence for period around 52, which corroberates with the inital assumption that the yearly period seasonality.
+The periodic waves in sample ACF shows seasonal autoregressive model should be appropriate for this data.
+
+```{r, echo=F}
+acf(weekly$R06, lag=100, main='weekly R06 sample autocorrelation')
+```
+
+## 2.3 Frequency Domain Analysis
+
+We can investigate the drug sale data from the frequency domain to get insights from another perspective.
+We can examine the periodogram of the weekly sales data and decompose the R06 drug sale into trend, noise and cycle components.
+
+The fluctuations in antihistamine sales appears to be cyclical. As antihistamines are frequently used to treat allergies, which can often be triggered by changes in the season [https://acaai.org/allergies/seasonal-allergies]. Let's take a look at this data in the frequency domain to see if our hypothesis of a yearly antihistamine sale cycle is supported:
+
+```{r, echo=FALSE}
+anhist <- weekly$R06
+anhist_spec <- spectrum(anhist, plot=FALSE)
+plot(anhist_spec$freq*52, anhist_spec$spec, type='l', log='y', main="Weekly Antihistamine Sale Spectrum", xlab="Cycles Per Year", ylab="spectrum")
+```
+
+There does appear to be a peak at approximately 1 cycle per year, but let's see if we can make the cyclical pattern even clearer by using a loess bandpass filter. We'll try to separate out the low frequency trend and high frequency noise to extract the cyclical behavior:
+
+```{r}
+a_low <- ts(loess(anhist~as.numeric(weekly$datum), span=0.5)$fitted, start=2014, frequency=52)
+a_high <- ts(anhist - loess(anhist~as.numeric(weekly$datum), span=0.1)$fitted, start=2014, frequency=52)
+a_cycles <- anhist - a_high - a_low
+plot(ts.union(anhist, a_low, a_high, a_cycles))
+##Citation: From Chapter 8 notes
+```
+
+The mid-range frequencies look like a fairly regular, one year cycle, which is promising. Let's plot a periodogram and extract the peak frequency of this cycle to see if that is borne out by the data:
+
+```{r}
+cycle_spec <- spectrum(a_cycles, main="Spectrum of Antihistamine Cycles", ylab="spectrum", xlab="Cycles per year")
+abline(v=c(1, 2), col=c("red", "blue"), lty=c(2,2))
+```
+
+The above plot shows the periodogram of the mid-range frequency cyclic behavior, with the red line representing our expected peak frequency of 1 cycle per year, and the blue line representing the first harmonic of that expected frequency: 2 cycles per year.
+
+Let's calculate the actual frequency of that first peak and the corresponding period:
+
+```{r}
+peak_freq <- cycle_spec$freq[which.max(cycle_spec$spec)]
+peak_freq
+period <- 1/peak_freq
+period
+```
+
+The periodogram does indeed return a peak frequency of approximately 0.975, which corresponds to a period of approximately 1.03 years. This does indeed support the idea that antihistamine sales experience an annual cycle.
+
+# 3 Fitting an ARMA model
+
+To establish a baseline model for comparison later, we start with an ARIMA model without considering the seasonal effects. The $Y_{1:N}$ here be the sales of drug R06 on each week from 2014 to 2019. According to the lecture note 5 equation[5], we will fit a stationary Gaussian ARMA(p,q) model with parameter vector $\theta = (\phi_{1:p}, \psi_{1:q}, \mu, \sigma^2)$ given by
+
+$$\phi(B)(Y_N - \mu) = \psi(B)\epsilon_{N}$$
+
+where
+
+$$E[Y_N] = \mu \\ \phi(x) = 1 - \phi_1 x - ... - \phi_p x^p\\ \psi(x) = 1 - \psi_1 x - ... - \psi_q x^q\\ \epsilon_N \sim iid N(0, \sigma^2)$$
+
+## 3.1 Model Selection for ARIMA Model
+
+We choose to use an AIC table as our first step in the model selection process.
+According to the AIC table below, ARMA(1, 1) has the best AIC value 2047.86.
+We also spot an evidence for mathematical instability at ARMA(2, 2) and ARMA(3, 2) where the AIC value increased more than 2.
+
+```{r, echo=F, warning=FALSE, message=F}
+arma_aic_table <- function(data, P, Q){
+  table <- matrix(NA, (P+1), (Q+1))
+  for(p in 0:P){
+    for(q in 0:Q){
+      table[p+1, q+1] <- arima(data, order=c(p, 0, q))$aic
+    }
+  }
+  dimnames(table) <- list(paste("AR", 0:P, sep=''), paste("MA", 0:Q, sep=''))
+  table
+}
+r06_arma_aic_table <- arma_aic_table(weekly$R06, 3, 3)
+require(knitr)
+kable(r06_arma_aic_table, digits=2)
+```
+
+## 3.2 Model Diagnostics for ARIMA Model
+
+We want to assess the goodness of fit of the ARMA(1, 1) model by looking at its residuals.
+Based on the residual ACF, there is no strong evidence for autocorrelation between the residual values at different lags.
+We superimposed the simulated data according to our ARMA(1, 1) model on top of the original R06 sales data.
+As we expected, the ARMA model does not capture the seasonal effects and fits poorly at the beginning and the ending part.
+
+```{r, echo=F}
+set.seed(2021)
+arma11 <- arima(weekly$R06, order=c(1, 0, 1))
+acf(arma11$residuals, main='ARMA(1, 1) ACF')
+plot(R06~datum, data=weekly, type='l', xlab='date', main='weekly R06 sales')
+t <- arima.sim(model=list(ar=0.902, ma=-0.3532), n=302, sd=sqrt(arma11$sigma2))+mean(weekly$R06)
+lines(x=weekly$datum, y=t, col='red')
+```
+
+# 4 Fitting SARIMA Model
+
+As we found from our exploratory data analysis, the time series data has a seasonal component with yearly period of 52 data points. Now we want to add the seasonal component into our model and see how much it improves the fit. As the data we used is a weekly dataset, according to the lecturen notes6 equation[S1] the general $SARMA(p,q) \times (P, Q)_{52}$ model for weekly data is
+
+$$\phi(B) \Phi(B^{52})(Y_N - \mu) = \psi(B) \Psi(B^{52}) \epsilon_N$$
+
+where
+
+$$E[Y_N] = \mu \\ \phi(x) = 1 - \phi_1 x - ... - \phi_p x^p\\ \psi(x) = 1 - \psi_1 x - ... - \psi_q x^q\\ \Phi(x) = 1 - \Phi_1 x - ... - \Phi_P x^P\\ \Psi(x) = 1 - \Psi_1 x - ... - \Psi_Q x^Q \\ \epsilon_N \sim iid N(0, \sigma^2)$$
+
+## 4.1 Model Selection for SARIMA Model
+
+
+```{r, echo=F, warning=FALSE}
+library(forecast)
+sarma_aic_table <- function(data, P, Q){
+  table <- matrix(NA, (P+1), (Q+1))
+  for(p in 0:P){
+    for(q in 0:Q){
+      table[p+1, q+1] <- arima(data, order=c(p, 0, q), seasonal=list(order=c(1, 0, 0), period=52))$aic
+    }
+  }
+  dimnames(table) <- list(paste("AR", 0:P, sep=''), paste("MA", 0:Q, sep=''))
+  table
+}
+
+r06_sarma_aic_table <- sarma_aic_table(weekly$R06, 2, 2)
+require(knitr)
+kable(r06_sarma_aic_table, digits=2)
+```
+
+According to the AIC table above, the SARIMA(1,1) will have the best AIC value `r r06_sarma_aic_table[2,2]`. Although the AIC of SARIMA(2,2) is lower, there is an evidence for mathematical instability at SARMA(2, 2) and SARMA(1, 2) where the AIC value increased more than 2.
+
+
+## 4.2 Model Diagnostics for SARIMA Model
+
+```{r}
+set.seed(2021)
+sarma11 <- arima(weekly$R06, order=c(1, 0, 1), seasonal=list(order=c(1, 0, 0), period=52))
+acf(sarma11$residuals, main='SARMA(1, 1) ACF')
+t1 <- simulate(sarma11, nsim=302)
+plot(R06~datum, data=weekly, type='l', xlab='date', main='weekly R06 sales')
+lines(x=weekly$datum, y=t1, col='red')
+```
+
+Again, in order to check the goodness of fit of the SARMA(1, 1) model, we will look at its residuals.
+Based on the residual ACF, there is no strong evidence for autocorrelation between the residual values at different lags.
+We overlay the simulated data(red line) according to our SARMA(1, 1) model on the original R06 sales data(black line).
+As we expected, the SARMA model does capture the seasonal effects, and it fits better than the ARMA(1,1) showed above.
+
+
+# 5 Conclusion
+
+Overall, we conclude that the SARMA(1,1) model performs best for our dataset, and captures some weekly seasonality. We hypothesize that the weekly seasonality is likely due to the correlation between prescriptions and business week periodicity, though there are perhaps still more complex underlying causes as well. 
+
+While we investigated linear regression with ARMA errors, we could not include outside covariates due to lack of available background information about our dataset, and thus we found that the regression approach did not outperform the other approaches we've outlined in this report.  
+
+
+
+# References and Group Activity:
+
+The following sources to compose this project:
+
+“Seasonal Allergies.” ACAAI Public Website, 29 Oct. 2018, acaai.org/allergies/seasonal-allergies.
+
+Ionides, Edward L. "Chapter 6: Extending the ARMA model: Seasonality, integration and trend." 2021, ionides.github.io/531w21/06/notes.pdf.
+
+Ionides, Edward L. "Chapter 5: Parameter estimation and model identification for ARMA models." 2021, ionides.github.io/531w21/05/notes.pdf.
+
+Ionides, Edward L. "Chapter 8: Smoothing in the Time and Frequency Domains." 2021, ionides.github.io/531w21/08/notes.pdf.

@@ -1,0 +1,405 @@
+---
+title: "Bike sharing in London: Time series analysis and interpretation"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+---
+
+\newcommand\prob{\mathbb{P}}
+\newcommand\E{\mathbb{E}}
+\newcommand\var{\mathrm{Var}}
+\newcommand\cov{\mathrm{Cov}}
+
+--------
+## Introduction
+
+Public bicycle rentals have operated in London since 2010, when they were restricted to the central city of London and consisted of 5,000 bikes. In the first decade of its operation, the program grew in popularity, and the number of bikes expanded to over 11,500 bikes spanning 40 square miles of London. Understanding the trends in bike sharing patterns and their relationships with other covariates can be used to plan and anticipate needs and changes in infrastructure for the program. In our analysis, we investigate London bike sharing behaviors, searching for evidence of a seasonal trend, observing covariance in bike rental counts and London's climate data, and ultimately proposing a time series model for the data that incorporates our findings.
+
+
+
+## Data
+The raw data contains $\sim$ 17k observations for the number of bikes being shared or used from the system by the hour for all of London. There are auxiliary variables that give a sense of the weather during the time. The data is available from January 4, 2015 through January 1, 2017; 730 days in total. For our analysis we work with a subset of the variables and analyse: daily bike share rentals, mean daily humidity, mean daily wind speed, mean daily real temperature, and if the day is part of the weekend. We aggregate the data by reducing the granularity to a daily time series. We total the number of bicycles rented by day, and average the variables representing the mean daily value.
+
+```{r setup, eval=TRUE, message=FALSE,warning=FALSE, echo=FALSE}
+knitr::opts_chunk$set(dev.args = list(png = list(type = "cairo")))
+
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+ld_data = read.csv("https://raw.githubusercontent.com/brappop/W21_531_midterm/main/ld_data_aggregated_cov.csv?token=AGLNAI2FCPE7KLSR47NRWG3AJVICM")[,-1]
+ld_data$date = as.Date(ld_data$date)
+
+par(mfrow=c(2,2))
+plot(ld_data$cnt,main="Number of bikes",xlab="Days",ylab="Count")
+plot(ld_data$wind_speed,main="Daily avg. wind speed",xlab="Days",ylab="Wind speed (km/h)")
+plot(ld_data$t1,main="Daily avg. temp.",xlab="Days",ylab="Temperature (C)")
+plot(ld_data$hum,main="Daily avg. humidity",xlab="Days",ylab="RH (%)")
+```
+
+The plots reveal long-term patterns that appear to recur with a period of one year. There appear to be significant correlations between the number of bikes rented and the average weather metrics. We also notice two outliers for the number of bicycles rented. These two dates are July 9, 2015 and Aug 6, 2015, which saw strikes by the employees of the London Tube. We suspect the effects of the strike by the underground transit system caused a large number of bikes to be used. We substitute the number of bikes rented on these days with the average of the number of bikes on a day before and a day after.
+
+We proceed to perform a deeper frequency domain analysis for the number of bikes.
+
+## Frequency domain analysis
+As we noticed earlier, the data appears to follow a yearly seasonality. To investigate further seasonal patterns in the data, we can study the spectral density function of the data, which can be interpreted as the power of the frequency components of the time-series data. The spectral density function is given by:
+
+$$\lambda(\omega) = \sum_{h=-\infty}^\infty \gamma_h e^{-2\pi i \omega h}$$
+where $\omega$ is the frequency of the component, and $\gamma_h$ is the autocovariance at lag $h$. For a finite time series, the discrete Fourier transform gives the frequency components and amplitude can be interpreted as the power of the wave at frequency $\omega$. We have the following:
+
+$$I_n = c_n^2 + s_n^2 = |d_n|^2$$
+Where $c_n$ and $s_n$ are the cosine and sine of the frequency components of the data, respectively, and $d_n$ is the amplitude.
+
+Here, we plot and compare the smoothed periodograms for bike rental counts at a daily and weekly level aggregates (total number of bikes, avg. temperature). For comparison with the weather covariates, we also plot the similar spectra for the temperatures.
+
+```{r data_process, eval=TRUE, warning=FALSE, echo=FALSE}
+correction_dates<-ld_data$date[ld_data$cnt>60000]
+cd1<-correction_dates-1
+cd2<-correction_dates+1
+ld_data$cnt[ld_data$date %in% correction_dates]<-0.5*(ld_data$cnt[ld_data$date %in% cd1]+ld_data$cnt[ld_data$date %in% cd2])
+
+ld_data$date<-as.Date(ld_data$date)
+ld_weekly <- ld_data %>% group_by(week=cut(date, "week")) %>%
+  summarize(cnt=sum(cnt), hum=mean(hum), t1=mean(t1))
+ld_weekly$week <- as.Date(ld_weekly$week)
+ld_diff = apply(ld_weekly[,c("cnt","hum","t1")], 2, diff)
+
+get_top_freqs <- function(spec) (spec$freq[sort(spec$spec, decreasing = T, index.return=T)$ix])
+
+par(mfrow=c(2,2))
+plot(spec_cnt <- spectrum(ld_data$cnt, spans=c(3, 5, 3), plot=F), main = "Periodogram (daily counts)")
+freqs = get_top_freqs(spec_cnt)
+for(v in freqs[c(2,6)]) abline(v=v, col="blue", lty=3)
+
+plot(spec_cnt <- spectrum(ld_weekly$cnt, spans=c(3, 5, 3), plot=F), main = "Periodogram (weekly counts)")
+freqs = get_top_freqs(spec_cnt)
+for(v in freqs[c(2)]) abline(v=v, col="blue", lty=2)
+
+plot(spec_t1 <- spectrum(ld_data$t1, spans=c(3, 5, 3), plot=F), main = "Periodogram (daily temps)")
+freqs = get_top_freqs(spec_t1)
+for(v in freqs[c(2)]) abline(v=v, col="blue", lty=3)
+
+plot(spec_t1 <- spectrum(ld_weekly$t1, spans=c(3, 5, 3), plot=F), main = "Periodogram (weekly temps)")
+freqs = get_top_freqs(spec_t1)
+for(v in freqs[c(1)]) abline(v=v, col="blue", lty=2)
+
+```
+
+The blue dotted lines highlight the dominant frequencies in each dataset. Among the daily datasets, both bike rentals and temperature have a dominant frequency of approximately 2.67e-3, which corresponds to a period of $\frac{1}{2.67e-3} \approx 375$ days, or about a year. In addition, the bike rentals data has a secondary frequency spike at approximately 0.143, which corresponds to a period of $\frac{1}{0.143} \approx 7$ or one week. 
+
+In the weekly data, and both datasets have dominant frequencies at approximately 1.85e-2, which corresponds to a period of $\frac{1}{1.85e-2} \approx 54$ weeks. This reinforces our observation of there being components of period of about a year.
+
+Both the weekly and the yearly patterns seem reasonable from the real world perspective. The yearly pattern of temperature can be attributed to the cyclic pattern of seasons. Also, bike sharing increases during the summer months (when temperatures are suited for outdoor activity) and decreases during the winter (when the temperatures are lower). Similarly, weekly trends are expected because of changes in demand on weekdays or on weekends.
+
+We proceed with building a model to describe the seasonality of the data.
+
+## Test for stationarity
+We formally test for the stationarity of the time series using the Augmented Dickey-Fuller (ADF) Test. The test is for the null hypothesis that the time series sample contains a unit root in its characteristic equation.
+
+<div align="center">
+$H_{0}$: A unit root exists in the data.
+
+$H_{A}$: The data is stationary.
+</div>
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+# Check if the data is stationary
+library(tseries)
+adf.test(ld_data$cnt) ## Not stationary
+adf.test(ld_data$hum) ## Stationary
+adf.test(ld_data$t1) ## Not stationary
+adf.test(ld_data$wind_speed) ## Stationary
+
+# H_0: **A unit root is present in the sample.** 
+# H_A: **The data is stationary.**
+```
+
+If we reject the hypothesis, the alternate hypothesis suggests that the data is stationary. Hence failure to reject the hypothesis would suggest that the data is non-stationary. We run the ADF test on the counts of bike sharing rentals, mean humidity, mean temperature (C), and the mean wind speed. According to the test, mean humidity, and mean wind speed are suggested to be stationary. Counts of bike sharing rentals and the mean temperature (C) are not suggested as stationary.
+
+To analyse the time-series using the lens of variants of the ARMA models, we resort to detrending the data.
+
+## Data detrending
+As we have noted earlier, we have two major frequencies in the data - a yearly and a weekly trend. We explore seasonal models that can help us provide greater intuition into the data. A dual period SARMA, while mathematically possible, is difficult to compute. Dual periods of the order of 7 days and $\sim$ 300 days can lead to a large number of parameters, which might lead to unstable numerical estimates. An alternative is to remove the effects of one of the seasonal patterns and analyze the remaining data.
+
+Removing the large-period seasonal effects can help in making the time-series stationary, besides making it easier to handle the residual series in R as a single-period SARMA model. Mathematically, if $C_n$ represents the number of cycles shared in a day in London, $C_n = \mu_n + Y_n$, where $\mu_n$ corresponds to a long term seasonal effects and $Y_n$ are the high-frequency components. By cleanly subtracting $\mu_n$ from the original time series, we can hope to model the remaining $Y_n$ as a SARMA process.
+
+We explore two ways to remove the large-period seasonal effects: LOESS Smoothing and HP filter. We compare the results to the built-in function in R called `decompose`.
+
+### LOESS smoothing
+We use locally weighted linear regression (LOESS) smoothing to remove the long term effects. Below, we compare the original time series (left column), the LOESS estimated trend (middle column) and the residual time series (right column).
+
+```{r loess_detrend, eval=TRUE, warning=FALSE, echo = FALSE}
+par(mfrow=c(3,3))
+for (span in (1:3)/4){
+  cnt_loess<-loess(cnt~as.numeric(date),ld_data,span=span)
+  cnt_loess_resid <- ld_data$cnt - cnt_loess$fitted
+  plot(ld_data$cnt,main="Number of bikes",xlab="Days",ylab="Count")
+  plot(cnt_loess$fitted,main=paste("LOESS smoothed (span)=",as.character(span),sep=""),xlab="Days",ylab="Count")
+  plot(cnt_loess_resid,main=paste("LOESS residuals (span)=",as.character(span),sep=""),xlab="Days",ylab="Count")
+}
+```
+
+Based on the charts above, we choose a span of 0.5. We observe that a span of 0.5 visually separates the long term seasonality in the data. The residual time-series for 0.5 appears stationary with no apparent changes in the mean or variance with time.
+
+### Hodrick-Prescott smoothing
+We also inspect the behavior of the HP smoothing filter for our data. A value of $\lambda=100$ is the standard econometric choice for removing yearly components. It also follows from our heuristic of visually removing the long-term non-linear trend in the data.
+
+```{r hp_detrend, eval=TRUE, warning=FALSE, message=FALSE, echo = FALSE}
+library(mFilter)
+par(mfrow=c(3,3))
+for (freq in (1:3)){
+cnt_hp<-hpfilter(ld_data$cnt,freq=10^freq,type='lambda',drift=FALSE)
+
+cnt_hp_low <- cnt_hp$trend
+cnt_hp_resid <- ld_data$cnt - cnt_hp$trend
+plot(ld_data$cnt,main="Number of bikes",xlab="Days",ylab="Count")
+  plot(cnt_hp$trend,main=paste("HP smoothed (lambda)=",as.character(10^freq),sep=""),xlab="Days",ylab="Count")
+  plot(cnt_loess_resid,main=paste("HP residuals (lambda)=",as.character(10^freq),sep=""),xlab="Days",ylab="Count")
+}
+```
+
+Besides the low frequency patterns, the HP filter also captures some high frequency patterns. This can be observed by comparing the trend component ($\mu_n$) generated by the HP filter and that by LOESS smoothing.
+
+```{r smooth_compare, eval=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+par(mfrow=c(2,1))
+
+cnt_loess<-loess(cnt~as.numeric(date),ld_data,span=0.5)
+
+cnt_hp<-hpfilter(ld_data$cnt,freq=1000,type='lambda',drift=FALSE)
+
+plot(cnt_loess$fitted,main=paste("LOESS smoothed (span)=",as.character(span),sep=""),xlab="Days",ylab="Count")
+plot(cnt_hp$trend,main=paste("HP smoothed (lambda)=",as.character(1000),sep=""),xlab="Days",ylab="Count")
+
+ld_data$cnt_loess_fit<-cnt_loess$fitted
+ld_data$cnt_loess_resid <- ld_data$cnt - ld_data$cnt_loess
+```
+
+The trend captured by the LOESS smoothing only appears to capture the very long term trends leaving the high frequency trends in the residual. This is a desirable property, as our aim is to capture most of the variability in data through our SARMA model. We choose the smoothing technique based on which one does a minimal detrending of the long-term trend and leaves more variability in the data. Hence, we proceed with the LOESS smoothed time-series for the SARMA model.
+
+As a final check, we test for the stationarity of the new series using the ADF test.
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE }
+# Check if the data is stationary
+adf.test(ld_data$cnt_loess_resid) ## stationary
+```
+
+Further, we compare our results against the standard R time-series function `decompose`.
+
+```{r decompose_smooth, eval=TRUE, warning=FALSE, message=FALSE, echo=FALSE}
+
+plot(decompose(ts (ld_data$cnt, frequency = 100)))
+```
+
+The built-in R function can split the given time series into a trend, a seasonal variation and the random error in the data. We notice that a frequency of 100 captures the yearly component in the time series that we smooth using LOESS smoothing.
+
+## Fitting a SARMA model
+We notice that the residual time-series after LOESS smoothing appears reasonably stationary. However, there seems to be some non-normality, as there is a long tail on the left end of the distribution. We proceed with the assumption of normality and revisit the assumption during model diagnostics.
+
+```{r residual_ts, eval=TRUE, warning=FALSE, echo=FALSE}
+par(mfrow=c(1,2))
+plot(ld_data$cnt_loess_resid,main="LOESS residuals of number of bikes)",xlab="Days",ylab="Residual")
+hist(ld_data$cnt_loess_resid,main="Histogram of LOESS residuals",xlab="LOESS residual value",ylab="Frequency")
+```
+
+We observe in the ACF of the residual time-series ($Y_n$) that there appears a cyclic pattern of period 7. This observation is in agreement with the spectrum of the original time-series, where we noted the presence of seasonality of a period of 7 days.
+
+```{r period_estimation, eval=TRUE, warning=FALSE, echo=FALSE}
+acf(ld_data$cnt_loess_resid,main="ACF of LOESS residuals")
+```
+
+We hope to fit a SARMA$(p,q) \times (P,Q)_7$ model to the LOESS residuals. The algebraic form of the model is
+$\phi(B)\Phi(B^7)(Y_n - \mu)=  \psi(B)\Psi(B^7)\epsilon_n$
+where
+\begin{eqnarray*}
+\mu &=& \E[Y_n]
+\\
+\phi(x)&=&1-\phi_1 x-\dots -\phi_px^p,
+\\ 
+\psi(x)&=&1+\psi_1 x+\dots +\psi_qx^q, 
+\\
+\Phi(x)&=&1-\Phi_1 x-\dots -\Phi_Px^P,
+\\ 
+\Psi(x)&=&1+\Psi_1 x+\dots +\Psi_Qx^Q, 
+\\
+\epsilon_n&\sim&\mathrm{ iid }\, \mathcal{N}[0,\sigma^2].
+\end{eqnarray*}
+We expect the value of $\mu$ to be very close to zero. We can verify the same in our final model. To find good parameters for our model, we use a two step optimization process over four variables $p, q, P$ and $Q$. We optimize using the AIC over the values of $(p,q)$ for a fixed value of $(P=0,Q=1)$. Then we find the minimum AIC for a fixed $(p=p_{opt},q=a_{opt})$ and then over (P,Q). We start with a representation for the seasonal part with period 7, no AR components ($P=0$) and one MA component ($Q=1$). We are only exploring small models and look at the AIC of several SARMA$(p,q) \times (0,1)_7$ for low values for $p$ and $q$.
+
+```{r baseline_def, eval=TRUE, warning=FALSE, echo=FALSE}
+aic_table<- function(data,P,Q){
+  table<-matrix(NA,P+1,Q+1)
+  for (p in 0:P){
+    for (q in 0:Q){
+      table[p+1,q+1] <- arima(data,order=c(p,0,q),seasonal=list(order=c(0,0,1),period=7))$aic
+    }
+  }
+  dimnames(table)<-list(paste("AR",0:P,sep=""),paste("MA",0:Q,sep=""))
+  return(table)
+}
+```
+
+```{r baseline_calc, eval=TRUE, warning=FALSE, echo=FALSE, message=FALSE}
+SARMA_aictable <- aic_table(ld_data$cnt_loess_resid,3,3)
+require(knitr)
+kable(SARMA_aictable,digits=2)
+```
+
+We observe that low values of AIC are consistently achieved for the non-trivial models. We consider the simplest model with both non-trivial AR and MA components $p=1,q=1$. We can compare the possibility of $p=2,q=0$ in a formal hypothesis test for the final model. Using $p=1$ and $q=1$, we optimize for the parameters $P$ and $Q$. Again, we restrict ourselves to small values and inspect the models for low values of $P$ and $Q$.
+
+```{r final_def, eval=TRUE, warning=FALSE, echo=FALSE}
+aic_table2<- function(data,P,Q){
+  table<-matrix(NA,P+1,Q+1)
+  for (p in 0:P){
+    for (q in 0:Q){
+      table[p+1,q+1] <- arima(data,order=c(1,0,1),seasonal=list(order=c(p,0,q),period=7))$aic
+    }
+  }
+  dimnames(table)<-list(paste("SAR",0:P,sep=""),paste("SMA",0:Q,sep=""))
+  return(table)
+}
+
+SARMA2_aictable <- aic_table2(ld_data$cnt_loess_resid,3,3)
+kable(SARMA2_aictable,digits=2)
+```
+
+We observe that the lowest AIC is achieved for $P=1$ and $Q=1$. We have a final model with a total 4 parameters (AR=1, MA=1, SAR=1 and SMA=1). We revisit the choice of AR=1,MA=1 over AR=2,MA=0 that we made earlier. We compare the SARMA$(1,1) \times (1,1)_7$ model against the SARMA$(2,0) \times (1,1)_7$ model by a formal hypothesis test. The null hypothesis is that the data is better represented by a SARMA$(1,1) \times (1,1)_7$ model against the alternative hypothesis that the SARMA$(2,0) \times (1,1)_7$ model is better suited. The test statistic, twice the difference in the log likelihoods of the models, is expected to be distributed $\chi^2_1$. If the test statistic is less than the value of a $\chi^2_1$ distribution at 95% significance level, then the null hypothesis cannot be rejected.
+
+```{r hyp_test, eval=TRUE, warning=FALSE, echo=TRUE}
+model0<-arima(cnt_loess_resid,order=c(1,0,1),seasonal=list(order=c(1,0,1),period=7))
+model1<-arima(cnt_loess_resid,order=c(2,0,0),seasonal=list(order=c(1,0,1),period=7))
+
+delta_ll = 2*(model1$loglik - model0$loglik)
+
+```
+
+We notice that the log likelihood of the SARMA$(2,0) \times (1,1)_7$ model is less than that of SARMA$(1,1) \times (1,1)_7$. This indicates that the SARMA$(1,1) \times (1,1)_7$ model is better suited to the time-series $Y_n$, which represents the remaining terms in the daily number of cycles shared after removing a yearly trend.
+
+### Model diagnostics
+We look at the residuals of the SARMA model. An ACF plot reveals that there are few significant correlations at lags other than zero. The QQ plot reveals that the errors are not normally distributed, especially near the lower end of the distribution. This is in agreement with our earlier observation of the histogram of the smoothed data series. We also observe that the intercept is very close to zero (compared to its standard error), which agrees with our earlier intuition.
+
+```{r model_diag, eval=TRUE, warning=FALSE, echo=FALSE}
+model0
+par(mfrow=c(1,2))
+
+acf(model0$residuals,main="ACF of SARMA(1,1) x (1,1)_7 model residuals")
+
+qqnorm(model1$residuals)
+qqline(model1$residuals)
+```
+
+The non-normality in the charts also indicates a model misspecification. We attempt to better model the data using linear regression of bike rentals with the weather covariates and ARMA errors.
+
+## Linear regression with ARMA errors
+To learn more about the covariates and how they can be potentially related to bike sharing rental counts, we perform linear regression with ARMA error. We hope to model the bikes rented as a function of the average temperature, average humidity and the average wind speed of the day.
+
+$$C_n = \sum_{k=1}^KZ_{n,k}\beta_k + \epsilon_{n}$$,
+
+where $\epsilon_{n}$ is a Gaussian ARMA process and where Z is a matrix of coefficients for the weather variables $\beta_1$ (temperature), $\beta_2$ (humidity), $\beta_3$ (windspeed) and $\beta_4$ (weekend).
+
+Note the difference here from our approach of modelling the process as composed of two frequency components. Here, we say that while there exist long-period (yearly) patterns, they can be explained by the patterns in the weather variables. The remainder error, which cannot be explained by the weather variables, is generated by an ARMA process.
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+aic_table <- function(data,P,Q,xreg=NULL){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg=xreg)$aic
+      }
+  }
+dimnames(table) <- list(paste("AR",0:P, sep=""),
+paste("MA",0:Q,sep=""))
+table
+}
+e_aic_table <- aic_table(ld_data$cnt,3,3,xreg=ld_data[,c(3:6)])
+kable(e_aic_table,digits=2)
+```
+
+Among the small models, we consider AR=1, MA=1 and perform a diagnostic check on the model.
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+model2 <- arima(ld_data$cnt,xreg=ld_data[,c(3:6)],order=c(1,0,1))
+acf(model2$residuals, main = "ACF Plot of Residuals")
+```
+
+We observe that there remains a component with period 7, evident from the correlation peaks at lags of 7. We hence attempt to fit a SARMA model to the linear regression errors.
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+model3 <- arima(ld_data$cnt,xreg=ld_data[,c(3:6)],order=c(1,0,1),seasonal=list(order=c(1,0,1),period=7))
+par(mfrow=c(1,2))
+
+acf(model3$residuals, main = "ACF Plot of Residuals")
+qqnorm(model3$residuals, main = "Normal Q-Q Plot of Residuals")
+qqline(model3$residuals)
+```
+
+The newer model can better capture the weekly variability of the number of bicycles shared. However, we see violations of our assumption of Gaussian residuals.
+
+### Linear regression with detrended variables
+As we have noted earlier, there are components of multiple frequency terms in the data. We noticed that the LOESS smoothing with a span of 0.5 is a reasonable option to remove annual periodicity in the data. We perform the linear regression with LOESS smoothing of the data. This is done as an exercise to more closely investigate the high frequency process in the data. A different formulation that is more robust than LOESS smoothing might give us better intuition of the long-term trends. For this report, we consider it effective in removing the large period trends in both the number of bicycles and weather variables. We use LOESS smoothing to make the variables in our model stationary.
+
+By smoothing, we change our mathematical description of the model. Our new model is,
+$$
+\begin{aligned}
+C_n &= \mu_n + Y_n\\
+\beta_n&=\mu_{\beta,n}+\delta \beta_n\\ 
+Y_n&= \sum_{k=1}^KZ_{n,k}\delta\beta_{n,k} + \epsilon_{n}\\
+\epsilon_n&\sim \mathrm{ iid }\, \mathcal{N}[0,\sigma^2].
+\end{aligned}
+$$
+where $\beta_n$ is a time-series of the vector of non-stationary weather variables. By detrending the time-series, we obtain the stationary time-series $\delta \beta_n$.
+
+```{r, warning = FALSE, message = FALSE, echo = FALSE}
+t1_loess <- loess(t1~as.numeric(date),ld_data,span=0.5)
+ld_data$t1_loess_resid <- ld_data$t1 - t1_loess$fitted
+
+model4 <- arima(ld_data$cnt,xreg=ld_data[,c(9,4:6)],order=c(1,0,1),seasonal=list(order=c(1,0,1),period=7))
+model4
+par(mfrow=c(1,2))
+acf(model4$residuals, main = "ACF Plot of Residuals")
+qqnorm(model4$residuals, main = "Normal Q-Q Plot of Residuals")
+qqline(model4$residuals)
+```
+
+Now we test the following hypotheses,
+
+<div align="center">
+$H_{0}: \beta = 0$
+
+$H_{A}: \beta \ne 0$
+</div>
+
+Using a likelihood ratio test, we come up with a p-value of approximately 0. Which means that there is strong evidence against the null hypothesis that $\beta = 0$, which suggests that $\beta$ is not 0 and thus the smoothed mean daily temperature (C), mean daily humidity, mean daily wind speed, and whether the day is a weekend are significant.
+
+```{r, echo = FALSE, eval = F}
+log_lik_ratio <- as.numeric(
+logLik(arima(ld_data$cnt,xreg=ld_data[,c(9,4:6)],order=c(1,0,1),seasonal=list(order=c(1,0,1),period=7))) -
+logLik(arima(ld_data$cnt,order=c(1,0,1),seasonal=list(order=c(1,0,1),period=7)
+)))
+LRT_pval <- 1-pchisq(2*log_lik_ratio,df=4)
+LRT_pval
+```
+
+
+## Conclusions
+
+From studying the data, we find that there is a similar seasonality in the bike sharing data and the London climate data. Some of the data is non-stationary which was mitigated by using the LOESS smoothing and HP filtering. We then learned that LOESS smoothing does a more suitable job of detrending the data. We then run our models and based on running the linear regression with the ARMA error on our covariates, we conclude that there is evidence to suggest an association between daily bike share rentals in London and mean daily humidity, mean daily wind speed, whether the day is on a weekend, and the detrended or smoothed mean daily temperature (C). 
+
+## References
+Data from Kaggle: [HERE](https://www.kaggle.com/hmavrodiev/london-bike-sharing-dataset/)
+
+Previous midterm project: Source [HERE](https://ionides.github.io/531w18/midterm_project/project22/midterm_project.html).
+
+Information on data: Source [HERE](https://medium.com/swlh/what-would-make-you-use-a-london-bike-share-b70a3d6a6bf1)
+
+Previous midterm project: Source [HERE](https://ionides.github.io/531w20/midterm_project/project1/Midterm-Project.html).
+
+AIC definition and equation: Source [HERE](https://ionides.github.io/531w21/05/slides-annotated-revised.pdf)
+
+LOESS Smoothing definition and code: Source [HERE](https://ionides.github.io/531w21/08/slides-annotated.pdf)
+
+HP Filter definition and equation: Source [HERE](https://ionides.github.io/531w21/09/slides-annotated.pdf)
+
+ADF test information: Source [HERE](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test)
+
+London Tube strike: Source [HERE](https://www.bbc.co.uk/news/live/uk-england-london-33674627)

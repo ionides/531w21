@@ -1,0 +1,238 @@
+---
+title: "Analysis on the U.S. 10-year Treasury Bond Yied"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: united
+    highlight: tango
+    number_sections: yes
+  pdf_document:
+    toc: yes
+---
+
+# Motivation and Background for the analysis
+
+- US Treasury Bond is a common investment tool for many institutional investors, including insurance companies. Specifically, insurance companies are required to invest in long-term bonds to match the asset duration with the liability duration and enhance the RBC (Risk-Based Capital) ratio. As a person who is devoting the career to the insurance industry, I have a particular interest in the trend, cyclic pattern, and the association with other factors of the U.S. Treasury long-term bond. 
+
+- The data is downloaded from the U.S. Treasury Website. Please note that it may take a minute to download the data. If it takes too long, please pause and rerun the code.
+
+- In this analysis, I choose to analyze the 10-year data among different long-term bonds because it has the most data points. The 30-year yield data was not available for a period between 2002 and 2006 because 30 year securities were not being offered during that period. The 20-year yield is not available until October 1993 because 20-year securities were not offered by then. 
+
+- I choose to transform the daily data into monthly data for the analysis which has just right sample size, $n=259$. The daily data has $n=7801$ samples, which are too large, and the annual data has $n=19$, which are too small.
+
+# Basic Plot
+
+```{r import_package, message=FALSE, warning=FALSE, include=FALSE}
+# Importing packages
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(GGally)
+library(httr)
+library(XML)
+```
+
+```{r load_data, message=FALSE, warning=FALSE, include=FALSE}
+# Loading Dataset
+
+year_list = 1990:2021
+dat = data.frame()
+for (year in year_list) {
+  URL = paste0("https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=yieldYear&year=",year)
+  
+  urldata <- httr::GET(URL)
+  data <- XML::readHTMLTable(rawToChar(urldata$content),
+                        stringsAsFactors = FALSE)
+  
+  # Finds html based list element w/daily data for the year
+  namesCheck <- c("Date","1 mo","3 mo","6 mo","1 yr","2 yr","3 yr","5 yr","7 yr","10 yr","20 yr","30 yr")
+  dataCheck <- NULL
+  for(i in 1:length(data)){
+        dataCheck[[i]] <- names(data[[i]])
+  }
+  
+  ## Returns appropriate frame
+  dataCheck <- which(unlist(lapply(1:length(dataCheck), function(i) 
+     (dataCheck[[i]] == namesCheck)[1])) == TRUE)
+  
+  temp <- as.data.frame((data[dataCheck]))
+  names(temp) <- gsub("NULL.","", names(temp)) # Take out "NULL."
+  
+  dat <- rbind(dat, temp)
+}
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Change the data format and impute missing values
+
+# Change the type of 10-year yield from character to numeric 
+dat[,'10.yr'] = as.numeric(dat[,'10.yr'])
+
+# Replace a row having 0 values for all variables with the previous day's row
+dat[which(dat['10.yr'] < 0.5),] = dat[which(dat['10.yr'] < 0.5)-1, ]
+
+# Replace a row having NA value for 10-year yield with the previous day's row
+dat[which(dat[,'10.yr'] %in% NA),][,'10.yr'] = dat[which(dat[,'10.yr'] %in% NA)-1,][,'10.yr']
+
+# Transform Date into a standard format 'POSIXct'
+data = dat[, c('Date', '10.yr')]
+colnames(data) = c('Date', 'Yield')
+data$Date = strptime(data$Date, "%m/%d/%y") %>% as.Date()
+data$year = format(data$Date, format="%Y") %>% as.numeric()
+data$month = format(data$Date, format="%m") %>% as.numeric()
+data$day = format(data$Date, format="%d") %>% as.numeric()
+```
+
+```{r}
+# Generate and plot a monthly data for 10-year Treasury Bond Yields
+
+for (year in 1990:2021) {
+  for (month in 1:12) {
+    data %>% filter(year==year, month==month)
+  }
+}
+
+monthdata = data %>% filter(day==2)
+plot(Yield~Date, data=monthdata, ty="l", main="10-year Treasury Bond Yields")
+```
+
+We can see that there is a downward trend. I first consider to fit ARMA model for this data.
+
+# ARMA: Parameter Estimation and Model Identification
+
+```{r split_trte, message=FALSE, warning=FALSE}
+aic_table = function(data,P,Q) {
+  table = matrix(NA, (P+1), (Q+1))
+  for (p in 0:P) {
+    for (q in 0:Q) {
+      table[p+1,q+1] = arima(data, order=c(p,0,q))$aic
+    }
+  }
+  dimnames(table) = list(paste("AR", 0:P, sep=""),paste("MA", 0:Q, sep=""))
+  table
+}
+yield = monthdata$Yield
+yield = as.numeric(yield)
+
+yield_aic_table = aic_table(yield, 3, 4)
+require(knitr)
+kable(yield_aic_table, digits=2)
+```
+
+According to the table above, ARMA(1,0) model has the lowest AIC. The AR(1) model is of the form $Y_n =\mu+(Y_{n-1}-\mu)+\epsilon_n$, where the $\epsilon_n$ is a white noise process with distribution $N(0, \sigma^2)$. Although the AIC table identifies this model as the most appropriate or the data, we can consider various nearby models which have similar level of AIC values, including the ARMA(1,1), ARMA(2,0) and ARMA(3,2).
+
+Among them, ARMA(3,2) is the least preferred due to its lack of simplicity. I fit the rest of three models to the data and the results are listed in the table below. The first thing to notice is that all four models give similar estimates for the intercept, around $4.5$, and their standard error estimates are also centered around $1.65$.
+
+```{r echo=FALSE}
+pairs = list(c(1,0), c(1,1), c(2,0))
+table = data.frame()
+i=1
+
+for (pair in pairs) {
+  table[i, 1] = arima(yield, order=c(pair[1],0,pair[2]))$coef["intercept"]
+  table[i, 2] = sqrt(diag(arima(yield, order=c(pair[1],0,pair[2]))$var.coef))["intercept"]
+  if ((arima(yield, order=c(pair[1],0,pair[2]))$coef["ar1"] %in% NA)) {
+    table[i,3] = NA
+  } else {
+    table[i,3] = arima(yield, order=c(pair[1],0,pair[2]))$coef["ar1"]
+  } 
+  if ((arima(yield, order=c(pair[1],0,pair[2]))$coef["ar2"] %in% NA)) {
+    table[i,4] = NA
+  } else {
+    table[i,4] = arima(yield, order=c(pair[1],0,pair[2]))$coef["ar2"]
+  }
+  if ((arima(yield, order=c(pair[1],0,pair[2]))$coef["ma1"] %in% NA)) {
+    table[i,5] = NA
+  } else {
+    table[i,5] = arima(yield, order=c(pair[1],0,pair[2]))$coef["ma1"]
+  }
+  i = i+1
+}
+rownames(table) = c("ARMA(1,0)", "ARMA(1,1)", "ARMA(2,0)")
+colnames(table) = c("Intercept", "SE (Intercept)", "AR1 Coef.",
+                    "AR2 Coef.","MA1 Coef.")
+kable(table, digits=3)
+
+ar1=arima(yield, order=c(1,0,0))
+```
+
+According to the table above, the MA1 coefficient of ARMA(1,1) and the AR2 coefficient of ARMA(2,0) are very close to zero and don't seem to be doing anything significantly different from the ARMA(1,0). Then, the ARMA(1,0) model can be written as $Y_{n}=4.503+0.991(Y_{n-1}-4.503)+\epsilon_{n}$. 
+
+Next, I examined the roots of the AR model as below. The root is outside the unit circle, suggesting we have a stationary causal fitted ARMA.
+
+```{r}
+polyroot(c(1, -coef(ar1)[c("ar1")]))
+```
+
+Since I have identified the ARMA(1,0) as the best model for the data, I need to check that the model assumption are valid. First, I will look at the residuals of the fitted ARMA(1,0) model as a time series plot.
+
+```{r echo=FALSE}
+plot(arima(yield, order=c(1,0,0))$residuals,ylab="Residuals of ARMA(1,0)")
+```
+
+The time series plot shows no striking patterns in the residuals, so I don't think there is anything too worrisome here. Next, we can draw the ACF plot for the residuals. This will allow us to check our assumption that the errors ${e_n}$ are uncorrelated. There is only two lags with significant autocorrelation (lag 9 and 17), while the rest may be considered sufficiently close to zero. While this may be the case, there are also some potentially non-negligible fluctuations in the autocorrelation that might be interesting to look into more carefully. This results into motivation for the investigating the cycle, which will be discussed later in this report.
+
+```{r}
+z = arima(yield, order=c(1,0,0))$residuals
+acf(z)
+```
+
+Finally, in fitting an ARMA model, we make the assumption that {$\epsilon_n$}$\sim N(0,\sigma^2)$ and we can check the normality assumption with a QQ-plot of the residuals. The residuals do not seem to be normal to make this assumption valid. This suggests that there might be another model that better fits for this data. One possible solution here may be to conduct furtehr analysis on the cyclic pattern, which results into the investigation in the frequency domain.
+
+```{r echo=FALSE}
+z = arima(yield, order=c(1,0,0))$residuals
+qqnorm(z, pch=1, frame=TRUE)
+qqline(z, col = "blue", lwd=1)
+```
+
+# Frequency domain data analysis
+
+Let's figure out the frequency domain. First, I plot the smoothed periodogram.
+
+```{r}
+smoothed_r = spectrum(yield, spans=c(5,5), main="Smoothed periodogram")
+dom_freq = smoothed_r$freq[which.max(smoothed_r$spec)]
+dom_period = 1/dom_freq
+dom_freq; dom_period
+```
+
+Now I use parametric method to estimate the spectral density.
+
+```{r}
+estimated = spectrum(yield, main="Spectrum estimated via AR model picked by AIC")
+abline(v=estimated$freq[which.max(estimated$spec)], lty="dotted")
+estimated$freq[which.max(estimated$spec)]
+1/estimated$freq[which.max(estimated$spec)]
+```
+We can see that the period estimated by the parametric method is a multiple ($90 = 45\times2)$ of the period estimated by the smoothed spectrum. This suggests that the period of 45 may be useful for the further analysis.
+
+# Conclusion
+
+- The 10-year US Treasury Bond yield has a trend, and it is well explained by the ARMA(1,0) model. However, the ARMA model also suggests to try other methods due to the lack of normality for the error term.
+
+- The 10-year Treasury yield has kept moving downward since 1990. Since there is not much room below the current level, it may be interesting to think about and predict the future long-term trend for the yield. 
+
+- If we focus on the recent time period after 2020, it seems that the yield started to increase. We may be able to pay attention to the future short-term change to see whether this upward movement is consistent with the cyclic pattern that I found in my analysis in the frequency domain.
+
+- For the final project, I will extend the research to investigate the association with the other data. The candidates are unemployment rates and the PMI (Purchasing Managers' Index).
+
+# Reference
+
+[1] 10-year U.S. Treasury Bond Yield data
+
+https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=yield
+
+[2] Introduction to Risk-Based Capital (RBC) by National Association of Insurance Commissioners
+
+https://content.naic.org/cipr_topics/topic_riskbased_capital.htm
+
+[3] Parsing 10-year federal note yield from the website
+
+https://stackoverflow.com/questions/37952589/parsing-10-year-federal-note-yield-from-the-website
+
+[4] Prof. Edward Ionides' Lecture Slides for STATS 531 (Winter 2021)
+
+https://ionides.github.io/531w21/#class-notes-and-lectures
+

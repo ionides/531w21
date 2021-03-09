@@ -1,0 +1,202 @@
+---
+title: "Midterm Project- Time Series Study of monthly rain in Seattle from 1997 to 2017"
+output:
+  html_document:
+    toc: true
+    theme: flatly
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1)
+```
+
+
+```{r message=FALSE,echo=FALSE}
+library(tidyverse)
+library(knitr)
+data = read.csv("seattleWeather_1948-2017.csv")
+library(lubridate)
+```
+
+
+```{r echo=FALSE}
+# data cleaning
+data = data %>% mutate(year = year(DATE),month = month(DATE)) %>% filter(year %in% c(1997:2017)) %>% group_by(year,month) %>% summarize(rain = mean(PRCP,na.rm =TRUE)) %>% mutate(time=year+month/12)
+```
+
+# Introduction
+
+Besides coffee and technology companies, one of the things that Seattle is most famous for is how frequent it rains. Daily preciptation may fluctuate a lot, and average precipitation of a month may be different based on different seasons. In this project, I will analyze the monthly average precipitation from 1997 to 2017.  
+
+# Data Summary and Exploratory Data Analysis
+
+In the original dataset, it contains daily precipitation data of seattle from 1948 to 2017 with other features, such as maximum and minimum temperature of the day. Since I'm only interested in the more general precipitation trend in recent years, I decided to use only the data from 1997 to 2017. Plus, I took the average of the daily precipitation of a month, and used the transformed data in the following analysis.  
+
+As can be seen from the summary below, the minimum average monthly precipitation is 0, and the maximum is precipitation.
+```{r echo=FALSE}
+#data$rain[data$rain == 0] = 0.0001
+kable(t(as.matrix(summary(data$rain))))
+```
+  
+Based on the plot of average monthly preciptation against time, there is no apparent trend or seasoning. Both the mean and variance of average monthly preciptation seems stationary from 1997 to 2017.
+```{r echo=FALSE}
+plot(data$time, data$rain, type= "l", xlim = c(1997,2017), main = "Average monthly rain from 1997 to 2017", ylab = "rainfall (inch)", xlab="")
+```
+  
+The decomposition of the data in trends, season, noise and cycles. As can be seen from the plots below, the trend doesn't fluctuate, and the noise seems mean and variance stationary despite a peak near 2007.
+```{r echo=FALSE}
+rain = data$rain
+time = data$time
+rain_loess = loess(rain~time,span = 0.5)
+trend = ts(loess(rain~time,span=0.5)$fitted,start=1997,frequency=12)
+noise = ts(rain-loess(rain~time,span=0.1)$fitted,start=1997,frequency=12)
+cycles = rain-noise-trend
+plot(ts.union(rain,trend,noise,cycles), main="Decomposition of rain as trend + noise + cycles")
+```
+
+# Fitting ARMA(p,q) model
+
+Now we can fit a stationary Gaussian ARMA(p,q) model $\phi(B)\left(Y_{n}-\mu\right)=\psi(B) \epsilon_{n}$ with parameters $\theta=\left(\phi_{1: p}, \psi_{1: q}, \mu, \sigma^{2}\right)$
+
+$$
+\begin{aligned}
+\mu &=\mathbb{E}\left[Y_{n}\right] \\
+\phi(x) &=1-\phi_{1} x-\cdots-\phi_{p} x^{p} \\ 
+\psi(x) &=1+\psi_{1} x+\cdots+\psi_{q} x^{q} \\
+\epsilon_{n} & \sim N\left[0, \sigma^{2}\right]
+\end{aligned}
+$$
+
+Specifically, $\phi(x)=1-\phi_{1} x-\cdots-\phi_{p} x^{p}$ represents autoregressive model, and $\psi(x)=1+\psi_{1} x+\cdots+\psi_{q} x^{q}$ represents moving average model. 
+
+## ARMA(p,q) model
+```{r echo=FALSE}
+aic_table <-function(data,P,Q){
+  table <-matrix(NA,(P+1),(Q+1))
+  for(p in 0:P){
+    for(q in 0:Q){
+      table[p+1,q+1] <- arima(data,order =c(p,0,q),method = "ML")$aic
+    }
+  }
+  dimnames(table) <- list(paste("AR",0:P,sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+
+aic_table1 <-aic_table(data$rain,4,5)
+
+kable(aic_table1,digits=2)
+```
+  
+Based on the AIC (Akaike’s information criterion), an approach to compare different models based on the likelihoods with penalty based on complexity of models, we have three best models with the lowest AIC, ARMA(3,2), ARMA(2,2),ARMA(2,3). Since ARMA(2,3) is rather simpler and lower in terms of AIC, I chose it to fit the precipitation data.
+
+```{r echo=FALSE}
+arma23 <- arima(data$rain, order=c(2,0,3))
+```
+
+## Diagnostics
+  
+After fitting the data using ARMA(2,3) model, we need to check the causality and the Invertibility of the models by checking the roots of the AR polynomial and MA polynomial. The first root of the AR polynomial is inside the unit circle, so it's not causal. For the invertibility, since all the roots are outside the unit circle, the model is therefore invertible. So it's reliable to use the ARMA(2,3) model to fit the data.
+```{r}
+# check causality
+abs(polyroot(c(1,arma23$coef[1],arma23$coef[2])))
+#check invertibility
+abs(polyroot(c(1,arma23$coef[3], arma23$coef[4],arma23$coef[5])))
+```
+  
+Based on the plot, the mean of residuals is around 0, and the variance seems fairly constant. Thus, the model meets the requirement of white noise.  
+
+```{r echo=FALSE}
+plot(arma23$residuals, ylab="residuals", main="Residuals of ARMA(2,3) model")
+```
+  
+Based on the plot, there is no autocorrelation between different residuals outside the 95% confidence interval, and, according to the normal QQ plot, the data doesn't seem normal. In fact, the distribution of residuals has heavy tail respective to the normal distribution.
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+acf(arma23$resid,main="ACF of ARMA(2,3) residuals")
+
+qqnorm(arma23$residuals)
+qqline(arma23$residuals)
+```
+
+# Spectrum Analysis
+
+Even though we assumed there is no seasonality in the data, we can still use the spectrum analysis to find the periods of the data. Using both the unparametric and parametric spectrum method, the dominant frequency seems to be around 0.0825, and the period is around 12 months.  
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+smoothed = spectrum(data$rain,spans=c(5,5),main="Smoothed periodogram",xlab="frequency")
+estimate = spectrum(data$rain,method="ar", main="Spectrum AR model picked based on AIC")
+```
+
+```{r include=FALSE}
+smoothed$freq[which.max(smoothed$spec)]
+estimate$freq[which.max(estimate$spec)]
+```
+
+|           | Smoothed      | Unsmoothed    |
+|-----------|---------------|---------------|
+| Frequency | 0.08203125    | 0.08316633    |
+| period    | 12.1904761905 | 12.0240967709 |
+
+
+# Fitting SARMA(p,q)x(P,Q) model
+  
+In order to check whether there's an actual seasonality in the data, I decided to use the seasonal ARMA model (SARMA). I used the period as 9 based on the ACF plot of ARMA(2,3) model.
+
+```{r echo=FALSE}
+sarma_203_100 = arima(data$rain,order=c(2,0,3), seasonal=list(order=c(1,0,0),period=9))
+
+sarma_203_001 = arima(data$rain,order=c(2,0,3), seasonal=list(order=c(0,0,1),period=9))
+```
+
+  
+The AIC values of SARMA(2,3)×(1,0) and SARMA(2,3)×(0,1) are -635.72 and -635.27. The SARMA(2,3)×(1,0) has lower AIC, so it's a better model. In fact, based on the AIC, SARMA(2,3)×(1,0) improves by having lower AIC compared to ARMA(2,3) model.  
+
+|     | SARMA(2,3)×(1,0) | SARMA(2,3)×(0,1) |
+|-----|------------------|------------------|
+| AIC | -635.72          | -635.27          |
+
+
+## Diagnostics
+  
+Based on the plot, there is no autocorrelation between different residuals outside the 95% confidence interval, and, according to the normal QQ plot, the data still doesn't seem normal. In fact, the distribution of residuals still has heavy tail respective to the normal distribution. 
+  
+```{r echo=FALSE}
+par(mfrow=c(1,2))
+acf(sarma_203_100$resid,main="ACF SARMA(2,3)×(1,0)_9 residuals")
+
+qqnorm(sarma_203_100$residuals)
+qqline(sarma_203_100$residuals)
+```
+
+As can be seen from the plot below, the SARMA(2,3)×(1,0) model fits well to the data, although it doesn't necessarily capture the peaks.
+
+```{r echo=FALSE}
+plot(x = data$time, y = data$rain,type="l",col="red",ylim =c(0,0.5), ylab = "Rainfall (inch)",xlab = 'Time', main = 'Fitted values using SARMA(2,3)×(1,0)_9 v.s. data')
+
+lines(x = data$time, y = rain-sarma_203_100$residuals,type="l",col="green",ylim =c(0,0.5), ylab = "Rainfall (mm)",xlab = 'time', main = 'Fitted values v.s. data')
+
+legend(2015, 0.475, legend=c("data", "fit"),col=c("red", "green"), lty=c(1,1), cex=0.8)
+```
+
+# Conclusion
+  
+In this report, I seek to use the time series models to fit the monthly average precipitation in Seattle from 1997 to 2017. To summarize, the model ARMA(2,3) is the best model if seasonality is not considered. Although there is only weak evidence of seasonality, when fitting the model SARMA(2,3)×(1,0), the fit does improve in terms of AIC, and based on the ACF plot, all the residuals are within 95% confidence interval.
+
+
+# Reference
+
+1. Code and Invertibility concept from Ionides, Edward ‘Analysis of Time Series’ from https://ionides.github.io/531w21/ 
+
+2. Data from: https://www.kaggle.com/rtatman/did-it-rain-in-seattle-19482017
+
+
+
+
+
+
+
+
+
+

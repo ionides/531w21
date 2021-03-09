@@ -1,0 +1,751 @@
+---
+title: "Time series analysis on climate dataset in Delhi"
+output:
+  bookdown::html_document2:
+    theme: flatly
+    toc: yes
+    toc_float: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tseries)
+library(ggplot2)
+library(knitr)
+```
+
+# Introduction
+
+Entering the age of information, more and more people enjoy the benefits brought by weather forecasts. Weather prediction can be accessed conveniently and instantly, making it popular among a variety of people. People tend to rely on the temperature forecasts to decide their outfits and travel plans. Hence it is of great importance and interest to tell to elements involved in predicting the temperature, as well as the best predictive model to access the fit by using the time series data.
+
+Comparatively speaking, India has one of the most extreme climate in the world. Unlike most other tropical countries, India has a very hot summer(April-July) and very cold winter(December-January). In the year of 2019, the India floods caused by torrential rain became a catestrophe that made over 140 death and hundreds of thousands people evacuated from their homes. It is of our great interest to investigate about the time series data of India with the incorporation of different relevant features in weather report, such as wind speed, humidity and pressure. We obtained our Daily Climate Time Series Data from Kaggle.com with the daily report of mean temperature, humidity, wind speed and mean pressure from January 1, 2013 to April 24, 2017 in the capital territory of India. The dataset contains 1462 observations and 4 features for the city of Delhi. Statistically speaking, every feature can contribute to the change of the other features. However, in this project, we will mainly focus on the intepretation of temperature as it is the most intuitive and commonly used by the citizens. Our goal is to find the best model and quantify the extent to which the temperature is influenced by the other variables.
+
+In this report, we will explore we two different methods to remove trend and seasonality from the original data. We first used the difference ARMA model and fit models that investigate on the relationship between mean temperature changes and other variables, then we will use non-difference ARMA model that used regression model with ARMA error based on the original scale of the data without taking difference of adjacent data points. In this way, we can find out whether there exists relationship between temperature of Delhi and other three meteorological features. Finally, we will make comparisons about the models we have adopted and analyze the output with implications in the real world.
+
+# Data overview
+
+## Descriptive analysis on temperature, wind speed, pressure and humidity ##
+
+Our data set consist of four variables, which are mean temperature, wind speed, humidity and mean pressure. From the plot we can see the first three variables have some oscillatory behaviors and pressure is stable for almost all the time despite some outliers.
+
+```{r original-lineplots,echo=FALSE,fig.cap="Plots of Temperature, Wind Speed, Humidity and Pressure over time",results='hide',fig.align='center'}
+ta <- read.csv('DailyDelhiClimateTrain.csv')
+nrow(ta)
+par(mfrow=c(2,2))
+ta$date = as.Date(ta$date,"%Y-%m-%d")
+idxs = which((ta$meanpressure<960) | (ta$meanpressure>1300))
+ta$meanpressure[idxs] = sapply(idxs,FUN = function(idx) mean(ta$meanpressure[idx-1],ta$meanpressure[idx+1]))
+plot(ta$date, ta$meantemp,type = 'l',xlab = "Date",ylab = "Temperature")
+plot(ta$date,ta$wind_speed,type='l',xlab = "Date", ylab = "Wind Speed")
+plot(ta$date,ta$humidity,type='l',xlab = "Date", ylab = "Humidity")
+plot(ta$date,ta$meanpressure,type='l',xlab = "Date", ylab = "Pressure")
+```
+## Identify seasonality of the temperature over time ##
+
+Now we focus on the temperature. To identify the circle, we first take a look at the spectrum.
+
+```{r unsmoothed-spec-plot,echo=FALSE,fig.align='center',fig.cap="Unsmoothed Periodogram of Temperature",results='hide'}
+a<-spectrum(ta$meantemp,main="")
+a$freq[which.max(a$spec)]
+```
+
+The Unsmoothed spectrum plot reveals that there is a cycle with frequency 0.00267 in raw data, which corresponds to 1 year. This is same with out initial thoughts of the length of period. To view the cycle more clearly, we decompose the data in different frequency. High frequency might be considered as noise and low frequency might be considered as trend.
+
+```{r decomp-plots,fig.align='center',fig.cap="Decomposition of mean temperature as trend+noise+cycles",echo=FALSE}
+data_low <- ts(loess(ta$meantemp~c(1:1462),span=0.5)$fitted,start=1,frequency = 12)
+data_hi <- ts(ta$meantemp-loess(ta$meantemp~c(1:1462),span=0.1)$fitted,start=1,frequency=12)
+data_cycles <- ta$meantemp-data_low-data_hi
+plot(ts.union(ta$meantemp,data_low,data_hi,data_cycles),main = '')
+```
+
+From the plot we can see the seasonality. Besides, we can also identify the non-stationarity of data. To explore the relationship between temperature and other three meteorological features, we need to remove the trend and seasonality of original data. The reason is that the trend and seasonality may caused by some confounders, i.e seasonal change of the climate in Delhi and global warming. The trend and seasonality will introduce some fake relationships between temperature and other variables. So we decide to first remove trend and seasonality before doing subsequent analysis. 
+
+In this report, we used two different methods to remove trend and seasonality from the original data. 
+
+* First we use difference ARMA model, which is first order difference ARIMA model. Specifically, we first take the difference between observations $\Delta Y_n = Y_{n} - Y_{n-1}$ to remove the trend and seasonality and then using the ARMA model to fit the data. 
+* The second approach we used to remove trend and seasonality was LOESS smoothing. We used LOESS smoothing to extract the high-frequency part of the data and model the extracted data using ARMA models.
+
+
+# Difference ARMA model (ARIMA)
+
+## Data preprocess
+
+For this part, we try to difference the mean temperature data such that $$\Delta Y_n=Y_n-Y_{n-1}$$
+
+```{r diff-temp-plot,fig.align='center',fig.cap="Differenced data of mean temperature"}
+plot(ta$date[-c(1)],diff(ta$meantemp),type='l',main = '',ylab = "Differenced temperature",xlab = "Date")
+```
+
+Now, the trend seems to be mean stationary around zero, and the covariance stationarity seems not to be a problem. 
+
+```{r}
+adf.test(diff(ta$meantemp))
+```
+
+Also, The Augmented Dickey-Fuller Test shows that the null hypothesis is rejected and the time series is stationary.
+
+```{r acf-temp-plot,fig.align='center',fig.cap="ACF of differenced mean tempertaure",echo=FALSE}
+acf(diff(ta$meantemp),main='')
+```
+
+ The estimated ACF plots show that there is an exponential decay in the estimated autocorrelation. Almost values are inside the dash line, which suggests they are not significant different from 0, indicating stationarity. For humidity, wind speed and mean pressure, we also take difference and use them to fit models. Adjusted data are shown as following.
+ 
+```{r diff-humid-wind-pressure,fig.align='center',fig.cap="Differenced data of mean humidity, temperature and wind speed",echo=FALSE}
+par(mfrow=c(2,2))
+plot(ta$date[-c(1)],diff(ta$humidity),type = 'l',ylab = "Differenced Humidity",xlab = "Date")
+plot(ta$date[-c(1)],diff(ta$wind_speed),type = 'l',ylab = "Differenced Wind Speed",xlab = "Date")
+plot(ta$date[-c(1)],diff(ta$meanpressure),type = 'l',ylab = "Differenced Pressure",xlab = "Date")
+```
+ 
+## Models
+
+To analyze the relationship between mean temperature changes and other variables, we'll fit four models separately.
+
+### Model 1: mean temperature and humidity
+
+```{r,include=FALSE}
+library(knitr) 
+aic_table <- function(data,P,Q,xreg=NULL){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg = xreg)$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b>AR",0:P, "</b>",sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+```
+
+#### model selection
+
+For model 1, we want to explore the relation between changes of mean temperature and humidity. To choose a proper model, we'll use Akaike’s information criterion (AIC) to select the best ARMA model to model the noise. We create an AIC table with autoregression order up to 4 and moving average order up to 4. For models with ar and ma larger than 5, we consider them overfitting.
+
+```{r aic-table1,echo=FALSE,warning=FALSE}
+hu_xreg <- data.frame(x1=diff(ta$humidity))
+aic_humidity <- aic_table(diff(ta$meantemp),4,4,xreg = hu_xreg)
+kable(aic_humidity,digits = 2,caption = "AIC Table of models that regresses differenced temperature on differenced humidity with ARMA error")
+```
+
+The model to consider here is ARMA(1,3), which has the lowest AIC values. An alternative model is ARMA(1,1), which has larger AIC value but less parameters. To determine which model to use, we conduct a hypothesis test using Wilks’ approximation. For this test, the null hypothesis is ARMA(1,1) is better, while the alternative correponds to ARMA(1,1). Then we use an approximation $$\Lambda=2(l_1-l_0)\approx \chi^2_{D_1-D_0}$$
+
+where $l_i$ is the maximum log likelihood under hypothesis $H_i$ and $D_i$ is the number of parameters under hypothesis $H_i$. If $\Lambda$ is bigger than $\chi^2$ cutoff, we'll reject the null hypothesis. The maximum log likelihood can be estimated by the function $arima()$. Then $\Lambda=37.796$, and the cutoff of $\chi^2_2$ is 
+
+```{r,include=FALSE}
+result1 <- arima(diff(ta$meantemp),order = c(1,0,3),xreg = diff(ta$humidity))
+result2 <- arima(diff(ta$meantemp),order = c(1,0,1),xreg = diff(ta$humidity))
+c(result2$loglik,result1$loglik)
+```
+
+```{r}
+qchisq(0.95,df=2)
+```
+
+This means we will reject the null hypothesis and ARMA(1,3) is better. Therefore our model 1 is $$\Delta(temperature)_t=\beta_0+\beta_1\Delta(humidity)_t+\epsilon_t$$
+
+where $\epsilon_t$ is ARMA(1,3) and the coefficients are shown below.
+
+```{r,echo=FALSE}
+result1
+```
+
+Then we check ar and ma roots. It seems that all the roots are outside the unit circle, suggesting desirable property of causality and invertibility.
+
+```{r}
+polyroot(c(1,-coef(result1)[c('ar1')]))
+polyroot(c(1,coef(result1)[c('ma1','ma2','ma3')]))
+```
+
+#### model diagnostics
+
+Since we have our model with ARMA(1,3) error, we need to check if the assumptions of model are valid. First we look at the residuals as a time series plot. It seems that there are no abnormal patterns in the plot, and the mean of residuals is around 0. Then we check the ACF of residuals. Almost all the valus are inside the dash lines apart from lag 20, suggesting no autocorrelation between residuals. It doesn't matter to have one over 32 lags outside dash lines, since we still can construct a $95%$ acceptance region under null hypothesis. Finally, we check the assumption that $\{\epsilon\}\sim N(0,\sigma^2)$ with QQ plot. The plot suggests, comparing to normal distribution, residuals of our models are kind of heavy-tailed, so the standard error of previous result is not quite valid.
+
+```{r model-diagnositics-plot-humidity,fig.align='center',fig.cap="Model Diagnostics Plots of Regression Model with ARMA Error",echo=FALSE}
+par(mfrow=c(2,2))
+plot(result1$residuals,ylab='Residuals')
+acf(result1$residuals)
+qqnorm(result1$residuals)
+qqline(result1$residuals)
+```
+
+#### simulations
+
+The arima() function in R uses the observed Fisher information to calculate standard errors for the coefficients. An approximate $95%$ confident interval can be constructed by these standard errors.
+Here, we considering doing inference on the coefficient of changes of humidity. According to the result of model, we can construct an CI $$[-0.1370-1.96*0.0041,-0.1370+1.96*0.0041]=[-0.1450,-0.1290]$$
+
+We can see 0 is not in the confident interval, so the humidity term is significant. However, assumption diagnostics reveals that standard error is unreliable, so we'll use a simulation to construct an confidence interval for $\beta_1$, and here is the distribution of results from 1000 simulations.
+
+
+```{r}
+set.seed(12)
+k=1000
+params <- coef(result1)
+ar <- params[grep('^ar',names(params))]
+ma <- params[grep('^ma',names(params))]
+sigma <- sqrt(result1$sigma2)
+theta <- matrix(NA,nrow = k,ncol = length(params),dimnames = list(NULL,names(params)))
+for (i in 1:k) {
+  Y <- arima.sim(list(ar=ar,ma=ma),n=length(ta$meantemp)-1,sd=sigma)+params[6]*diff(ta$humidity)+params[5]
+  theta[i,] <- coef(arima(Y,order = c(1,0,3),xreg = diff(ta$humidity)))
+}
+```
+
+```{r,echo=FALSE,fig.align='center',width='75%'}
+theta <- data.frame(theta)
+ggplot(theta,aes(x=diff.ta.humidity.))+geom_density()+geom_vline(xintercept=c(-0.1370+1.96*0.0041,-0.1370-1.96*0.0041),linetype='dashed')
+quantile(theta$diff.ta.humidity.,c(0.025,0.975))
+```
+
+In this plot, the dash lines correspond to the interval calculated before, and the 95% confidence interval of simulation is $[-0.1451,-0.1293]$, which is also close to CI of model 1. Since 0 is not in the CI, we can say that the change of humidity is statistically significant associated with the change of temperature. The coefficient of differenced humidity is negative, so we can say the decreasing of change of humidity will lead to an increase in change of temperature.
+
+### Model 2: mean temperature and wind speed
+
+#### model selection
+
+Our second model focus on the relation between changes of mean temperature and wind speed. With the same approach as model 1, we first search for a proper ARMA model for error.
+
+```{r aic-table-ws,echo=FALSE,warning=FALSE}
+ws_xreg <- data.frame(x1=diff(ta$wind_speed))
+aic_winds <- aic_table(diff(ta$meantemp),4,4,xreg = ws_xreg)
+kable(aic_winds,digits = 2,caption = "AIC Table of models that regresses differenced temperature on differenced wind speed with ARMA error")
+```
+
+It seems that the best model is ARMA(2,2), and an alternative model is ARMA(1,1). Notice that for ARMA(2,2), the AIC value has more than 2 difference with the adjacent model, which is not consistent with the definition of AIC, so there must be some numeric error and the validation of ARMA(2,2) is doubtful. First we use hypothesis test as model 1, it turns out $\Lambda=31.14$ and the cutoff of $\chi^2_2$ is 
+
+```{r}
+qchisq(0.95,df=2)
+```
+
+So we'll reject the null hypothesis that ARMA(1,1) is better. However, if we check the AR and MA roots of ARMA(2,2)
+
+```{r,echo=FALSE}
+result3 <- arima(diff(ta$meantemp),order = c(2,0,2),xreg = diff(ta$wind_speed))
+result4 <- arima(diff(ta$meantemp),order=c(1,0,1),xreg=diff(ta$wind_speed))
+```
+```{r}
+polyroot(c(1,-coef(result3)[c('ar1','ar2')]))
+polyroot(c(1,coef(result3)[c('ma1','ma2')]))
+```
+
+some roots are near the threshold, suggesting that the model is not stable. Plus the problem of AIC value, it's possible that ARMA(2,2) is overfitting. The roots of ARMA(1,1) is quite desirable, so ARMA(1,1) is our choice.
+
+```{r}
+abs(polyroot(c(1,-coef(result4)[c('ar1')])))
+abs(polyroot(c(1,coef(result4)[c('ma1')])))
+```
+
+Therefore, the model 2 is $$\Delta(temperature)_t=\beta_0+\beta_1\Delta(wind\ speed)_t+\epsilon_t$$
+
+where $\epsilon_t$ is ARMA(1,1) and the coefficients are shown below
+
+```{r,echo=FALSE}
+result4
+```
+
+#### model diagnostics
+
+Again, we look at model diagnostics to see if the model above violates any of assumptions.
+
+```{r,model-diagnositics-plot-windspeed,fig.align='center',fig.cap="Model Diagnostics Plots of Regression Model with ARMA Error",echo=FALSE}
+par(mfrow=c(2,2))
+plot(result4$residuals,ylab='Residuals')
+acf(result4$residuals)
+qqnorm(result4$residuals)
+qqline(result4$residuals)
+```
+
+From the plots, there's no striking pattern of residuals we should worrisome. And there's no autocorrelation between residuals. The QQ plot reveals that the residuals are heavy tailed, so standard errors of model 2 are not valid. Again, we conduct a simulation.
+
+#### simulation
+
+Here, we check the significance of wind speed. Same as described above, we could construct an confidence interval with estimated standard error for $\beta_1$, which is $$[0.0250-1.96*0.0095,0.0250+1.96*0.0095]=[0.0064,0.0436]$$
+
+This is not valid, so we construct a CI with 1000 simulations. 
+
+```{r,echo=FALSE}
+set.seed(123)
+k=1000
+params <- coef(result4)
+ar <- params[grep('^ar',names(params))]
+ma <- params[grep('^ma',names(params))]
+sigma <- sqrt(result4$sigma2)
+theta2 <- matrix(NA,nrow = k,ncol = length(params),dimnames = list(NULL,names(params)))
+for (i in 1:k) {
+  Y <- arima.sim(list(ar=ar,ma=ma),n=length(ta$meantemp)-1,sd=sigma)+params[4]*diff(ta$wind_speed)+params[3]
+  theta2[i,] <- coef(arima(Y,order = c(1,0,1),xreg = diff(ta$wind_speed)))
+}
+```
+
+```{r,echo=FALSE,fig.align='center',width='75%'}
+theta2 <- data.frame(theta2)
+ggplot(theta2,aes(x=diff.ta.wind_speed.))+geom_density()+geom_vline(xintercept=c(0.0250+1.96*0.0095,0.0250-1.96*0.0095),linetype='dashed')
+quantile(theta2$diff.ta.wind_speed.,c(0.025,0.975))
+```
+
+The dash lines correspond to the confidence interval calculated above, and the $95%$ CI is $[0.0069,0.0445]$, which is also close. Since 0 is not inside the CI, the changes of wind speed is statistically significant and play a role in changes of temperature. The coefficient of wind speed is positive, so the increase of change of wind speed could cause a bigger temperature difference.
+
+### Model 3: mean temperature and mean pressure
+
+#### model selection
+
+For model 3, we explore the relation between changes of mean temperature and mean pressure. Model selection procedure is same as described in previous models. First, we select an ideal model from AIC table.
+
+```{r aic-pressure,echo=FALSE,warning=FALSE}
+mp_xreg <- data.frame(x1=diff(ta$meanpressure))
+aic_mp <- aic_table(diff(ta$meantemp),4,4,xreg = mp_xreg)
+kable(aic_mp,digits = 2,caption = "AIC Table of models that regresses differenced temperature on differenced wind speed with ARMA error")
+```
+
+The model to consider here is ARMA(1,3). We reject ARMA(0,4) because of the fear of overfitting, and they are also on the edge of table. An alternative choice is ARMA(1,1). Using Wilks' approximation, we do the hypothesis test with ARMA(1,1) as null hypothesis and ARMA(1,3) as alternative. Here $\Lambda=5.45$ and the cutoff of $\chi^2_2$ is 5.99. So we accept the null hypothesis and choose ARMA(1,1).
+
+```{r,echo=FALSE}
+result5 <- arima(diff(ta$meantemp),order=c(1,0,3),xreg = diff(ta$meanpressure))
+result6 <- arima(diff(ta$meantemp),order=c(1,0,1),xreg = diff(ta$meanpressure))
+```
+```{r}
+polyroot(c(1,-coef(result6)[c('ar1')]))
+polyroot(c(1,coef(result6)[c('ma1')]))
+```
+
+The roots of ARMA(1,1) suggest a desirable property of causality and invertibility. And the model 3 is $$\Delta(temperature)_t=\beta_0+\beta_1\Delta(pressure)_t+\epsilon_t$$
+
+where $\epsilon_t$ is ARMA(1,1) and the coefficients are shown as following
+
+```{r,echo=FALSE}
+result6
+```
+
+#### model diagnostics
+
+Now we check the assumptions of model, the plots are similar as previous models.
+
+```{r,model-diagnositics-plot-pressure,fig.align='center',fig.cap="Model Diagnostics Plots of Regression Model with ARMA Error",echo=FALSE}
+par(mfrow=c(2,2))
+plot(result6$residuals,ylab='Residuals')
+acf(result6$residuals)
+qqnorm(result6$residuals)
+qqline(result6$residuals)
+```
+
+From the plots we can draw the same conclusion as before: there are no abnormal pattern in residuals; there is no autocorrelation between the residuals and compared to normal distribution, the residuals of model 3 are heavy tailed. Then we still need simulations.
+
+#### simulation
+
+From the result of arima(), we can calculate the confidence interval of $\beta_1$, which is $$[-0.3314-1.96*0.0245,-0.3314+1.96*0.0245]=[-0.3794,-0.2834]$$
+
+Since model 3 does not meet normal assumption, we again conduct 1000 simulations to construct a confidence interval for $\beta_1$, and the plot shows the distribution of results of 1000 simulations.
+
+```{r,echo=FALSE}
+set.seed(123)
+k=1000
+params <- coef(result6)
+ar <- params[grep('^ar',names(params))]
+ma <- params[grep('^ma',names(params))]
+sigma <- sqrt(result6$sigma2)
+theta3 <- matrix(NA,nrow = k,ncol = length(params),dimnames = list(NULL,names(params)))
+for (i in 1:k) {
+  Y <- arima.sim(list(ar=ar,ma=ma),n=length(ta$meantemp)-1,sd=sigma)+params[4]*diff(ta$meanpressure)+params[3]
+  theta3[i,] <- coef(arima(Y,order = c(1,0,1),xreg = diff(ta$meanpressure)))
+}
+```
+
+```{r,echo=FALSE,fig.align='center',width='75%'}
+theta3 <- data.frame(theta3)
+ggplot(theta3,aes(x=diff.ta.meanpressure.))+geom_density()+geom_vline(xintercept=c(-0.3794,-0.2834),linetype='dashed')
+quantile(theta3$diff.ta.meanpressure.,c(0.025,0.975))
+```
+
+The dash lines correspond to the CI calculated before, and 95% CI of simulations $[-0.3775,-0.2854]$ is close to it. Since 0 is also outside the confidence interval, we can say the change of mean pressure is statistically significant and has effect on the change of temperature. The coefficient of pressure is negative, then the change of pressure will play a negative role in changes in mean temperature.
+
+### Model 4: mean temperature and all variables
+
+#### model selection
+
+For the last model, we'll include all three variable (humidity, wind speed and mean pressure). First, same as before, we choose a ARMA model from AIC table.
+
+```{r aic-all,echo=FALSE,warning=FALSE}
+all_xreg <- data.frame(humidity=diff(ta$humidity),wind_speed=diff(ta$wind_speed),meanpre=diff(ta$meanpressure))
+aic_all <- aic_table(diff(ta$meantemp),4,4,xreg = all_xreg)
+kable(aic_all,digits = 2,caption = "AIC Table of models that regresses differenced temperature on differenced pressure with ARMA error")
+```
+
+It seems there are more numeric errors than previous model, but we could select ARMA(1,3), and ARMA(2,1) can be alternative. Again, we conduct a hypothesis test with ARMA(2,1) as null hypothesis and ARMA(1,3) as alternative hypothesis. We have $\Lambda=4.65$ and the 0.95 cutoff of $\chi^2_1$ is
+
+```{r}
+qchisq(0.95,df=1)
+```
+
+Therefore, we reject the null hypothesis and choose ARMA(1,3).
+
+```{r,echo=FALSE}
+result7 <-arima(diff(ta$meantemp),order = c(1,0,3),xreg = all_xreg)
+result8 <- arima(diff(ta$meantemp),order=c(2,0,1),xreg = all_xreg)
+```
+```{r}
+polyroot(c(1,-coef(result7)[c('ar1')]))
+polyroot(c(1,coef(result7)[c('ma1','ma2','ma3')]))
+```
+
+The AR and MA roots are all outside the unit circle, suggesting a good property of causality and invertibility. And the model 4 is $$\Delta(temperature)_t=\beta_0+\beta_1\Delta(humidity)_t+\beta_2\Delta(wind\ speed)+\beta_3\Delta(pressure)+\epsilon_t$$
+
+where $\epsilon_t$ is ARMA(1,3) and following are the coefficients of model 4
+
+```{r,echo=FALSE}
+result7
+```
+
+#### model diagnostics
+
+Same as before, we check the assumptions of model 4. 
+
+```{r model-diagnositics-plot-all,fig.align='center',fig.cap="Model Diagnostics Plots of Regression Model with ARMA Error",echo=FALSE}
+par(mfrow=c(2,2))
+plot(result7$residuals,ylab='Residuals')
+acf(result7$residuals)
+qqnorm(result7$residuals)
+qqline(result7$residuals)
+```
+
+From the plot, we can not identify any abnormal pattern of the residuals. There does not seem to be autocorrelation between residuals. Compared to normal distribution, the residuals of model 4 is heavy tailed. To fix this problem, we still need a simulation.
+
+#### simulation
+
+we can derive confidence intervals for $\beta_1,\beta_2,\beta_3$ from the results of model 4, which are $$\beta_1:[-0.1322-1.96*0.0041,-0.1322+1.96*0.0041]=[-0.1402,-0.1241]$$
+
+$$\beta_2:[-0.0281-1.96*0.0068,-0.0281+1.96*0.0068]=[-0.0414,-0.0148]$$
+
+$$\beta_3:[-0.2326-1.96*0.0197,-0.2326+1.96*0.0197]=[-0.2712,-0.1940]$$
+
+```{r,echo=FALSE}
+set.seed(123)
+k=1000
+params <- coef(result7)
+ar <- params[grep('^ar',names(params))]
+ma <- params[grep('^ma',names(params))]
+sigma <- sqrt(result7$sigma2)
+theta4 <- matrix(NA,nrow = k,ncol = length(params),dimnames = list(NULL,names(params)))
+for (i in 1:k) {
+  Y <- arima.sim(list(ar=ar,ma=ma),n=length(ta$meantemp)-1,sd=sigma)+params[6]*all_xreg$humidity+params[7]*all_xreg$wind_speed+params[8]*all_xreg$meanpre+params[5]
+  theta4[i,] <- coef(arima(Y,order = c(1,0,3),xreg = all_xreg))
+}
+```
+
+```{r,echo=FALSE,fig.align='center'}
+library(gridExtra)
+theta4 <- data.frame(theta4)
+a <-ggplot(theta4,aes(x=humidity))+geom_density()+geom_vline(xintercept=c(-0.1402,-0.1241),linetype='dashed')
+b <-ggplot(theta4,aes(x=wind_speed))+geom_density()+geom_vline(xintercept=c(-0.0414,-0.0148),linetype='dashed')
+c <- ggplot(theta4,aes(x=meanpre))+geom_density()+geom_vline(xintercept=c(-0.2712,-0.1940),linetype='dashed')
+grid.arrange(a,b,c,ncol=2)
+c(quantile(theta4$humidity,c(0.025,0.975)),quantile(theta4$wind_speed,c(0.025,0.975)),quantile(theta4$meanpre,c(0.025,0.975)))
+```
+
+The dash lines correspond to intervals above, and the 95% confidence interval is similar too. Since 0 is outside of all CIs, all three variables are statistically significant and have effects on the change of temperature. All the coefficients of variables are negative, therefore, the increase of difference of any of these variables will lead to an decrease of temperature difference.
+
+Notice that when fitting model with all three variables, the coefficients of humidity is stable, but for wind speed, it becomes negative and mean pressure changes a lot. It might indicate that humidity is not correlated with the other two and the changes of wind speed and mean pressure may have some relation, which can be one of our future tasks.
+
+
+
+# Non-difference ARMA model #
+
+The second method to model the data is to use regression model with ARMA error based on the original scale of the data without taking difference of adjacent data points. The idea is that first extract the high-frequency part of the data to remove the confounding of season and trend, then model the extracted data to find out whether there exists relationship between temperature of Delhi and other three meteorological features. 
+
+## Remove seasonality and trend from original data ##
+
+To extract the high-frequency part of the data, we used LOESS method to remove seasonality and trend. The plots of data after processing are shown in Figure \@ref(fig:hf-plot). From the plots, we can see that only the high-frequency part of the features were extracted and trend and seasonality were removed.
+
+
+```{r hf-plot,fig.align='center',fig.cap="High-frequency part of four meteorological features.",echo=FALSE,fig.width=9,fig.height=9}
+meantemp_hi <- ts(ta$meantemp-loess(ta$meantemp~c(1:length(ta$meantemp)),span=0.1)$fitted,start=1,frequency=1)
+humidity_hi <- ts(ta$humidity-loess(ta$humidity~c(1:length(ta$humidity)),span=0.1)$fitted,start=1,frequency=1)
+meanpressure_hi = ts(ta$meanpressure-loess(ta$meanpressure~c(1:length(ta$meanpressure)),span=0.1)$fitted,start=1,frequency=1)
+windspeed_hi = ts(ta$wind_speed-loess(ta$wind_speed~c(1:length(ta$wind_speed)),span=0.1)$fitted,start=1,frequency=1)
+# meantemp_hi <- hpfilter(ta$meantemp,freq=6.25,type = "lambda",drift = F)$cycle
+# humidity_hi <- hpfilter(ta$humidity,freq=6.25,type = "lambda",drift = F)$cycle
+# meanpressure_hi <- hpfilter(ta$meanpressure,freq=6.25,type = "lambda",drift = F)$cycle
+# windspeed_hi <- hpfilter(ta$wind_speed,freq=6.25,type = "lambda",drift = F)$cycle
+par(mfrow=c(2,2))
+plot(ta$date,meantemp_hi,type = 'l',ylab="Detrend and decycled temperature",xlab = "Date")
+plot(ta$date,humidity_hi,type='l',ylab="Detrend and decycled humidity",xlab = "Date")
+plot(ta$date, meanpressure_hi,type='l',ylab="Detrend and decycled pressure",xlab = "Date")
+plot(ta$date,windspeed_hi,type='l',ylab="Detrend and decycled wind speed",xlab = "Date")
+```
+
+To give tough idea whether there exists some marginal relationship between any pair of features, pairwise pearson correlations were plotted in Figure \@ref(fig:pair-corr). From the plot, we can see that there exists negative correlation between temperature and pressure, as well as temperature and humidity. The relationship between temperature and wind speed can not be directly told by the correlation plot.
+
+
+```{r pair-corr,fig.align='center',fig.cap="Pairwise Correlation plots of four features",echo=FALSE,fig.width=9,fig.height=9}
+plot(data.frame(temperature = meantemp_hi,windspeed=windspeed_hi,pressure=meanpressure_hi,humidity=humidity_hi))
+```
+
+## Potential lagged relationships between temperature and pressure, windspeed and humidity ##
+
+To investigate the potential lagged relationships between temperature and other three meteorological features, sample cross-correlation functions (CCF) between pairwise time series were calculated, where CCF can be formulated as,
+$$
+\begin{align}
+\hat{\rho}_{xy}(h) = \frac{\sum_{n=1}^{N-h} (x_{n+h} - \bar{x})(y_n - \bar{y})}{\sqrt{\sum_{n=1}^{N} (x_{n} - \bar{x})^2\sum_{n=1}^{N} (y_{n} - \bar{y})^2}}
+\end{align}
+$$
+
+The CCF plots are shown in Figure \@ref(fig:ccf-plots). From the CCF plot of temperature vs pressure, we can see that there exists **negative** lagged and instantaneous relationship between temperature and pressure, which means the lower the pressure is, the higher the temperature will be. Same conclusion can be made on the lagged and instantaneous relationship between temperature and humidity, which demonstrate **negative** relationship between temperature and humidity. For the relationship between temperature and wind speed, the CCF plot shows there exists **positive** instantaneous relationship between temperature and wind speed, however the magnitude of the relationship is not very strong.
+
+```{r ccf-plots,fig.align='center',fig.cap="CCF plots between temperature and other features",echo=FALSE,fig.width=9,fig.height=9}
+par(mfrow = c(2,2))
+ccf(meantemp_hi,meanpressure_hi,main = "temperatue vs pressure")
+ccf(meantemp_hi,humidity_hi,main = "temperatue vs humidity")
+ccf(meantemp_hi,windspeed_hi,main = "temperatue vs wind speed")
+```
+
+To further investigate the cross-covariance in frequency domain, the coherency and phase of cross-spectrum were investigated between temperature and other three meteorological features. The plots are shown in Figure \@ref(fig:freq-plots). 
+
+From the first row of the plots, we can identify two significant frequencies that temperature and pressure are correlated, which are 1 cycle per 2.2 days and 1 cycle per 88 days. By looking at the phase plot, we can see that the phases for these two frequencies are negative, which means that there exists lagged effect between temperature and pressure on these frequencies. And we conjecture that the reason why the frequency 1 cycle per 88 days is significant is that the seasonality has not been completely removed from the original data since we only focus on high-frequency relationship between two time series.
+
+The second row shows the coherency and phase plot of temperature and humidity. The coherency plot told us it seems that there exists correlation between temperature and humidity in almost every frequencies. The reason is that maybe there is complicated relationship between temperature and humidify and further research need to conducted.
+
+The third row gives us the idea that the relationship between temperature and wind speed in almost all the frequencies is neglectable since 95% confidence intervals of nearly all the frequencies covers 0. The result indicates that maybe there is no relationship between temperature and wind speed, or the relationship is very small.
+
+```{r freq-plots,fig.align='center',fig.cap="Coherency and Phase plots between pairwise time series.",echo=FALSE,fig.width=9,fig.height=9}
+par(mfrow=c(3,2))
+
+# temp vs pres
+s <- spectrum(cbind(meantemp_hi,meanpressure_hi),spans=c(10,10),plot=F)
+top_freqs = s$freq[order(s$coh,decreasing = TRUE)[1:5]]
+plot(s,plot.type="coherency",main="")
+abline(v=top_freqs[c(1,3)],col="green",lty=2)
+plot(s,plot.type="phase",main="")
+abline(h=0,col="red",lty=2)
+abline(v=top_freqs[c(1,3)],col="green",lty=2)
+
+# temp vs humidity
+s <- spectrum(cbind(meantemp_hi,humidity_hi),spans=c(10,10),plot=F)
+plot(s,plot.type="coherency",main="")
+plot(s,plot.type="phase",main="")
+abline(h=0,col="red",lty=2)
+
+# temp vs wind speed
+s <- spectrum(cbind(meantemp_hi,windspeed_hi),spans=c(10,10),plot=F)
+top_freqs = s$freq[order(s$coh,decreasing = TRUE)[1:5]]
+plot(s,plot.type="coherency",main="")
+abline(v=top_freqs[c(1,2)],col="green",lty=2)
+plot(s,plot.type="phase",main="")
+abline(h=0,col="red",lty=2)
+abline(v=top_freqs[c(1,2)],col="green",lty=2)
+```
+
+
+## Non-difference regression model with ARMA error ##
+
+To quantify the relationship between temperature and other three features, regression model with ARMA error was fitted. To find out what were the appropriate orders of AR and MA parameters, AIC were calculated for different ARMA models of temperature without any regressor, which were shown in Table \@ref(tab:aic-table2). The optimal model was selected by try and error method from the model with smallest AIC to see that whether the model was non-invertibile or non-casual. The ARMA model with order of AR and MA being $(1,2)$ was selected as the optimal model.
+
+```{r aic-table2,echo=FALSE}
+aic_table <- function(data,P,Q,xreg=NULL){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg = xreg,optim.control = list(maxit = 1000))$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b>AR",0:P, "</b>",sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+aic <- aic_table(meantemp_hi,5,5)
+kable(aic,digits = 2,caption = "AIC Table for ARMA models of temperature with different orders of AR and MA.")
+```
+
+```{r,echo=FALSE}
+model0 = arima(meantemp_hi,order = c(1,0,2),optim.control = list(maxit = 1000))
+ma_roots = polyroot(c(1,coef(model0)[grep("^ma",names(coef(model0)))]))
+ma_roots_abs = abs(polyroot(c(1,coef(model0)[grep("^ma",names(coef(model0)))])))
+ar_roots = polyroot(c(1,-coef(model0)[grep("^ar",names(coef(model0)))]))
+ar_roots_abs = abs(polyroot(c(1,-coef(model0)[grep("^ar",names(coef(model0)))])))
+```
+
+The estiamtes of the parameters with standard error was shown in Table \@ref(tab:table-model0), and therefore the corresponding optimal null model can be formulated as 
+
+
+\begin{align}
+  Y_t+0.01 = 0.53 Y_{t-1} + 0.09 \epsilon_{t-2} + 0.012 \epsilon_{t-1} + \epsilon_t
+\end{align}
+
+```{r table-model0,echo=FALSE}
+df = data.frame(estimate=model0$coef,se=sqrt(diag(model0$var.coef)))
+kable(t(df),digits = 2,caption = "The estimates and s.e. of the null model")
+```
+
+
+The marginal relationships between temperature and other meteorological features were investigated using regression model with ARMA error and likelihood ratio tests were performed to check the significance of the correlations. 
+
+Before performing likelihood ratio test, the null model was fitted, which was
+\begin{equation}
+  Temperature^{hs}_t = \beta_0 + \epsilon_t (\#eq:M0)
+\end{equation}
+where $\epsilon_i$ is ARMA(1,2) error and superscript "hs" denotes the high-frequency of the time series. The log likelihood of the model \@ref(eq:M0) was `r round(model0$loglik,2)`.
+
+The model diagnostics for the null model was also performed and diagnostics plots were shown in Figure \@ref(fig:model-diagnostics-plot-M0). It seems that there wasn't any violations against model assumptions. Also the absolute values of the roots of AR and MA were calculated, which were `r round(ar_roots_abs,2)`, and (`r round(ma_roots_abs[1],2)`,`r round(ma_roots_abs[2],2)`). The roots were all outside of the unit cycle, which indicated no vilotions of invertability and casuality.
+
+```{r model-diagnostics-plot-M0,fig.align='center',fig.cap="Model diagnostics plots of regression model with ARMA error",echo=FALSE,fig.width=9,fig.height=9}
+par(mfrow=c(2,2))
+plot(model0$residuals,ylab='Residuals')
+acf(model0$residuals)
+qqnorm(model0$residuals)
+qqline(model0$residuals)
+```
+
+
+
+### Marginal relationship between temperature and pressure ###
+
+The following model was fitted,
+
+\begin{equation}
+  Temperature^{hs}_t = \beta_0 + \beta_1 Pressure^{hs}_t + \epsilon_t (\#eq:M1)
+\end{equation}
+
+where $\epsilon_i$ is ARMA(1,2) error and superscript "hs" denotes the high-frequency of the time series.
+
+```{r,echo=FALSE,results='hide'}
+model = arima(meantemp_hi,order = c(1,0,2),optim.control = list(maxit = 1000),xreg = data.frame(pressure=meanpressure_hi))
+polyroot(c(1,coef(model)[grep("^ma",names(coef(model)))]))
+abs(polyroot(c(1,coef(model)[grep("^ma",names(coef(model)))])))
+polyroot(c(1,-coef(model)[grep("^ar",names(coef(model)))]))
+abs(polyroot(c(1,-coef(model)[grep("^ar",names(coef(model)))])))
+```
+
+```{r table-model1,echo=FALSE}
+df = data.frame(estimate=model$coef,se=sqrt(diag(model$var.coef)))
+kable(t(df),digits = 2,caption = "The estimates and s.e. of the model parameters of temperature regressing on pressure with ARMA error")
+```
+
+The fitted model gave the coefficient of pressure being `r round(model$coef["pressure"],2)` with standard error `r round(sqrt(model$var.coef[5,5]),2)`. The test statistic for LRT was `r -2*(round(model0$loglik,2)-round(model$loglik,2))`, which followed Chi square distribution with degree of freedom being 1. The corresponding pvalue was `r 1-pchisq(-2*(round(model0$loglik,2)-round(model$loglik,2)),1)`, which means the coefficient was significantly different from $0$. Also by looking at the sign of the coefficient, we can conclude that there exists significantly **negative** correlation between temperature and pressure.
+
+
+### Marginal relationship between temperature and humidity ###
+
+The following model was fitted,
+
+\begin{equation}
+  Temperature^{hs}_t = \beta_0 + \beta_1 Humidity^{hs}_t + \epsilon_t (\#eq:M2)
+\end{equation}
+
+where $\epsilon_i$ is ARMA(1,2) error and superscript "hs" denotes the high-frequency of the time series.
+
+```{r,echo=FALSE,results='hide'}
+model = arima(meantemp_hi,order = c(1,0,2),optim.control = list(maxit = 1000),xreg = data.frame(humidity=humidity_hi))
+polyroot(c(1,coef(model)[grep("^ma",names(coef(model)))]))
+abs(polyroot(c(1,coef(model)[grep("^ma",names(coef(model)))])))
+polyroot(c(1,-coef(model)[grep("^ar",names(coef(model)))]))
+abs(polyroot(c(1,-coef(model)[grep("^ar",names(coef(model)))])))
+```
+
+```{r table-model2,echo=FALSE}
+df = data.frame(estimate=model$coef,se=sqrt(diag(model$var.coef)))
+kable(t(df),digits = 2,caption = "The estimates and s.e. of the model parameters of temperature regressing on humidity with ARMA error")
+```
+
+
+The fitted model gave the coefficient of pressure being `r round(model$coef["humidity"],2)` with standard error `r round(sqrt(model$var.coef[5,5]),2)`. The test statistic for LRT was `r -2*(round(model0$loglik,2)-round(model$loglik,2))`, which followed Chi square distribution with degree of freedom being 1. The corresponding pvalue was `r 1-pchisq(-2*(round(model0$loglik,2)-round(model$loglik,2)),1)`, which means the coefficient was significantly different from $0$. Also by looking at the sign of the coefficient, we can conclude that there exists significantly **negative** correlation between temperature and humidity.
+
+
+### Marginal relationship between temperature and wind speed ###
+
+The following model was fitted,
+
+\begin{equation}
+  Temperature^{hs}_t = \beta_0 + \beta_1 WindSpeed^{hs}_t + \epsilon_t (\#eq:M3)
+\end{equation}
+
+where $\epsilon_i$ is ARMA(1,2) error and superscript "hs" denotes the high-frequency of the time series.
+
+```{r,echo=FALSE,results='hide'}
+model = arima(meantemp_hi,order = c(1,0,2),optim.control = list(maxit = 1000),xreg = data.frame(windspeed=windspeed_hi))
+polyroot(c(1,coef(model)[grep("^ma",names(coef(model)))]))
+abs(polyroot(c(1,coef(model)[grep("^ma",names(coef(model)))])))
+polyroot(c(1,-coef(model)[grep("^ar",names(coef(model)))]))
+abs(polyroot(c(1,-coef(model)[grep("^ar",names(coef(model)))])))
+```
+
+```{r table-model3,echo=FALSE}
+df = data.frame(estimate=model$coef,se=sqrt(diag(model$var.coef)))
+kable(t(df),digits = 2,caption = "The estimates and s.e. of the model parameters of temperature regressing on wind speed with ARMA error")
+```
+
+The fitted model gave the coefficient of pressure being `r round(model$coef["windspeed"],2)` with standard error `r round(sqrt(model$var.coef[5,5]),2)`. The test statistic for LRT was `r -2*(round(model0$loglik,2)-round(model$loglik,2))`, which followed Chi square distribution with degree of freedom being 1. The corresponding pvalue was `r round(1-pchisq(-2*(round(model0$loglik,2)-round(model$loglik,2)),1),2)`, which means the coefficient was significantly different from $0$. Also by looking at the sign of the coefficient, we can conclude that there exists significantly **positive** between temperature and wind speed. However the positive relationship between temperature and wind speed was not very significant since the pvalue is near the critical threshold of the test, as compared to other two features.
+
+
+### Joint model of temperature regressing on pressure, humidity and wind speed ###
+
+Since maybe there exists some correlations between pressure, humidity and wind speed, joint model which regresses temperature on pressure, humidity and wind speed was fitted,
+
+\begin{equation}
+  Temperature^{hs}_t = \beta_0 + \beta_1 Pressure^{hs}_t + \beta_2 Humidity^{hs}_t + \beta_3 WindSpeed^{hs}_t + \epsilon_t (\#eq:M4)
+\end{equation}
+
+where $\epsilon_i$ is ARMA(1,2) error and superscript "hs" denotes the high-frequency of the time series.
+
+```{r,echo=FALSE,results='hide',echo=FALSE}
+model_joint = arima(meantemp_hi,order = c(1,0,2),optim.control = list(maxit = 1000),xreg = data.frame(pressure = meanpressure_hi,humidity=humidity_hi,windspeed=windspeed_hi))
+polyroot(c(1,coef(model_joint)[grep("^ma",names(coef(model_joint)))]))
+abs(polyroot(c(1,coef(model_joint)[grep("^ma",names(coef(model_joint)))])))
+polyroot(c(1,-coef(model_joint)[grep("^ar",names(coef(model_joint)))]))
+abs(polyroot(c(1,-coef(model_joint)[grep("^ar",names(coef(model_joint)))])))
+```
+
+The parameters of joint model were shown in Table \@ref(tab:table-model-joint). The coefficients for pressure, humidity and wind speed were `r round(model_joint$coef["pressure"],2)`, `r round(model_joint$coef["humidity"],2)` and `r round(model_joint$coef["windspeed"],2)`, while the corresponding pvalues were $<0.00001$, $<0.00001$ and $0.00001$ respectively. From the joint model, we can tell that the **negative** relationships between temperature and pressure, as well as humidity were consistent with previous marginal analysis, however the relationship between temperature and wind speed changed sign after controlling for humidity and pressure. We conjectured that the possible reason is that maybe the wind speed are correlated with humidity and pressure. 
+
+```{r table-model-joint,echo=FALSE}
+df = data.frame(estimate=model_joint$coef,se=sqrt(diag(model_joint$var.coef)))
+kable(t(df),digits = 2,caption = "The estimates and s.e. of the joint model")
+```
+
+
+# Conclusions
+
+In this report, we used two different methods to remove trend and seasonality from the original data. We first used the difference ARMA model and fit models that investigate on the relationship between mean temperature changes and other variables. We have reached the following sub-conclusions:
+
+* The change of humidity is statistically significant and has **negative** relation with the change of temperature.
+* The change of wind speed is statistically significant and has **positive** relation with the change of temperature.
+* The change of mean pressure is statistically significant and has **negative** relation with the change of temperature.
+* Of all three factors, when controlling two of them, remaining one has **negative** effect on the change of temperature.
+
+Then we tried the non-difference ARMA model that used regression model with ARMA error based on the original scale of the data without taking difference of adjacent data points. We have reached the following sub-conclusions based on non-difference ARMA models:
+
+* There exists significant marginal **negative** correlation between temperature and humidity.
+* There exists significant marginal **positive** correlation between temperature and wind speed.
+* There exists significant marginal **negative** correlation between temperature and pressure.
+* The pressure has **negative** effect on temperature after controlling for wind speed and humidity; The humidity has **negative** effect on temperature after controlling for wind speed and pressure; The wind speed has **negative** effect on temperature after controlling for pressure and humidity.
+
+# Future work
+
+* Further explore the relationship between temperature and humidity in frequency domain.
+* Find out the reason why marginal effect of wind speed is different from effect of wind speed after controlling for humidity and pressure. And same work on the changes of them.
+* Collect more data and analyze the relationship among low-frequency parts of the time series
+
+# References
+
+1. Data source https://www.kaggle.com/sumanthvrao/daily-climate-time-series-data
+2. Course notes and lectures  https://ionides.github.io/531w20/
+3. Previous midterm projects of 2018 https://ionides.github.io/531w18/midterm_project/
+4. Previous midterm projects of 2020 https://ionides.github.io/531w20/midterm_project/
+5. India floods: More than 140 dead after torrential rain. https://www.bbc.com/news/av/world-asia-india-49311458
+6. Moreno-Carbonell S, Sánchez-Úbeda EF, Muñoz A. Time Series Decomposition of the Daily Outdoor Air Temperature in Europe for Long-Term Energy Forecasting in the Context of Climate Change. Energies. 2020; 13(7):1569. https://doi.org/10.3390/en13071569
+7. Shuichi Hokoi, Mamoru Matsumoto, Toshikazu Ihara,Statistical time series models of solar radiation and outdoor temperature — Identification of seasonal models by Kalman filter,
+Energy and Buildings, Volume 15, Issues 3–4, 1990, Pages 373-383, ISSN 0378-7788, https://doi.org/10.1016/0378-7788(90)90011-7.
+https://www.sciencedirect.com/science/article/pii/0378778890900117 
+8. Climate of Delhi https://en.wikipedia.org/wiki/Climate_of_Delhi
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

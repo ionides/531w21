@@ -1,0 +1,276 @@
+---
+title: "SARMA Model fitting USA-China Trade Monthly Import Value (2001-2018)"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+# Introduction
+
+China is growing up to one of the most important economies in the world at a dramatically speed after joining World Trade Orangization (WTO) in 2001. However China domestic market still has distinct planning characteristics, which are clear seasonal effect and stable trend shown in time series. The industry structures between China and United States are compensate and "Chinese trade provided incentives for US firms to diversify and reorganize production". [1] However, the global economy is developing towards anti-globalization, which is represented by the trade war raised by Trumpt government towards China and other exporting-oriented economies since 2019. To better understand the anti-globalization effect on global trade, modeling USA-China trade is vital. 
+
+As the overall trade surplus from China to USA is positive, this project focuses on the Importing value in USA-China trade and aims to model the seasonal effect, trend and fluctuation. The data is collected from United States Foreign Trade Census [2], and we select monthly data from 2001 to 2018 so as to remove fluctuations due to political issues. We select appropriate SARMA model to analyze the detrended data, which will help us to predict the possible importing trade value without trade war.
+
+# Data Exploration
+
+```{r,include=FALSE}
+require(knitr)
+library(forecast)
+library(readr)
+library(plyr)
+US_all_country_trade_data <- read_csv("US-all country_trade_data.csv")
+# View(US_all_country_trade_data)
+
+library(tidyverse)
+data_I = US_all_country_trade_data %>% 
+  select(-c("CTY_CODE", "IYR", "EYR")) %>%
+  filter(CTYNAME == "China") %>%
+  pivot_longer (
+    cols = starts_with("I"),
+    names_to = "Month",
+    values_to = "Import",
+    names_prefix = "I"
+  ) %>%
+  select(c("year", "CTYNAME", "Month", "Import"))
+
+data_E = US_all_country_trade_data %>% 
+  select(-c("CTY_CODE", "IYR", "EYR")) %>%
+  filter(CTYNAME == "China") %>%
+  pivot_longer (
+    cols = starts_with("E"),
+    names_to = "Month",
+    values_to = "Export",
+    names_prefix = "E"
+  ) %>%
+  select(c("year", "CTYNAME", "Month", "Export"))
+
+data = left_join(data_I, data_E, by = c("year","Month", "CTYNAME")) %>%
+  filter(year >= 2001) %>%
+  filter(year <= 2018)
+
+data$index = seq.int(nrow(data))
+
+```
+
+```{r}
+plot(data$Import, type="l", ylab="Importing Value")
+```
+
+Starting from time series plot of importing trade data, we can find an increasing trend with big and periodic fluctuations. Hence we calculate the growth rate to see whether it is more suitable for analysis.
+
+$$
+y_{growth\ rate, i} = \frac{y_{import,i}  - y_{import, i-1}}{y_{import, i-1}} 
+$$
+
+```{r, echo=FALSE}
+
+data$Growth_rate = 1:nrow(data) * 1.0
+data[1, 'Growth_rate'] = 0.0
+for (i in 2:nrow(data)) {
+  data[i, 'Growth_rate'] = (data[i, "Import"] - data[i-1, "Import"]) / data[i-1, "Import"]
+}
+```
+
+```{r}
+plot(data$Growth_rate, ylab = "Growth Rate", type='l')
+each(max,min,mean,median,sd)(data$Growth_rate)
+```
+
+From the time series plot and statistics of growth rate data, we can find it is more stable and easier to analyze. 
+
+The verification of whether growth rate transformation has detrended the data will be shown in following sections.
+
+As we can find the growth rate data also has seasonal characteristics, we will first conduct frequncy analysis over the growth rate data. 
+
+```{r}
+period=spectrum(data$Growth_rate, span = c(nrow(data)/24,nrow(data)/24), main="Smoothed Periodogram of Growth Rate")
+f_freq = period$freq[which(period$spec == max(period$spec))]
+s_freq = period$freq[50:108][which(period$spec[50:108] == max(period$spec[50:108]))]
+sprintf("The first dominating frequency is %0.4f",f_freq)
+sprintf("The second dominating frequency is %0.4f",s_freq)
+```
+
+Here we can find there are two dominating frequency, which are at 0.0833 and 0.3472, which are coresponding to periods of 12 months and 2.88 months. 
+
+```{r}
+acf(data$Growth_rate)
+```
+
+From the acf plot, we can find the major frequency in 12-month lag is shown significantly. Meanwhile, as the 3-month lag is lag is also significant in the plot, we can say it is also a dominant frequency. Moreover, we can find the absolute value of acf is asymptotically decreasing, thus we regard the growth rate data as stationary data. 
+
+Meanwhile, we can use lowess to smooth the growth rate data, where we set the window size equal to 1 year as the dominant period is 12-month.
+
+```{r}
+plot(data$Growth_rate, xlab = "index", ylab = "Growth Rate",type = 'l')
+lines(lowess(data$Growth_rate~data$index,f = 12 / nrow(data) ), col = "blue")
+```
+```{r, include=FALSE}
+mean(lowess(data$Growth_rate~data$index,f = 12 / nrow(data) )$y)
+```
+
+# Model Selection
+
+## ARMA(p,q) Model
+
+As direct selection over SARIMA model is hard to conduct due to multiple optimization dimensions, we will first try to model short-term patterns in Growth Rate data. The ARMA(p, q) model we used here could be written as:
+
+$$
+Y_{n}=\mu+\phi_{1}\left(Y_{n-1}-\mu\right)+\cdots+\phi_{p}\left(Y_{n-p}-\mu\right)+\varepsilon_{n}+\psi_{1} \varepsilon_{n-1}+\cdots+\psi_{q} \varepsilon_{n-q}
+$$
+
+where $\varepsilon_n$ follows $\mathcal{N}\left(0, \sigma^{2}\right)$ and parameters $(\mu, \sigma^2, \phi_1, ..., \phi_p, \psi_1, ..., \psi_q)$ are to be estimated. 
+
+To select best choice of $(p,q)$, we first apply Akaike information criteria (AIC) value as a criteria and find the ARMA model with lowest AIC value. The AIC selection code is refered from Lecture Notes Chapter 9 [3].
+
+```{r, echo=FALSE}
+aic_table <- function(data,P,Q){
+table <- matrix(NA,(P+1),(Q+1))
+for(p in 0:P) {
+for(q in 0:Q) {
+table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
+}
+}
+dimnames(table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+table
+}
+aic_table <- aic_table(data$Growth_rate,3,3)
+kable(aic_table,digits=3)
+```
+
+From the above AIC table, we find ARMA(2,2) has significant lower AIC value and relative less number of parameters. Then ARMA(2,2) model is fitted as following:
+
+```{r}
+arima(data$Growth_rate,order=c(2,0,2))
+```
+
+Plotting the residuals of $ARMA(2,2)$ model and its acf, we can find the short-term pattern of the original Growth rate data has been well-fitted.
+
+```{r}
+plot(residuals(arima(data$Growth_rate,order=c(2,0,2))), ylab="ARMA(2,2) Residuals", xlab="index")
+acf(residuals(arima(data$Growth_rate,order=c(2,0,2))))
+```
+
+## SARIMA Model
+
+As we investigated in periodgram, we find growth rate data has a 12-month seasonal effect. Considering the initial analysis suggesting a $SARIMA(2,0,2)\times(m,0,n)_{12}$ model, we will also use AIC to do model selection.
+
+```{r, include=FALSE}
+aic_table <- function(data,sa=2, sm=2, P,Q){
+table <- matrix(NA,(P+1),(Q+1))
+for(p in 0:P) {
+for(q in 0:Q) {
+# print(paste(toString(p), toString(q), sep = '+'))
+table[p+1,q+1] <- arima(data,order=c(2,0,2), seasonal = list(order=c(p,0,q),period=12))$aic
+}
+}
+dimnames(table) <- list(paste("SAR",0:P, sep=""),paste("SMA",0:Q,sep=""))
+table
+}
+aic_table <- aic_table(data$Growth_rate,P=4,Q=4)
+```
+
+```{r}
+kable(aic_table,digits=3)
+```
+
+From the AIC table, we can find $SARIMA(2,0,2)\times(3,0,3)_{12}$ has best performance in AIC selection.Then $SARIMA(2,0,2)\times(3,0,3)_{12}$ model is fitted as following:
+
+```{r}
+s_selected = arima(data$Growth_rate,order=c(2,0,2), seasonal = list(order=c(3,0,3),period=12))
+s_selected
+```
+
+Plotting the acf of the residuals of $SARIMA(2,0,2)\times(3,0,3)_{12}$ model , we can find the there are roughly no significant lags and the residuals are close to white noise. Thus we can say our model is a good fit for the growth data. 
+
+```{r}
+acf(residuals(s_selected))
+```
+
+# Diagnostic
+
+Here we try to test the normality of residuals by QQ-plot.
+
+```{r}
+qqnorm(residuals(s_selected))
+qqline(residuals(s_selected),probs = c(0.25,0.75))
+```
+
+From the QQ-plot, we can find the residuals of selected model is roughly normal distributed, which validates the normal assumptions in the selected model error terms.
+
+# Comparsion and Evaluations.
+
+First we compare the selected model fitted value (colored in blue) with the growth rate from 2001 to 2018 (colored in red).
+
+```{r}
+plot(forecast(s_selected)$fitted, col="blue", type="l", ylab="Growth Rate", xlab="index")
+lines(data$Growth_rate, col = "red")
+```
+
+We can find $SARIMA(2,0,2)\times(3,0,3)_{12}$ model roughly matches the real growth rate. 
+
+Then we introduce the growth rate data from 2019 to 2020 and compare it with the prediction made by selected value
+
+```{r, include=FALSE}
+data_new = left_join(data_I, data_E, by = c("year","Month", "CTYNAME")) %>%
+  filter(year >= 2001) %>%
+  filter(year <= 2020)
+
+data_new$index = seq.int(nrow(data_new))
+data_new$Growth_rate = 1:nrow(data_new) * 1.0
+data_new[1, 'Growth_rate'] = 0.0
+for (i in 2:nrow(data_new)) {
+  data_new[i, 'Growth_rate'] = (data_new[i, "Import"] - data_new[i-1, "Import"]) / data_new[i-1, "Import"]
+}
+```
+
+```{r}
+plot(forecast(s_selected))
+lines(data_new$Growth_rate, col = "red")
+```
+
+From the plot, we can find although from 2019 to 2020 most of month importing value are within the confidence interval, the growth rate in 2019 is relatively small compared to the predicted value, which is effected by the trade war. When it comes to 2020, covid-19 attacked on both the economies and caused giant fluctuations in growth rate. 
+
+Transform the Growth Rate to Importing values, we can compare the model fitted value (colored in blue) with real importing data (colored in red).
+
+```{r, include=FALSE}
+predicted_value = forecast(s_selected)$mean
+import_predict = c((data_new %>% filter(year >= 2019))$Import[1])
+for (i in 2:length(predicted_value)) {
+  import_predict = append(import_predict, import_predict[length(import_predict)]*(1+predicted_value[i]))
+}
+```
+
+```{r}
+plot((data_new %>% filter(year >= 2019))$Import, xlab="index", ylab="Importing Value", col="red", type="l", ylim = c(20000,60000))
+lines(import_predict, col="blue")
+```
+
+We can from 2019 to 2020, the prediction importing value is always greater than the actual importing trade data. The USA-China importing trade is decreased by the trade war. 
+
+# Conclusion
+
+The Importing value data is not stationary, transform it into growth rate will stablize it and make arima model suitable.
+
+After frequency domain analysis, we find two major frequency in 12-month and 2.88-month. The long-term pattern comes from the production cycle in 1 year and the short-term pattern comes from the common 3-month delivery cycle between USA and China.
+
+From model selection, we find $SARIMA(2,0,2)\times(3,0,3)_{12}$ model fits the growth rate data well with relative small number of parameters. However, we can still improve it by introducing some other side information (adding new variables such as shipping tonnage) to reach a more complex but accurate model.
+
+Comparing the model prediction and the real importing value in 2019 and 2020, we find the importing trade is decreased when we base on the model concentrated from the Importing data from 2001 to 2018. Thus we conclude that the trade war exactly harms the USA-China Importing trade. 
+
+
+# Contributions
+
+As the subgroup size is 1, this project is conducted by the author only. As the data set we selected across the group is different from each other, we have not received extra feedbacks from others.
+
+
+# Reference
+
+[1] The link between trade, jobs and wages https://ourworldindata.org/trade-and-globalization#the-link-between-trade-jobs-and-wages
+
+
+[2] United States Foreign Trade Census https://www.census.gov/foreign-trade/statistics/highlights/toppartners.html
+
+[3] AIC selection code https://ionides.github.io/531w21/09/slides-annotated.pdf
+
+[4] Homework 4 solution https://ionides.github.io/531w21/hw04/sol04.html
+

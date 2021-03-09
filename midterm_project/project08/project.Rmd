@@ -1,0 +1,558 @@
+---
+title: "An Analysis of Lake Michigan-Huron Water Levels"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 3
+    theme: flatly
+subtitle: STATS 531 Midterm Project (W21)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	warning = FALSE,
+	message = FALSE,
+	include = TRUE,
+	comment='',
+	fig.align = "center"
+)
+```
+
+
+```{css, include = TRUE, echo = FALSE}
+span.math{ /* Formulas */
+  font-size: 14px;
+}
+.comment { /* Comments, to be deleted later */
+  margin: 30px;
+  padding-left: 10px;
+  color: Darkred;
+  border-left-style: solid;
+  border-color: #f2f2f2;
+  font-weight: 600;
+}
+table{
+  margin-left: auto; /* center the tables */
+  margin-right: auto; /* center the tables */
+  margin-bottom: 10px; /* add vertical space after table */
+}
+tr td {
+  min-width: 70px;
+  height: 35px;
+}
+tr:nth-child(odd) td {
+  background-color: #f9f9f9; /* create the striped effect */
+}
+tr td:nth-child(1) {
+  font-weight: 600; /* bold the first column */
+}
+div#coef tr th, div#coef tr td {
+  text-align: center;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+```
+
+```{r, echo = FALSE}
+opar = par()
+library(tidyverse)
+
+generate_aic_table=function(data, P, Q, D=0, ...){
+	table=matrix(NA, (P+1), (Q+1))
+	for(p in 0:P) {
+		for(q in 0:Q) {
+		  model_aic = try(
+		    arima(data, order = c(p, D, q), method="ML", ...)$aic, 
+		    silent = TRUE
+		  )
+		  table[p + 1,q + 1] = ifelse(
+		    inherits(model_aic, "try-error"), NA, model_aic
+		  )
+		}
+	}
+	dimnames(table) = list(paste("AR", 0:P, sep=""), paste("MA", 0:Q, sep=""))
+  table
+}
+
+format_aic_tables = function(table, ...) {
+  min_idx = which(table == min(table, na.rm = TRUE), arr.ind = TRUE)
+  table %>% 
+    knitr::kable(format='html', digits=2, escape=FALSE, ...)
+}
+
+generate_acf_qqplot = function(model) {
+  par(mfrow = c(1, 2))
+  acf(model$resid, na.action = na.pass, 
+      main = "sample ACF")
+  qqnorm(as.numeric(model$resid))
+  qqline(as.numeric(model$resid))
+  par(opar)
+}
+```
+
+------------
+
+## Introduction
+
+The Great Lakes are a major source of water, recreation, and industry for over 30 million people, including most Michigan residents. However, in recent years, there has been a growing concern over steadily rising water levels: local and national news sources such as the Green Bay Press-Gazette [[1](https://www.greenbaypressgazette.com/story/news/local/oconto-county/2020/08/04/lake-michigan-breaks-34-year-old-high-water-record/3294377001/)], the Detroit Free Press [[2](https://www.freep.com/story/news/local/michigan/2020/07/17/great-lakes-water-levels-records-erosion-damage/5450910002/)], and The Washington Post [[3](https://www.washingtonpost.com/weather/2019/11/08/great-lakes-water-levels-have-swung-record-lows-record-highs-heres-why/)] have reported on the resulting property damage, shoreline erosion, and economic disruption. As such, environmental scientists have been investigating the potential causes and implications of high water in the Great Lakes, tying this into the larger conversation about climate change [[4](https://www.watershedcouncil.org/great-lakes-water-levels.html)]. 
+
+In this project, we consider the variation of water levels in Lake Michigan-Huron over the time period 1980-2020, given that the majority of residents in the Great Lakes watershed live by Lake Michigan [[4](https://www.watershedcouncil.org/great-lakes-water-levels.html), [5](https://en.wikipedia.org/wiki/Lake_Michigan%E2%80%93Huron)]. Our goals are as follows: 
+
+(1) Identify if there is a general trend that could explain the noticeable increase in water levels in the past 10 years.
+
+(2) Describe any other patterns that may be of interest to environmental scientists and climatologists. 
+
+In addition, we may want to study how the water levels in one lake may be associated with the water levels in another lake for prediction purposes; thus, we will cross-compare water levels between Lake Michigan and Lake Erie. Our goal is then to:
+
+(3) Describe the temporal relationship between water levels in Lake Michigan and Lake Erie.
+
+----
+
+**NB**: Lake Michigan and Lake Huron are hydrologically one lake [[5](https://en.wikipedia.org/wiki/Lake_Michigan%E2%80%93Huron)], since the flow of water through the Straits of Mackinac keeps their respective water levels in near-equilibrium. In this project, we will use the names Lake Michigan and Lake Michigan-Huron interchangeably.
+
+------------
+
+## Data
+
+The data consists of monthly lake level means from Harbor Beach, MI and was collected by the Center for Operational Oceanographic Products and Services (CO-OPS), an arm of the National Oceanic and Atmospheric Administration (NOAA) [[6](https://tidesandcurrents.noaa.gov/)].  
+
+```{r echo=FALSE}
+## reading in and formatting data
+data_huron = read.csv('michigan_huron.csv', colClasses = list(Date = "Date")) %>%
+  rename_with(~ str_extract(.x, "([[:alpha:]]+)")) %>% # get rid of `.` in colnames
+  select(Date, MSL) %>% 
+  filter(Date < as.Date("2021-01-01"))
+level = data_huron$MSL
+```
+
+------------
+
+## Exploratory Data Analysis
+
+```{r, echo=FALSE, fig.width=8, fig.height=4}
+date_breaks = with(data_huron, seq.Date(from = min(Date), to = max(Date), by = '5 years'))
+
+peak_trough = rbind(
+  data_huron %>% filter(Date<as.Date("1990-01-01")) %>% filter(MSL==max(MSL)),
+  data_huron %>% filter(Date>as.Date("1990-01-01"), Date<as.Date("2000-01-01")) %>% filter(MSL==max(MSL)),
+  data_huron %>% filter(Date>as.Date("2010-01-01")) %>% filter(MSL==min(MSL))
+)
+
+data_huron %>%
+  ggplot(aes(Date, MSL)) + 
+    theme_bw() +
+    geom_line(color="#69b3a2", size=1) +
+    ylab("Mean Lake Level (ft)") +
+    ggtitle('Lake Michigan-Huron Water Levels, 1980-2020') +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    geom_vline(data=peak_trough, aes(xintercept=Date), 
+               color="darkred", linetype="dashed", alpha=.4) +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+The water levels of Lake Michigan-Huron had two noticeable peaks in October 1986 and July 1997, a dip around the years 2000-2013, followed by a sharp rise; there does seem to be some evidence of a nonlinear trend. In addition, we see evidence of cyclical behavior with period ~10 years from 1980-2000 -- we will examine this more closely in the [Seasonality] section.
+
+More concretely, let's look at the sample autocorrelation function (ACF) to see if our intuition is correct, and to test if a stationary time series model would be appropriate.
+
+```{r, echo=FALSE, fig.width=5, fig.height=3.5}
+acf(level, main="sample ACF")
+```
+
+There is significant evidence for non-stationarity in the data! The gradual decrease in the ACF suggests that there is an systematic trend in the data, and the periodic behavior suggests that seasonality is also present. As such, we will likely want to fit a model with both trend and seasonality. 
+
+### Trend 
+
+Before we examine seasonality, we will want to detrend our data. Looking at our data, anything less than a quadratic fit is likely to be underfitting, but we should be careful about overfitting as well. Therefore, we compare models by computing Akaike's information criterion (AIC) for each polynomial regression model of degree up to 5, where time is our regressor. Recall that the AIC is given by 
+
+$$
+\mathrm{AIC} = -2\ell(\theta^*) + 2p
+$$
+
+where $\theta^*$ is our parameter vector, $\ell(\theta^*)$ is the model log-likelihood, and $p$ is the number of parameters in our model.
+
+More formally, let $t_n$ represent time, and let $Y_n$ be our data generating process. Then we are comparing models of the form 
+
+$$
+Y_n = \sum\limits_{j=0}^{d}\beta_j t_n^j,\ \ d \in [5].
+$$
+
+```{r echo=FALSE}
+date_num = seq(from = 1980, length = nrow(data_huron), by = 1/12)
+
+table=matrix(NA, 5, 1)
+for(i in 1:5) {
+  model_aic = try(
+    AIC(lm(level ~ poly(date_num, i))), 
+    silent = TRUE
+  )
+  table[i, 1] = ifelse(
+    inherits(model_aic, "try-error"), NA, model_aic
+  )
+}
+dimnames(table) = list(paste("degree ", 1:5, ': ', sep=""))
+
+table %>% 
+  knitr::kable(format='html', digits=2, escape=FALSE, caption='<center style=\'color:black\'><strong>AIC values</strong></center>')
+```
+
+The lowest AIC value is attained by the quartic fit; however, plotting the cubic and quartic lines of best fit indicate that they are quite close, so we will remain parsimonious and select the cubic function to model our trend.
+
+```{r echo=FALSE, fig.width=8, fig.height=4}
+data_huron %>%
+  ggplot(aes(Date, MSL)) +
+    theme_bw() +
+    geom_line(color="#69b3a2", size=1) +
+    ggtitle('Lake Michigan-Huron Water Levels, 1980-2020') +
+    ylab("Mean Lake Level (ft)") +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    geom_smooth(size=1, method="lm", formula=y~poly(x, 4), 
+                aes(color="quartic fit", fill="quartic fit")) +
+    geom_smooth(size=1, method="lm", formula=y~poly(x, 3), 
+                aes(color="cubic fit", fill="cubic fit")) +
+    scale_colour_manual(name="Fitted values", values=c("#FC948D", "#96BCFF")) +
+    scale_fill_manual(name="Fitted values", values=c("#FC948D", "#96BCFF")) +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+Looking at the model residuals, there seems to be only periodic behavior left to analyze; thus we continue with our analysis on seasonality.
+
+```{r echo=FALSE, fig.width=6, fig.height=3}
+data_huron %>%
+  mutate(Residuals = lm(level ~ poly(date_num, 3))$residuals) %>%
+  ggplot(aes(Date, Residuals)) +
+    theme_bw() +
+    geom_line(size=1, color="#69b3a2") +
+    ggtitle('Residuals') +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+### Seasonality
+
+Now, let's further examine the data by decomposing the time series into trend, seasonality, and noise components. Our prior knowledge should inform us that lake levels tend to be higher in early summer and lower in winter due to increased runoff and precipitation in spring [[4](https://www.watershedcouncil.org/great-lakes-water-levels.html)].
+
+```{r, echo=FALSE, fig.width = 6, fig.height = 5}
+stl(ts(level, start = c(1980, 2), frequency=12), s.window = 'periodic', t.window=50) %>% plot(main='Decomposition Of Lake Levels')
+```
+
+There appears to be short-term cyclical behavior with period 1 year, which matches with our intuition. In order to identify such seasonality more concretely, let us approximate the spectral density function of the detrended data by using a smoothed periodogram to remove noise.
+
+```{r, echo=FALSE, fig.width=6, fig.height=4}
+model <- lm(level ~ poly(date_num, 3))
+smoothed <- spectrum(model$residuals, spans=c(5, 5, 5), main="Periodogram (Smoothed)")
+
+idx_max <- which.max(smoothed$spec)
+idx_max2 <- which.max(smoothed$spec[20:length(smoothed$spec)]) + 19
+idx_max3 <- which.max(smoothed$spec[50:length(smoothed$spec)]) + 49
+
+abline(v=smoothed$freq[idx_max], lty=2, col='red')
+abline(v=smoothed$freq[idx_max2], lty=2, col='red')
+abline(v=smoothed$freq[idx_max3], lty=2, col='gray')
+
+paste0('local maximum 1: ', smoothed$freq[idx_max])
+paste0('local maximum 2: ', smoothed$freq[idx_max2])
+paste0('local maximum 3: ', smoothed$freq[idx_max3])
+```
+
+There seem to be a couple of dominant frequencies. The first is $\omega_1 = 0.01$, which corresponds to a period of $1 / 0.01 = 100$ months, or about $8.33$ years. This seems to correspond to the the longer-term variation of around 10 years as described above. However, the peak is not "sharp" and so this may simply be due to natural variation.
+
+There is also a noticeable maximum at around $\omega_2 = 0.084$, which corresponds to a much shorter period of $1 / 0.084 \approx 12$ months or $1$ year. (There is another local maximum at around $0.166$; however, this corresponds to the second harmonic of $\omega_2$, so we can ignore this.) This fits in with our domain knowledge, so we will include this in our model fitting below.
+
+-----
+
+## Model Selection
+
+Given our analyses above, we find it appropriate to conduct a linear regression with ARMA errors, where the regressors are a cubic function of time, and the errors are modeled with an some sort of seasonal ARMA (SARMA) process. The regression equation is then 
+
+$$
+Y_n = \beta_0 + \beta_1t_n + \beta_2t_n^2 + \beta_3 t_n^3+ \eta_n
+$$
+
+where $Y_n$ represents the Lake Michigan water level at time $t_n$, the $\beta_i$ are coefficients to be estimated, and $\{\eta_n\}$ is our SARMA process as specified below.
+
+Judging from our seasonality analysis above, we may want to consider adding in two seasonality terms into our error model -- one encoding the yearly variation, and another encoding the longer-term variation over 8-10 years. The model would then be a $\mathrm{SARMA}(p, q) \times (P_1, Q_1)_{12} \times (P_2, Q_2)_{100}$, with corresponding model equation:
+
+$$
+\phi(B)\Phi_1(B^{12})\Phi_2(B^{100})\left[Y_n-(\beta_0 + \beta_1t_n + \beta_2t_n^2 + \beta_3t_n^3)\right] = \psi(B)\Psi_1(B^{12})\Psi_2(B^{100})\varepsilon_n
+$$
+
+where $\{\varepsilon_n\}$ is a Gaussian white noise process, $B$ is the backshift operator, and $\phi(\cdot)$, $\Phi(\cdot)$, $\psi(\cdot)$ and $\Psi(\cdot)$ are the monthly and seasonal AR and MA polynomials, respectively.
+
+However, this long-term seasonality is not very evident in the latter half of the time series, and time series software has a difficult time handling this in any case. In the interest of simplicity, we will only fit the yearly component, giving a $\mathrm{SARMA}(p, q) \times (P, Q)_{12}$ model with model equation:
+
+$$
+\phi(B)\Phi(B^{12})\left[Y_n-(\beta_0 + \beta_1t + \beta_2t^2 + \beta_3t^3)\right] = \psi(B)\Psi(B^{12})\varepsilon_n
+$$
+
+We start by choosing an appropriate $\mathrm{SARMA}(p, q) \times (P, Q)_{12}$ model, again using AIC as a comparison metric. To keep the model relatively simple, we limit the seasonal AR and MA factors $(P,Q)$ to $\{(0,0), (1,0), (0,1), (1,1)\}$, and find that $(P, Q) = (1, 1)$ has a much lower AIC value than the other three pairs. 
+
+```{r, echo=FALSE}
+generate_aic_table(
+  level, P=5, Q=5, D=0, xreg = poly(date_num, 3),
+  seasonal = list(order = c(1, 0, 1), period = 12)
+) %>%
+  format_aic_tables(caption = '<center style=\'color:black\'><strong>AIC of $\\mathrm{SARMA}(p, q) \\times (1, 1)_{12}$ models, $0 \\leq p, q \\leq 5$</strong></center>')
+```
+
+Although the lowest AIC is given by the $\mathrm{SARMA}(5,2)\times(1,1)_{12}$ model, $\mathrm{SARMA}(3,0)\times(1,1)_{12}$ and $\mathrm{SARMA}(2,0)\times(1,1)_{12}$ have very similar performance and fewer parameters. Therefore, we will consider the two simpler models in the following analysis. 
+
+```{r echo=FALSE}
+m30_11 = arima(level, c(3, 0, 0), xreg = poly(date_num, 3), 
+               seasonal = list(order = c(1, 0, 1), period = 12), method='ML')
+
+m20_11 = arima(level, c(2, 0, 0), xreg = poly(date_num, 3), 
+               seasonal = list(order = c(1, 0, 1), period = 12), method='ML')
+```
+
+------
+
+## Model Diagnostics
+
+### Residual Analysis
+
+We analyze the fit by investigating the distribution of the residuals. 
+The residuals of both models show no striking patterns or significant signs of autocorrelation, and look to be normally distributed, suggesting that both models have fit the data relatively well. 
+
+#### Residuals of the $\mathrm{SARMA}(3, 0) \times (1, 1)_{12}$ model
+
+```{r echo=FALSE, fig.width = 6, fig.height = 3}
+data_huron %>%
+  mutate(Residuals = m30_11$residuals) %>%
+  ggplot(aes(Date, Residuals)) +
+    ggtitle('Residual Plot') +
+    theme_bw() +
+    geom_line(size=.5, color="#69b3a2") +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+```{r echo=FALSE, fig.width = 6, fig.height = 3}
+generate_acf_qqplot(m30_11)
+```
+
+To check for causality and invertibility of the $\mathrm{SARMA}(3, 0) \times (1, 1)_{12}$ model, we compute the roots of the AR polynomial $\phi(x)\Phi(x^{12}) = (1-1.329x+0.257x^2+0.099x^3)(1-0.999x^{12})$ and MA polynomial $\Psi(x^{12}) = 1-0.965x^{12}$. The results suggest that all roots fall outside the unit circle, which means our model is both causal and invertible. 
+
+```{r}
+# unit root test
+params30_11 = m30_11$coef
+roots = list(
+  ar_nonseasonal = polyroot(c(1, -params30_11[grep("^ar", names(params30_11))])),
+  ar_seasonal = polyroot(c(1, -params30_11["sar1"])),
+  ma_seasonal = polyroot(c(1, params30_11["sma1"]))
+)
+lapply(roots, abs)
+```
+
+#### Residuals of the $\mathrm{SARMA}(2, 0) \times (1, 1)_{12}$ model
+
+```{r echo=FALSE, fig.width = 6, fig.height = 3}
+data_huron %>%
+  mutate(Residuals = m20_11$residuals) %>%
+  ggplot(aes(Date, Residuals)) +
+    ggtitle('Residual Plot') +
+    theme_bw() +
+    geom_line(size=.5, color="#69b3a2") +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+```{r echo=FALSE, fig.width = 6, fig.height = 3}
+generate_acf_qqplot(m20_11)
+```
+
+Again, we compute the roots of the AR polynomial $\phi(x)\Phi(x^{12}) = (1-1.369x+0.394x^2)(1-x^{12})$ and MA polynomial $\Psi(x^{12}) = 1-0.974x^{12}$. All roots are outside the unit circle, indicating that the model is both causal and invertible. 
+
+```{r}
+# unit root test
+params20_11 = m20_11$coef
+roots = list(
+  ar_nonseasonal = polyroot(c(1, -params20_11[grep("^ar", names(params20_11))])),
+  ar_seasonal = polyroot(c(1, -params20_11["sar1"])),
+  ma_seasonal = polyroot(c(1, params20_11["sma1"]))
+)
+lapply(roots, abs)
+```
+
+
+### Model Comparison
+
+Comparing the estimated coefficients of the two models, we can see that the `ar3` estimate is close to zero and on the edge of statistical significance as measured by the Fisher information. This motivates us to conduct a formal hypothesis test using Wilks' approximation. 
+
+<div id="coef">
+```{r}
+tibble(
+  model="SARMA(3,0) x (1,1)", Term = names(m30_11$coef), 
+  est = sprintf("%4.3f (%4.3f)", m30_11$coef, sqrt(diag(m30_11$var.coef)))
+) %>%
+  rbind(
+    tibble(
+      model="SARMA(2,0) x (1,1)", Term = names(m20_11$coef), 
+      est = sprintf("%4.3f (%4.3f)", m20_11$coef, sqrt(diag(m20_11$var.coef)))
+    )
+  ) %>%
+  pivot_wider(id_cols = Term, names_from = model, values_from = est, values_fill = list(est = "")) %>%
+  mutate(Term = ifelse(Term %in% c("1", "2", "3"), sprintf("$\\mathrm{t}^%s$", Term), Term)) %>%
+  knitr::kable(
+    format = "html", escape = TRUE, align = "lcc", 
+    caption = "<center style=\'color:black\'><strong>Coefficient Estimates (S.E.)</strong></style>"
+  )
+```
+</div>
+
+```{r, eval=FALSE, fig.width=6, fig.height=3}
+# # Profile log-likelihood test. Setting `eval=FALSE` will skip the evaluation
+# K = 100
+# ar3 = seq(-0.8, -0.01, length.out = K)
+# profile_loglik = numeric(K)
+# xreg = poly(date_num, 3)
+# for (k in 1:K) {
+#   loglik_k = try(
+#     logLik(
+#       arima(level, c(3, 0, 0), xreg = xreg,
+#             seasonal = list(order = c(1, 0, 1), period = 12), method='ML',
+#             fixed = c(NA, NA, ar3[k], NA, NA, NA, NA, NA, NA))
+#     ), silent = TRUE
+#   )
+#   profile_loglik[k] = ifelse(inherits(loglik_k, "try-error"), NA, loglik_k)
+# }
+# 
+# plot(profile_loglik ~ ar3, type = "l")
+```
+
+For this test, the null hypothesis $H_{0}$ corresponds to the $\mathrm{SARMA}(2, 0)\times(1, 1)_{12}$ model, and the alternative hypothesis $H_{1}$ corresponds to the $\mathrm{SARMA}(3, 0)\times(1, 1)_{12}$ model. Recall that Wilks' Theorem states that $\Lambda = -2(\ell_0 - \ell_1) \sim \chi^2_\nu$, where $\nu$ is the difference in degrees of freedom between the two models. In this case, $\nu = 1$.
+
+The difference in the log likelihood is $\Lambda \approx `r sprintf("%4.3f", -2 *(m20_11$loglik - m30_11$loglik))` > `r sprintf("%4.3f", qchisq(0.95, df = 1))`$. Therefore, we can reject $H_{0}$ at the 5% confidence level - the $\mathrm{SARMA}(3, 0)\times(1, 1)_{12}$ model is more appropriate for the data.
+
+We make a final plot to show the fit of our model against the data.
+
+```{r, echo=FALSE, fig.width=8, fig.height=3}
+data_huron %>%
+  mutate(fit = MSL + m30_11$residuals) %>%
+  ggplot() + 
+    theme_bw() +
+    geom_line(aes(Date, MSL, color="Original data"), size=1, alpha=0.5) +
+    geom_line(aes(Date, fit, color="Fitted values"), lty=2, size=0.7) +
+    ylab("Mean Lake Level (ft)") +
+    ggtitle('Lake Michigan-Huron Water Levels, 1980-2020') +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    scale_color_manual(name="", values=c("Original data"="#69b3a2", "Fitted values"="purple")) +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+------------
+
+## Cross-Comparison  
+
+We may also be interested in investigating how the water levels in one lake correlate with the water levels in another lake -- specifically, we aim to compare Lake Michigan-Huron with Lake Erie, the warmest and shallowest of the Great Lakes [[7](https://en.wikipedia.org/wiki/Lake_Erie)]. We choose to focus on Lake Erie due to its many environmental issues and susceptibility to the negative effects of climate change. If there is significant cross-correlation, we may be able to predict the levels in one lake from the other, allowing climatologists to given residents advance warning of future trends.
+
+```{r, echo=FALSE}
+data_erie = read.csv("erie.csv", colClasses = list(Date = "Date")) %>%
+  rename_with(~ str_extract(.x, "([[:alpha:]]+)")) %>% # get rid of `.` in colnames
+  select(c("Date", "MSL")) %>% 
+  filter(Date < as.Date("2021-01-01"))
+```
+
+First, we plot the data from Lake Erie. The water levels of Lake Erie peaked in June 1986 and June 1997, and has presented a steady upward trend since 2010. 
+
+```{r, echo=FALSE, fig.width=8, fig.height=3.5}
+peak_trough = rbind(
+  data_erie %>% filter(Date<as.Date("1990-01-01")) %>% filter(MSL==max(MSL)),
+  data_erie %>% filter(Date>as.Date("1990-01-01"), Date<as.Date("2000-01-01")) %>% filter(MSL==max(MSL)),
+  data_erie %>% filter(Date>as.Date("2010-01-01")) %>% filter(MSL==min(MSL))
+)
+
+data_erie %>%
+  ggplot(aes(Date, MSL)) + 
+    theme_bw() +
+    geom_line(color="#69b3a2", size=1) +
+    ylab("Mean Lake Level (ft)") +
+    ggtitle("Lake Erie Water Levels, 1980-2020") +
+    scale_x_date(breaks=date_breaks, date_labels='%Y') +
+    geom_vline(data=peak_trough, aes(xintercept=Date), 
+               color="darkred", linetype="dashed", alpha=.4) +
+    theme(plot.title=element_text(hjust=0.5))
+```
+
+We notice that the variation in the water levels is quite similar to that of Lake Michigan. Plotting the centered water levels of Lake Erie and Lake Michigan-Huron together, we can see that the two sets of data present a similar overall trend. 
+
+```{r, echo=FALSE, fig.width=8, fig.height=3.5}
+ggplot() + 
+  theme_bw() +
+  geom_line(data=data_erie, 
+            aes(Date, MSL-mean(MSL, na.rm=T), alpha="Erie"), 
+            color="#69b3a2", size=1) +
+  geom_line(data=data_huron, 
+            aes(Date, MSL-mean(MSL, na.rm=T), alpha="Michigan-Huron"),
+            color="#69b3a2", size=1) +
+  ylab("Centered Mean Lake Level (ft)") +
+  ggtitle("Centered Water Levels of Lake Erie and Lake Michigan-Huron") +
+  scale_x_date(breaks=date_breaks, date_labels='%Y') +
+  scale_alpha_manual(name="Lake", values = c("Michigan-Huron" = 0.4, "Erie" = 1)) +
+  theme(legend.position="bottom", legend.margin=margin(-10),
+        plot.title=element_text(hjust=0.5))
+```
+
+While Lake Michigan's water levels have always been higher than Lake Erie's, we see that Lake Erie's water levels have varied less drastically than Lake Michigan's from the years 1980-2012 (the rate of change has since caught up). The reason for this is unknown, and scientists may want to take note of both these observations.
+
+Let us also compare the two series by investigating the cross-correlation function (CCF); if there is a noticeable pattern, it may be worth analyzing further.
+
+```{r, echo=FALSE, fig.width=6, fig.height=3.5}
+ccf(data_huron$MSL, data_erie$MSL, main="sample CCF")
+```
+
+The cross-correlations are clearly significant at each of these lags, reaching a maximum at lag 1, supporting the assertion that these lake levels vary together. The plot also shows an oscillatory pattern, motivating further investigation in the frequency domain. Since there is evidence that Lake Erie's trend precedes Lake Michigan's by about one month, let's take a look at the coherency between the two time series to confirm.
+
+```{r, echo=FALSE, fig.width=6, fig.height=4}
+s <- spectrum(cbind(data_huron$MSL,data_erie$MSL), spans=c(15,15,15), plot=F)
+plot(s, plot.type="phase", main="Phase Plot of Erie-Michigan Coherency")
+abline(h=0, col='red', lty=2)
+```
+
+From the phase plot, we can conclude that Lake Erie's and Lake Michigan's water levels show strong evidence of being *pro-cyclical*; however, the negative phase (with narrow confidence interval) at frequencies $\omega \in [0.06, 0.1]$ suggest that Lake Michigan does lag Lake Erie by about one month, which would correspond to a frequency of $\omega \approx 0.083$ in the phase plot. One explanation could be geography and climate patterns -- Lake Michigan is located a little further north than Lake Erie, and so seasonal impacts on Lake Michigan may be slightly delayed when compared to Lake Erie.
+
+------------
+
+## Conclusion
+
+From the above analyses, we can see that the Lake Michigan water levels are highly non-stationary, varying wildly and erratically. The best fitting model was a cubic function of time, with $\mathrm{SARMA}(3, 0) \times (1, 1)_{12}$ errors. The water levels varied from a record high in the 1980s to a somewhat stagnant low period in the 2000s before rising again. Thus, there is no clear evidence for a one-way trend explaining the past 10 years. However, we will likely have to wait a few more decades to see how this pattern plays out. In addition, the recent rise is much sharper than in past decades; combined with the unpredictability which with the data vary, this could be a reason for concern. The takeaway: the current rise in lake levels is not unprecedented, since the mid-1980s had comparable water levels (albeit by only a small margin).
+
+As our intuition expected, there is a very distinct yearly pattern that can most likely be attributed to precipitation patterns driven by seasonal variation. There is slight evidence of a longer-term 8-10 year trend, but more data would be needed to conclude for certain, as this pattern disappears after two "periods".
+
+From comparing Lake Erie's water levels to Lake Michigan's, we see that the two lakes exhibit pro-cyclical behavior. They exhibit the same seasonal pattern and general trend, which makes sense due to their relative closeness and similar climate patterns. However, there is evidence that Lake Erie's water levels tend to precede Lake Michigan's by about one month, which could also be explained by Lake Erie warming before Lake Michigan due to its location. The takeaway: if Lake Erie is experiencing high water levels, expect Lake Michigan to see the same in a month.
+
+Surprisingly, Lake Erie's water levels have fluctuated a bit less than Lake Michigan's, despite its smaller size and depth [[7](https://en.wikipedia.org/wiki/Lake_Erie)]; this is worth investigating further. Overall, it is valuable to note that what affects one lake, can also affect the other.
+
+While Lake Michigan water levels have increased in the past 10 years, the Lake's water levels are within historical variation; its residents need not worry, yet.
+
+------------
+
+## Limitations
+
+We ran into numerical stability problems on occasion where our model fitting algorithm did not converge, especially when the model specification gets more complex. This gives us evidence that some of our model choices were not entirely well-specified. This is supported by the generated AIC tables, since the AIC would increase by much more than 2 when only adding one parameter. A more careful analysis may be of use, especially one that verifies our assumptions with bootstrapping.
+
+In addition, the cubic fit does not correspond to the data very well; it is likely that a nonparametric smoothing method could have worked better. This is a more general concern throughout this project; although we emphasized simplicity, it is possible that a more complicated model could have fit the data more accurately.
+
+In the future, we may want to extend our analysis to cross-compare all five Great Lakes, as well as investigate monthly average temperatures in this date range (1980-2020) and see if they correlate with the lake levels. 
+
+------------
+
+## References  
+
+[1] [Green Bay Press-Gazette](https://www.greenbaypressgazette.com/story/news/local/oconto-county/2020/08/04/lake-michigan-breaks-34-year-old-high-water-record/3294377001/), "Lake Michigan Breaks 34-Year-Old High Water Record". August 24, 2020.
+
+[2] [Detroit Free Press](https://www.freep.com/story/news/local/michigan/2020/07/17/great-lakes-water-levels-records-erosion-damage/5450910002/), "Record-High Michigan Water Levels Are a Nightmare for Homeowners, State". July 17, 2020.
+
+[3] [The Washington Post](https://www.washingtonpost.com/weather/2019/11/08/great-lakes-water-levels-have-swung-record-lows-record-highs-heres-why/), "Great Lakes Water Levels Have Swung from Record Lows to Record Highs. Here’s Why.". November 8, 2019.
+
+[4] [Tip of the Mitt Watershed Council](https://www.watershedcouncil.org/great-lakes-water-levels.html), "Great Lakes Water Levels". May 14, 2020.
+
+[5] [Wikipedia](https://en.wikipedia.org/wiki/Lake_Michigan%E2%80%93Huron), "Lake Michigan-Huron". Accessed March 3, 2021.
+
+[6] [Center for Operational Oceanographic Products and Services](https://tidesandcurrents.noaa.gov/), National Oceanic and Atmospheric Administration, "Tides & Currents". Accessed March 1, 2021.
+
+[7] [Wikipedia](https://en.wikipedia.org/wiki/Lake_Erie), "Lake Erie". Accessed March 3, 2021.
+
+*All uncited statistical methods were obtained by consulting the [STATS 531](https://ionides.github.io/531w21/) class notes.*
+
+----

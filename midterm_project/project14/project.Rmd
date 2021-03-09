@@ -1,0 +1,338 @@
+---
+title: "Time Series Analysis of Weekly PM2.5 Concentration in Beijing from 2013 to 2020"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+## Project background and motivation
+
+PM2.5 (fine air pollution particles less than 2.5 microns in diameter) is a hazardous air pollutant which can penetrate deeply into the lungs and even enter the bloodstream, irritating the alveolar wall and impairing lung function (Xing et al., 2016). PM2.5 also produces haze, making it a nuisance in urban environments where it reduces visibility. A variety of sectors contribute to emissions of PM2.5, including the burning of fossil fuels from coal combustion and internal combustion engines, emissions of volatile organic compounds from petrochemical industries, ammonia emissions from the agriculture sector, and dust from construction sites (Lu et al., 2020). PM2.5 emissions can become especially hazardous during winter months when ideal atmospheric and meteorological conditions effectively trap air pollutants over a region, causing local spikes in PM2.5 concentrations (Xu et al., 2016).
+
+Air pollution in China is said to be responsible for around 1 million premature deaths per year and annual premature mortality costs from air pollution cost close to 10% of the nation's GDP(World Bank Group, 2016). In 2013, the Chinese government adopted the WHO Target-1 level annual mean limit for PM2.5 concentration of 35 ug/m3 to reign in PM2.5 pollution and decouple air pollution from economic growth. Beijing set a five year goal to achieve annual average concentrations of PM2.5 below 60 ug/m3 by the end of 2017, a reduction of greater than 30% (Lu et al., 2020).
+
+For our project we analyzed time series data of daily PM2.5 concentrations recorded from monitoring stations in Beijing between 2013 - 2020. We analyzed two different monitoring data sets - the reference monitoring stations and the urban monitoring stations. The reference monitoring stations measure pollution concentrations across the Beijing region, including urban, suburban, and industrial areas. The urban monitoring stations only measure pollution concentrations in the most urbanized parts of the city and could be more impacted by local spikes in PM2.5 emissions from sources like city traffic. 
+
+![](Location.png)
+
+We analyzed both data sets to determine if the reference (MS24-MS30) and urban (MS1-MS12) monitoring stations followed the same trends. We also sought to determine if PM2.5 in Beijing had a decreasing trend in line with the city's goal to reduce air pollution, and if PM2.5 concentrations followed any seasonal trend. We also looked to use our time series model to determine if the model could accurately forecast PM2.5 concentrations in 2020, given that the lockdown measures taken to control the outbreak of the COVID-19 pandemic early in 2020 may have influenced PM2.5 concentrations in the city (potentially from less traffic, decreased output at industrial facilities, etc.).
+
+## Exploratory data analysis
+
+We obtained the air quality monitoring data from [https://quotsoft.net/air/](https://quotsoft.net/air/). The data set included hourly air quality monitoring for 35 monitoring stations. Specifically, we used 7 reference monitoring stations and 12 urban monitoring stations for our study. We limited our analysis between years 2013 - 2020. We aggregated the data into weekly average in order to have a relatively low frequency time series data. We then further averaged the weekly monitoring data for the reference and urban stations respectively. For weeks with missing data points we interpolated the data by averaging the prior and future week's PM2.5 concentrations. The final dataset includes observations for 373 weeks. 
+
+The averaged weekly PM2.5 monitoring data for the reference and urban monitoring stations between 2013 - 2020 is shown in the time series plot and histogram below. The averaged reference station data is shown in blue while the averaged urban station data is shown in red.
+
+```{r load data, echo=FALSE, warning=FALSE, message = FALSE}
+#load the data
+data_week <- read.csv("air quality data in Beijing from 20131205_20210213_weekly.csv")
+data_week[, 13] <- as.numeric(data_week[,13])
+date <- data_week$Time.Year.Week.52.
+reference <- apply(data_week[,28:34], 1, mean, na.rm=T)
+urban <- apply(data_week[,5:16], 1, mean, na.rm=T)
+#add missing data
+reference[21] <- sum(reference[20],reference[22])/2
+urban[21] <- sum(urban[20],urban[22])/2
+#training set
+reference_training <- reference[c(1:315)] 
+urban_training <- urban[c(1:315)] 
+Time <- date[c(1:315)] 
+```
+
+```{r time series plot, echo=FALSE}
+#Time series plot
+plot(reference_training~Time, type="l", col='blue', ylab="Weekly PM2.5 Concentration", xlab="2013-2019")
+lines(urban_training~Time, type='l',col="red")
+legend("topright", c("Reference Station", "Urban Station"), col=c('blue', "red"), lwd=10)
+#Histogram
+hgA <- hist(reference_training, plot = FALSE) # Save first histogram data
+hgB <- hist(urban_training, plot = FALSE) # Save 2nd histogram data
+c1 <- rgb(173,216,230,max = 255, alpha = 80, names = "lt.blue")
+c2 <- rgb(255,192,203, max = 255, alpha = 80, names = "lt.pink")
+plot(hgA, col = c1, main="Histogram of Weekly PM2.5 Concentration",xlab="PM2.5 Concentration") # Plot 1st histogram using a transparent color
+plot(hgB, col = c2, add = TRUE) # Add 2nd histogram using different color
+legend("topright", c("Reference Station", "Urban Station"), col=c(c1, c2), lwd=10)
+```
+
+Based on above figures, it seems that the distribution of weekly PM2.5 concentration is highly skewed without mean stationary and covariance stationary characteristics. In order to get stationarity, we conducted log transformation to the raw dataset.
+
+```{r data transformation, echo=FALSE}
+reference_training_log<-log(reference_training)
+urban_training_log<-log(urban_training)
+```
+
+
+```{r data time series after transformation, echo=FALSE}
+#Time series plot
+plot(reference_training_log~Time, type="l", col='blue', ylab="Weekly Log PM2.5 Concentration", xlab="2014-2019")
+lines(urban_training_log~Time, type='l',col="red")
+legend("topright", c("Reference Station", "Urban Station"), col=c('blue', "red"), lwd=10)
+#Histogram
+hgA <- hist(reference_training_log, plot = FALSE) # Save first histogram data
+hgB <- hist(urban_training_log, plot = FALSE) # Save 2nd histogram data
+c1 <- rgb(173,216,230,max = 255, alpha = 80, names = "lt.blue")
+c2 <- rgb(255,192,203, max = 255, alpha = 80, names = "lt.pink")
+plot(hgA, col = c1, main="Histogram of Weekly Log PM2.5 Concentration",xlab="Log PM2.5 Concentration") # Plot 1st histogram using a transparent color
+plot(hgB, col = c2, add = TRUE) # Add 2nd histogram using different color
+legend("topright", c("Reference Station", "Urban Station"), col=c(c1, c2), lwd=10)
+#shapiro.test(reference_training_log)
+#shapiro.test(urban_training_log)
+```
+
+After the log transformation, the distribution of the data becomes more gaussian (confirmed by the Shapiro Wilk test with p value =0.8424>0.05 for reference data and p value =0.9295>0.05 for urban data) and the stationaruty assumption can be achieved. All the following analyses are conducted based on the log weekly data.
+
+## Model selection and analysis
+### ARMA model construction
+Based on the basic statistical summary and the time plot, the log PM2.5 concentration for both urban and reference stations have a quasi-normal distribution. There seems to be a time trend but not obvious. It is reasonable for us to try a stationary model at first. Thus, the stationary Gasussian $ARMA(p,q)$ model is used to construct the model under the null hypothesis that there is no trend with the form of:
+
+\begin{align*}
+\phi(B)(Y_n -\mu) = \psi(B)\varepsilon_n
+\end{align*}
+
+where
+
+\begin{align*}
+&\mu = \mathbb{E}[Y]\\
+&\phi(x) =1 - \phi_1 x - \phi_2 x^2 - \dots - \phi_p x^p\\
+&\psi(x) = 1 + \psi_1 x + \psi_2 x^2 + \dots + \psi_p x^p\\
+&\varepsilon_{n} \in iid N(0, \sigma^2)
+\end{align*}
+
+
+```{r AIC table function, echo=FALSE, warning=FALSE, message = FALSE}
+AIC_table <- function(data,P,Q){
+  aic_table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      aic_table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
+    }
+  }
+dimnames(aic_table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+aic_table
+}
+```
+
+In order to choose a proper value for p and q, we first tabulate AIC values for a range of different choices of p and q from 0 to 5.
+
+```{r Urban AIC Table, echo=FALSE, warning=FALSE, message = FALSE}
+require(kableExtra)
+urban_aic = AIC_table(urban_training_log, 5, 5)
+urban_aic %>%
+  knitr::kable(
+    format = 'html', 
+    escape = FALSE, 
+    align = 'llccc',
+  ) %>%
+  kableExtra::kable_styling("striped", full_width = TRUE)
+```
+
+```{r Reference AIC Table, echo=FALSE, warning=FALSE, message = FALSE, results='hide'}
+reference_aic <- AIC_table(reference_training_log,5,5)
+reference_aic %>%
+  knitr::kable(
+    format = 'html', 
+    escape = FALSE, 
+    align = 'llccc',
+  ) %>%
+  kableExtra::kable_styling("striped", full_width = TRUE)
+```
+
+The candidate models are first selected based on the Akaike information criteria (AIC) values for different combination of the p (from 0 to 5) and q (from 0 to 5). Models with low AIC are somehow more trustworthy and have more reasonable predictive power. According to the AIC table, we noticed that the lowest AIC value 441.2045 appears when AR = 1 and MA = 1. Similarly, we found that the $ARMA(1,1)$ model also has the lowest AIC value of 381.3902 for the reference group. So we choose our ARMA model to be $ARMA(1,1)$ to map the PM2.5 variation for both urban and reference stations.
+
+```{r arma, echo=FALSE, warning=FALSE, message = FALSE}
+urban_arma11 <- arima(urban_training_log,order=c(1,0,1))
+urban_arma11
+urban_AR_roots_11 <- polyroot(c(1,-coef(urban_arma11)[c("ar1")]))
+urban_MA_roots_11 <- polyroot(c(1,-coef(urban_arma11)[c("ma1")]))
+#abs(urban_AR_roots_11)
+#abs(urban_MA_roots_11)
+reference_arma11 <- arima(reference_training_log,order=c(1,0,1))
+reference_arma11
+reference_AR_roots_11 <- polyroot(c(1,-coef(reference_arma11)[c("ar1")]))
+reference_MA_roots_11 <- polyroot(c(1,-coef(reference_arma11)[c("ma1")]))
+#abs(reference_AR_roots_11)
+#abs(reference_MA_roots_11)
+
+par(mfrow=c(1,2))
+urban_acf=acf(urban_arma11$residuals, lag.max=60, na.action=na.pass, xlab="Lag(Weeks)", main="Urban Station")
+reference_acf=acf(reference_arma11$residuals, lag.max=60, na.action=na.pass, xlab="Lag(Weeks)", main="Reference Station")
+```
+
+The auto correlation plot of residuals of both models do not show any significant auto correlation for any lag greater than 1, i.e. residuals are approximately independently identically distributed, satisfying model assumptions. The AR roots are 1.07 and 1.07 and the MA roots are 1.36 and 1.44 for urban and reference respectively. Both are outside unit circle, suggesting both models are causal and invertible. 
+
+
+### ARMA with trend
+
+As we can witness a slight decreasing trend on the original time series plot. We can further fit a trend model for comparison. Based on our previous results, we construct a trend model using $Year$ as covariate with $ARMA(1,1)$ noise. The form of the trend model is:
+
+\begin{align*}
+(1-\phi B)(Y_n -\mu - \beta t_n) =(1-\psi B) \varepsilon_n
+\end{align*}
+
+```{r arma trend, echo=FALSE, warning=FALSE, message = FALSE}
+urban_arma_trend11 <- arima(urban_training_log, order=c(1,0,1), xreg=Time)
+urban_arma_trend11
+urban_AR_roots_trend_11 <- polyroot(c(1,-coef(urban_arma_trend11)[c("ar1")]))
+urban_MA_roots_trend_11 <- polyroot(c(1,-coef(urban_arma_trend11)[c("ma1")]))
+#abs(urban_AR_roots_trend_11)
+#abs(urban_MA_roots_trend_11)
+reference_arma_trend11 <- arima(reference_training_log, order=c(1,0,1), xreg=Time)
+reference_arma_trend11
+reference_AR_roots_trend_11 <- polyroot(c(1,-coef(reference_arma_trend11)[c("ar1")]))
+reference_MA_roots_trend_11 <- polyroot(c(1,-coef(reference_arma_trend11)[c("ma1")]))
+#abs(reference_AR_roots_trend_11)
+#abs(reference_MA_roots_trend_11)
+```
+
+In order to verify the necessity of using a xreg parameter, we first conducted a Z test on $\beta$. The test statistic: $|\frac{\hat{\beta}}{SE(\hat{\beta})}|=\frac{0.1445}{0.0260}=5.56>1.96$. We then conducted a likelihood ratio test: The test statistic: $\Delta=-209.28-(-216.6)=7.32>1.92$. So we can eject $H^{<0>}$ at 5% level. We witnessed the same findings on the reference group, with the Z test statistic:  $|\frac{\hat{\beta}}{SE(\hat{\beta})}|=\frac{0.1303}{0.0345}=3.78>1.96$ and a likelihood ratio test statistic:$\Delta=-182.47-(-186.7)=4.23>1.92$. Thus, the coefficients for both two models are significantly different with 0. Showing there is a decreasing trend on PM2.5 concentration in Beijing.
+
+```{r LRT, echo=FALSE, results='hide'}
+(-248.06)-(-257.74) > 0.5*qchisq(0.95, df=1)
+```
+
+### Spectrum
+
+In order to explore more about our data. We then plot the spectrum in order to find something from the frequency domain.
+
+```{r Smoothed span, echo=FALSE}
+par(mfrow=c(2,1))
+spectrum(ts.union(ts(urban_training_log),ts(reference_training_log)), main="Unsmoothed periodogram for Urban & Reference Station", sub="", xlab="frequency/year")
+legend("topright", c("Reference Station", "Urban Station"), col=c("red", "black"), lwd=2, cex = 0.5)
+smooth_urban = spectrum(ts.union(ts(urban_training_log),ts(reference_training_log)),spans=c(5,5,5), main="Smoothed periodogram for Urban & Reference Station", sub="", xlab="frequency/year")
+abline(v=0.01875, lty="dotted", col ="blue")
+legend("topright", c("Reference Station", "Urban Station"), col=c("red", "black"), lwd=2, cex = 0.5)
+```
+
+Based on the smoothed peridogram, there is a clear peak around 0.1875. This indicates that there may be a period about 53 weeks~ 1 yr exits in the data. This finding is also consistent with the acf plot where exits a high acf around 53 lag(weeks). Thus, we need to further fit a SARMA model to detect the potential seasonal patterns.
+
+### SARMA model construction
+From the original time series plot, we can find a flucuation in each year. This phenomenon indicates that there may be a seasonal pattern. Thus, we further fit a SARMA model to detect this pattern. The form of the seasonal model is $SARMA(1,1)\times(p,0,q)_{52}$. In order to choose a proper value for p and q, we also tabulate AIC values for a range of different choices of p and q from 0 to 5.
+
+```{r AIC table function for SARMA, echo=FALSE, warning=FALSE, message = FALSE}
+AIC_table2 <- function(data,P,Q){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data, order=c(1,0,1),seasonal=list(order=c(p,0,q), period=52), xreg=Time)$aic
+    }
+  }
+  dimnames(table) <- list(paste("P = ",0:P, sep=""),paste("Q = ",0:Q,sep=""))
+  table
+}
+
+```
+
+```{r Urban AIC Table for SARMA, echo=FALSE, warning=FALSE, message = FALSE}
+require(kableExtra)
+urban_aic_sarma = AIC_table2(urban_training_log, 2, 2)
+urban_aic_sarma %>%
+  knitr::kable(
+    format = 'html', 
+    escape = FALSE, 
+    align = 'llccc',
+  ) %>%
+  kableExtra::kable_styling("striped", full_width = TRUE)
+```
+
+According to the AIC table, we noticed that the lowest AIC value appears when p = 0 and q = 0. This is the original model we have. Thus, instead, we selected the $SARMA(1,1)\times(1,0,0)_{52}$ model for comparison.
+
+```{r urban sarma, echo=FALSE, warning=FALSE, message = FALSE}
+urban_sarma <- arima(urban_training_log, order=c(1,0,1),seasonal=list(order=c(1,0,0), period=52), xreg=Time)
+urban_sarma
+```
+```{r reference sarma, echo=FALSE, warning=FALSE, message = FALSE, results='hide'}
+reference_sarma <- arima(reference_training_log, order=c(1,0,1), seasonal =list(order = c(1, 0, 0), period = 52), xreg=Time)
+reference_sarma
+```
+We first conducted a Z test on $\beta$. The test statistic: $|\frac{\hat{\beta}}{SE(\hat{\beta})}|=\frac{0.0649}{0.0608}=1.07<1.96$. So we can not reject $H^{<0>}$ at 5% level. We then conducted a likelihood ratio test. The test static:$\Delta=(-208.71)-(-209.28)=0.57<1.92$. So we not reject $H^{<0>}$ at 5% level. We witnessed the same findings on the reference group, with the Z test static: $|\frac{\hat{\beta}}{SE(\hat{\beta})}|=\frac{0.0880}{0.0639}=1.38<1.96$ and a likelihood ratio test static:$\Delta=-181.53-(-182.47)=0.94<1.92$. Thus, the coefficients for both two models are not significantly different with 0. It means that there is no seasonality which is also consistent with the AIC results (the lowest AIC is found when seasonal coefficients to be (0,0,0)).
+
+
+## Diagnostics 
+
+Based on the above analysis, we choose the linear trend model with $ARMA(1,1)$ errors as our final model. In order to guarantee the correctness of our model, we conducted a series of diagnostics on the selected model. In our previous results, we noticed the AR roots are slightly larger than 1. Thus, we want to make sure there is no non-causality issues. 
+
+```{r Diagnostics, echo=FALSE, warning=FALSE, message = FALSE}
+K = 500
+profile_loglik = rep(NA, K)
+ar = seq(from=0.5, to=0.99, length=K)
+for (k in 1:K){
+  profile_loglik[k] = logLik(arima(urban_training_log, order=c(1,0,1), xreg = Time, fixed = c(ar[k],NA,NA,NA)))
+}
+upper = max(profile_loglik)
+lower = upper - 1.92
+left_FI = 0.7805-1.96*0.0875
+right_FI = 0.7805+1.96*0.0875
+left = 0.526
+right = 0.906
+plot(profile_loglik~ar, ty="l")
+ar = ar[which(profile_loglik > quantile(profile_loglik, 0.95))]
+abline(h=c(upper,lower), col=c("red", "red"), lty=c(2,2), lwd=c(2, 2))
+abline(v=c(left,right,left_FI,right_FI), col=c("red","red","blue", "blue"), lty=c(2,2,1,1), lwd=c(2,2,2, 2))
+legend("bottomright", legend=c("Profile loglikelihood 95% confidence interval", "Fisher information 95% confidence interval"), col=c("red", "blue"), lty=c(2,1), cex=0.8)
+```
+
+The profile likelihood method gives a 95% confidence interval [0.526, 0.906], similar to that of Fisher's information. Therefore we conclude that there's no non-causal problem with our models. Then we assess model fit by analyzing residuals. 
+
+```{r diagnostic normal, echo=FALSE, warning=FALSE, message = FALSE}
+par(mfrow=c(2,2))
+plot(urban_arma11$residuals, ylab="Residuals for Urban Station")
+qqnorm(urban_arma11$residuals)
+qqline(urban_arma11$residuals)
+plot(reference_arma11$residuals, ylab="Residuals for Reference Station")
+qqnorm(reference_arma11$residuals)
+qqline(reference_arma11$residuals)
+```
+
+Plots of residuals look like white noise. QQplots shows residuals for both models are approximately normal, with only a few points on both tails straying away. Therefore, model diagnostics conclude that both models are causal and invertible and satisfies underlying model assumptions.  
+
+## Prediction
+
+Based on our constructed model, we further predict the weekly PM2.5 concentration for 2020. 
+
+```{r data prediction, echo=FALSE, warning=FALSE, message = FALSE}
+library(forecast)
+PM_arma_trend <- Arima(urban_training_log, order=c(1,0,1), xreg=Time)
+newTime <- date[316:367]
+myforecast <- forecast(PM_arma_trend, level=c(95), h=52, xreg=newTime)
+plot(myforecast)
+
+```
+
+Based on our results, there is still a decreasing trend on 2020 and the giant confidence interval indicate there may be huge uncertainty for this prediction rsults.
+
+#### Hypothesis Test on 2020 Trend
+
+Here we want to examine the effects of quarantine on Beijing PM2.5 level. Since we already see a decreasing trend in PM2.5 over the years, here We conduct the hypothesis test with null hypothesis that from 2013 to the end of 2020, the decreasing trend is constant (the coefficient for xreg is constant), and alternative hypothesis that PM2.5 is decreasing at constant rate from 2013 to 2019 and at a different rate in 2020. 
+  The test is achieved by constructing the $xreg$ parameter for null hypothesis to be weekly dates from 2013 to 2020, while $xreg$ for alternative hypothesis to be a bivariate matrix with one column being the same as $xreg$ for null hypotehsis and the other column contains only weekly dates of 2020 and 0's for previous time periods. Denoting the coefficient of second variable for $xreg$ to be $xreg_2$, then the hypothesis becomes  
+  
+$$H_0:xreg_2=0, H_A:xreg_2\neq0$$ 
+
+```{r Hypothesis Test }
+x1 = date[1:366]
+x2 = c(rep(0, 315), date[316:366])
+m1 = arima(log(urban[1:366]), order=c(1,0,1), xreg=x1)
+m2 = arima(log(urban[1:366]), order=c(1,0,1), xreg=cbind(x1,x2))
+m2$loglik - m1$loglik < qchisq(0.95, df=1)*0.5
+```
+
+A likelihood ratio test on $xreg_2$ fails to reject the null hypothesis, so we conclude that the year 2020 did not see a decreasing trend that's different from previous years.
+
+
+## Conclusion
+* PM2.5 in Beijing is slightly **decreasing** over the years, which means the air quality is **improving**.
+  
+* Urban and reference stations, which are our two focuses, show pretty **similar** patterns in overall trends & model fitting.
+  
+* The air quality approximately follows an **annual cycle** but is not significantly related to previous years. It is well approximated by a linear trend model with **ARMA(1,1)** noise term.
+  
+* The hypothesis test on 2020 show that there **isn't** a significant change of PM2.5 pattern during the 2020. This means that the COVID-19 anti-epidemic measures (e.g. city lockdown & isolation) might **not** have a significant influence on the original trend of air pollution.
+
+## Reference
+
+1.Lu, X. et al. Progress of Air Pollution Control in China and Its Challenges and Opportunities in the Ecological Civilization Era. Engineering vol. 6 1423-1431 (2020).
+
+2.World Bank Group. The cost of air pollution. Washington, DC: World BankGroup; 2016
+
+3.Xing, Y. F., Xu, Y. H., Shi, M. H. & Lian, Y. X. The impact of PM2.5 on the human respiratory system. Journal of Thoracic Disease vol. 8 E69-E74 (2016).
+
+4.Xu, J. et al. Impact of meteorological conditions on a nine-day particulate matter pollution event observed in December 2013, Shanghai, China. Particuology 20, 69-79(2015).

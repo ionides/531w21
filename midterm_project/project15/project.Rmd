@@ -1,0 +1,703 @@
+---
+title: "Forecasting Solar Flare from X-ray Flux Time Series"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+geometry: "left=2.5cm,right=2.5cm,top=1.5cm,bottom=1.5cm"
+output:
+  html_document:
+    highlight: tango
+    number_sections: yes
+    fig_caption: TRUE
+    theme: paper
+    toc: yes
+    toc_depth: 5
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+```{r, out.width="1000px", echo=FALSE}
+knitr::include_graphics("solarflarelogo.jpg")
+```
+
+# Introduction
+
+Sunspots are areas that appear dark on the surface of the Sun. Solar flares are a sudden explosion of energy caused by tangling, crossing or reorganizing of magnetic field lines near sunspots. They have massive destructive power when reaches certain amount of magnitude and can interfere space-earth radio communications and neutralize space-earth electronics equipment. In the this study, we want to see whether it's possible to build a solar flare forecasting model on time series data from the Geostationary Operational Environmental Satellite (GOES).
+
+GOES is operated by the United States' National Oceanic and Atmospheric Administration (NOAA)'s National Environmental Satellite, Data, and Information Service division. It supports weather forecasting, severe storm tracking, and meteorology research. GOES spacecraft carry on board the Space Environment Monitor (SEM) instrument consist of a magnetometer, X-ray sensor, high energy proton and alpha particle detector, and a energetic particles sensor. The X-ray sensor (XRS) found on board of GOES capable of registering two wavelength bands : 0.05-0.4nm and 0.1-0.8nm. The data for this study is the X-ray flux captured by the 0.1-0.8nm sensor during 2019. The detail about the data is in the next section. When the X-ray flux reaches certain intensity thresholds, solar flares occur.
+
+## Research Objectives
+Given the X-ray flux time series, we want to understand these questions:
+
+* Is it possible to predict future solar flare events with the past data ? Furthermore, does the time series have any seasonality effect ? 
+
+* If the data indeed have predictive power, the next task is to find which classical time series models coverd in stats531 best fit the data. In addition, it's known that solar flares and sunpots happen together, we shall analyze whether a sunspot time series helps forecast solar flares.
+
+* Finally, we want to formally assess the proposed models' predictive powers with a reserved test dataset and examine their limitations.
+
+
+# Data Preparation & Processing
+
+## Preprocessing Note
+
+We use the the GOES 2019 X-ray flux for this project. To prepare the data, we downloaded the raw satellite 2019 data available in this [source](https://satdat.ngdc.noaa.gov/sem/goes/data/avg/2019). Then, we took advantage of a python script script from [Vlad Landa's github](https://github.com/vladlanda/Low-Dimensional-Convolutional-Neural-Network-For-Solar-Flares-GOES-Time-Series-Classification/blob/master/source/goes_avg_preprocess.py) to convert the raw data into a csv file. The csv file contains X-ray flux intensities recorded by GOES every 1 minute from 2019-01-01 00:00 to 2019-12-31 23:59.
+
+Since there are too many data points, we aggregated the data, creating one single observation for every 12 hours of 1-minute data. The aggregation was done by taking the 97.5 percentile of every 12 hour of 1-minute data points. After aggregating, our dataset contains $366 \times 2 = 732$ points. We now justify our method of aggregation. The project goal is to predict solar flares and since solar flares is known to occur less than an hour and the X-ray reading during solar flares is much higher than normal, taking average over $12 \times 60 = 720$ minutes would dilute the flare intensity. While we can take the max(), this method is brittle against outlier noises.
+
+In addition, we can also convert the raw intensities into flare categories by using the below table (from Stanford Solar Center) to provide another perspective of the data. Finally, since all of the intensities in the dataset are smaller number $<10^{-6}$, we take log transformation on the time series for numerical stability. 
+
+
+Class    Intensity              Solar Flares' Effect on Earth 
+-------  ---------              -----------------------------
+B        $< 10^{-6}$            Too small to harm Earth.    
+C        $[10^{-6}, 10^{-5})$   Small with few noticeable consequences on Earth.
+M        $[10^{-5}, 10^{-4})$   Can cause brief radio blackouts that affect Earth's polar regions and minor radiation storms.	
+X        $\ge 10^{-4}$            Can trigger planet-wide radio blackouts and long-lasting radiation storms
+
+## Exploratory Analysis
+
+After preprocessing, the data is a time series $\{ y_1, y_2, \ldots, y_{732} \}$ where $y_i$ is the top 97.5 percentile of X-ray readings every-12 hour in log scale. We split this data into a train set $\{y_1, \ldots, y_{718}\}$ and a test set $\{y_{719}, \ldots, y_{732}\}$. The analysis in Section 3 is based on the train set and the test set is utilized to assess model performance in Section 4.
+
+Observe from the plot, the time series have multiple peaks coincidental to solar flare events. The horizontal lines specify the threshold for C, M and X solar category that may have impacts to the Earth. There are no obvious trends in the X-ray flux time series and class C flares make up most of the flare events.
+
+
+```{r echo=F, message=F}
+require(lubridate)
+require(dplyr)
+
+d = 12
+
+raw_xray2019 = read.csv('xray2019.csv', header = FALSE)
+colnames(raw_xray2019) = c("date", "flux")
+raw_xray2019[,1] =ymd_hms(raw_xray2019[,1])
+raw_xray2019$day = day(raw_xray2019[,1])
+raw_xray2019$month = month(raw_xray2019[,1])
+raw_xray2019$everydh = hour(raw_xray2019[,1]) %/% d
+
+xray_dh <- raw_xray2019 %>% group_by(day, month, everydh) %>% summarise(mflux = quantile(flux, .975))
+xray_ts <- as.vector(unlist(xray_dh[,4]))
+
+train_size = 718
+ts_train <- log(xray_ts[1:train_size])
+ts_test <- log(xray_ts[seq(train_size + 1, train_size +  14)])
+```
+
+```{r echo=F, message=F}
+require(ggplot2)
+require(gridExtra)
+
+time_train = seq(length(ts_train))
+time_test =   seq(train_size + 1, train_size + 14)
+ 
+xray_train_df = data.frame(t = time_train, x = ts_train)
+xray_test_df = data.frame(t = time_test, x = ts_test)
+```
+
+
+```{r echo=F, fig.align='center', fig.cap="Train Set X-ray fluxtime series in log scale"}
+ggplot(data=xray_train_df) + geom_line(aes(x = t, y = x)) + ggtitle("X-ray Flux Activities in 2019 - Training Set") + xlab("Time") + ylab("Intensties") + geom_hline(aes(yintercept=-5*log(10), color = "orange")) + 
+geom_hline(aes(yintercept=-4*log(10), color = "red")) + 
+geom_hline(aes(yintercept=-6*log(10), color = "blue")) + 
+scale_color_discrete(name = "Legend", labels = c("C", "M", "X")) +    
+theme_bw()
+```
+
+```{r echo=F, fig.align='center', fig.cap = "Train Set X-ray intensities (in log scale) histogram"}
+ggplot(data.frame(x = ts_train), aes(x= x)) + geom_histogram(color="black", fill="white", binwidth = 0.1) + theme_bw()
+```
+
+
+```{r echo=F, message=F}
+convert_intensity_to_cat <- function(x) {
+  cats <- factor(c('B', 'C', 'M', 'X'))
+  y = rep(cats[1], length(x))
+  
+  
+  for(i in 1:length(x)) {
+    if(x[i] >= -4*log(10)) {
+      y[i] = cats[4]
+    } else if(x[i] >= -5*log(10)) {
+      y[i] = cats[3]
+    } else if(x[i] >= -6*log(10)) {
+      y[i] = cats[2]
+    } else {
+      y[i] = cats[1]
+    }
+  }
+  
+  y
+}
+
+y_train = convert_intensity_to_cat(ts_train)
+y_test = convert_intensity_to_cat(ts_test)
+```
+
+```{r echo=F,message=F, fig.align='center', fig.cap="Train Set Solar Flare Caterogy Distribution"}
+piedf_train <- data.frame(y = y_train) %>% group_by(y) %>% summarise(count=n())
+
+p1<- ggplot(data = piedf_train, aes(x = "", y = count, fill = y)) + 
+  geom_bar(stat = "identity", color='black') +  coord_polar("y") + scale_fill_brewer(palette="Blues") + theme_void()
+p2 <- ggplot(data = data.frame(y = y_train)) + geom_bar(aes(y = y)) + ylab('Category') + xlab("Counts") + theme_bw()
+
+grid.arrange(p1, p2, nrow = 1)
+```
+
+# Research Methodology & Results
+
+## Does data have predictive power ?
+
+The first question is whether we can utilize the X-ray time series $y = (y_1, y_2, \ldots, y_n)$ to predict future solar events. If not then the time series is just white noise or a random walk distribution. To formally analyze, we perform a hypothesis test where $H_0:$ $y_1, y_2, \ldots, y_n$ are iid. This can be bone by ploting the acf of y. At significant level $\alpha = 5$\%, only 1/20 lag should be outside the acceptance region (blue dashed-line). We observe 4/20 lags outside, and therefor reject the null hypothesis that y are white noise and have confidence that it may be possible to predict future events.
+
+```{r echo=F,message=F}
+require(forecast)
+ggAcf(ts_train, lag.max = 20) + ggtitle("X-ray Flux Train Set Acf") + theme_bw()
+```
+
+On the other hand, a different way to answer is to fit ARMA(p, q) models and see whether ARMA(0, 0) is favored in term of AIC scores. As we illustrate in the next section, models with $p > 0$ and $q > 0$ are indeed better than $p = q = 0$.
+
+## Which model best fits the data ?
+
+Our analysis implies that we can learn from the past data and $ARMA(p, q)$ models may be good candidates. Auto Regressive Moving Average (ARMA) is formally defined as $Y_n = \phi_1 Y_{n-1} + \ldots \phi_2Y_{n-p} + \mu + \psi_1 \epsilon_{n-1} + \ldots + \psi_q \epsilon_{n-q}$, or succinctly, $\phi(B)(Y_n - \mu) = \psi(B)\epsilon_n$ where B is the backshift operator,i.e., $Y_{n-1} = B Y_{n}$ and
+
+\begin{align*}
+\phi(B) &= 1 + \phi_1 B + \ldots \phi_p B^p \\
+\psi(B) &= 1 + \psi_1 B + \ldots \psi_q B^q \\
+\end{align*}
+
+```{r echo=F,message=F,cache=T,warning=F}
+aic_table <- function(data,P,Q) {
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b> AR",0:P,"<b>", sep=""),paste("<b> MA",0:Q,"<b>",sep=""))
+  table
+}
+
+require(knitr)
+aic_table <- aic_table(ts_train,5,5)
+kable(aic_table, digits = 2)
+```
+
+
+To select parameters (p, q), we fit different models with $p,q \in \{1,2,3,4,5\}$ then pick the one with lowest AIC. One thing to note from the below table is that AIC values seems not reliable because of some big jumps of AIC even when number of parameters changes by only 1. Under that scenario, theoretically, AIC score can only move up or down by 2. As the majority of values in the table are in range 2220-2233, we pick only models within this range. The 4 candidates are ARMA(0, 3), ARMA(0, 4), ARMA(1, 3) and ARMA(1, 4) where AIC is 2020.55, 2022.55, 2022.55 and 2020.37 respectively. Inspecting the coefficients, we observe that the intercept is the same for all models but standard deviation is largest for ARMA(0, 4). In addition, ARMA(1,4)'s coefficients of AR1, MA1, MA2 and MA4 are also biggest. It implies that ARMA(1, 4) indeed best fits the X-ray flux train time series.
+
+```{r echo=F,message=F,cache=T}
+arma.table <- function(data, R, orders){
+  table <- matrix(NA, R, 7)
+  for(r in 1:R){
+    arma.tmp <- arima(data, order = orders[[r]])
+    table[r, 1] <- round(arma.tmp$coef["intercept"],3)
+    table[r, 2] <- round(sqrt(arma.tmp$var.coef["intercept", "intercept"]),3)
+    table[r, 3] <- round(arma.tmp$coef["ar1"],3)
+    if(is.na(table[r, 3])) table[r, 3] <- "--"
+    table[r, 4] <- round(arma.tmp$coef["ma1"],3)
+    table[r, 5] <- round(arma.tmp$coef["ma2"],3)
+    table[r, 6] <- round(arma.tmp$coef["ma3"],3)
+    table[r, 7] <- round(arma.tmp$coef["ma4"],3)
+    if(is.na(table[r, 7])) table[r, 7] <- "--"
+}
+  dimnames(table) <- list(c("<b> ARMA(0, 3)", "<b> ARMA(0, 4)", "<b> ARMA(1, 3)", "<b> ARMA(1, 4)"), c("Intercept", "SE(Intercept)", "AR Coef.", "MA 1 Coef.", "MA 2 Coef.", "MA 3 Coef.", "MA 4 Coef."))
+  table
+}
+
+temp.armas <- arma.table(ts_train, R = 4, orders = list(c(0,0,3), c(0,0,4), c(1,0,3), c(1,0,4)))
+require(knitr)
+kable(temp.armas)
+```
+
+### 95\% CI for ARMA(1,4)
+
+```{r echo=F}
+arma14 <- Arima(ts_train, order=c(1,0,4))
+```
+
+As we decided to proceed with ARMA(1,4), the following is the 95% confidence interval for the models' coefficients.
+
+```{r echo=F, message=F, fig.align='center',fig.cap='95% CI for ARMA(1,4) Coefficients'}
+arima14_ci_tab = matrix(NA, nrow = 6, ncol = 2)
+arima14_ci_tab[1,1:2] = -12.6808 + c(-1.96,1.96) * 0.0953
+arima14_ci_tab[2,1:2] = c(0.88, 1.008484)
+arima14_ci_tab[3,1:2] = -0.7305 + c(-1.96,1.96) * 0.0378 
+arima14_ci_tab[4,1:2] = -0.2923 + c(-1.96,1.96) * 0.0464
+arima14_ci_tab[5,1:2] = -0.0897 + c(-1.96,1.96) * 0.0467
+arima14_ci_tab[6,1:2] = 0.1315 + c(-1.96,1.96) * 0.0360
+dimnames(arima14_ci_tab) <- list(c("<b> Intercept<b>","<b> AR1<b>","<b> MA1<b>","<b>MA2<b>","<b> MA3<b>","<b> MA4<b>"), c("<b> 2.5%<b>","97.5%"))
+require(knitr)
+kable(arima14_ci_tab)
+```
+
+The reported AR1's 95% CI in the table is produced by the profile log likelihood. Since AR1 parameter is the one component that actually involves the past data, we want to be more precise. 
+
+The Fisher approximation CI is $0.9930 + c(-1.96,1.96) * 0.0079 = c(0.977516, 1.008484)$ and we claim it's much narrower than the true 95% CI. This can be seen from plotting out the profile log likelihood in the below. In addition, a simulation was carried out to verify that the profile log likehood curve's shape. Because the the curve around the MLE (the highest peak) is very sharp, an approximate quadratic curve at the MLE would a result a much narrower CI than the true interval.
+
+
+```{r echo=F,message=F,warning=F,cache=T}
+K <- 500
+set.seed(1997)
+ar1 <- seq(from=0.4,to= 0.999,length=K)
+
+profile_loglik <- rep(NA,K)
+
+for(k in 1:K){
+  profile_loglik[k] <- logLik(arima(ts_train,order=c(1,0,4), fixed=c(ar1[k],NA,NA,NA,NA,NA)))
+}
+```
+
+```{r echo=F,warning=F,message=F,cache=T}
+set.seed(1)
+J <- 1000
+
+params <- coef(arma14)
+ar <- params[grep("^ar",names(params))]
+ma <- params[grep("^ma",names(params))]
+intercept <- params["intercept"]
+sigma <- sqrt(arma14$sigma2)
+theta <- matrix(NA,nrow=J,ncol=length(params),
+dimnames=list(NULL,names(params)))
+
+for(j in 1:J){
+  Y_j <- arima.sim(list(ar=ar,ma=ma),n=length(ts_train), sd=sigma) + intercept
+  theta[j,] <- coef(arima(Y_j,order=c(1,0,4)))
+}
+```
+
+```{r echo=F, fig.align='center',fig.cap="AR by Profile Likelihood"}
+plot(profile_loglik~ar1,ty="l")
+abline(h=(max(profile_loglik) -1.92), col='red')
+```
+
+```{r echo=F, fig.align='center',fig.cap="AR Distribution by Simulation"}
+ggplot(data.frame(x = theta[,"ar1"]), aes(x= x)) + geom_histogram(color="black", fill="white", binwidth = 0.025) + theme_bw()
+```
+
+### ARMA(1, 4) GoF
+
+To evaluate ARMA(1, 4) Goodness of Fit, we observe that the roots MA polynomial $\psi(x)$ are outside of a unit circle and means that the model is causal. However, the root of AR polynomial $\phi(x)$ is $r_1 = 1.007095$ barely outside of the unit circle and it's possible that ARMA(1, 4) is non-invertible. The following plot is to visualize the inverse roots of ARMA polys. As such, for invertible and causal models, the inverse roots should be inside the unit circle.
+
+
+```{r echo=F,message=F,fig.align='center',fig.cap="Plot of Inverse ARMA Roots"}
+require(forecast)
+autoplot(arma14)
+```
+
+Given that ARMA(1,4) nearly on the verge of invertibility, we need to check the residuals. While there are no obivious residual patterns, residual is normal but not for extreme values and the acf also indicates some correlation. These are signs of the ill-fitness of ARMA(1,4). Moreover, we can also plot out the fitted data and overlay with the original time series. As observed from this figure, the original y is the gray dashed line and the fitted values are red points and lines. The fitted time series doesn't seem to be able to capture the peaks correctly. These are signs of illness of fit of ARMA(1,4) over this data. As such, in the next section, we want to assess the model's predictive power on a reserved test set. 
+
+```{r echo=F, fig.align='center',fig.cap='ARMA(1,4) Residual Plot'}
+par(mfrow=c(2,2))
+plot(arma14$resid, ylab = "Residuals [ARMA(1,4)]")
+qqnorm(arma14$residuals, main = "QQ-Plot: Residuals of ARMA(1,4)")
+qqline(arma14$residuals)
+acf(arma14$residuals, main = "ACF: Residuals of ARMA(1,4)")
+```
+
+```{r echo=F,fig.align='center',fig.cap='ARMA(1,4) Fitted Time Series vs X-ray Train Set'}
+ggplot() + geom_point(data = data.frame(x = 1: length(ts_train), y = fitted(arma14)), aes(x, y), color='red') +  geom_line(data = data.frame(x = 1: length(ts_train), y = fitted(arma14)), aes(x, y), color='red') + geom_line(data = data.frame(x = 1: length(ts_train), y = ts_train), aes(x, y), color='gray', linetype='dashed') + scale_y_continuous(expand = c(0,0)) + theme_bw()
+```
+
+
+## Is there seasonal effect ?
+
+Many solar activities are periodic. Thus, we're interested to study whether the X-ray time series exhibit any periodic behaviors. To do so, we examine the data in frequency domain and its periodogram. In the following, the unsmoothed periodgram doesn't have any obvious peaks. On the other hand, the smoothed periodogram and periodogram estimated by AR(p) have the dominant frequency about $f =.125$ or period = 8 observations = 4 days.
+
+```{r echo=F,message=F}
+par(mfrow=c(1,2))
+spectrum(ts_train, main="Unsmoothed x-ray flux periodogram")
+smth_est = spectrum(ts_train, span = c(30,30))
+abline(v=smth_est$freq[which.max(smth_est$spec)], lty="dotted", col = 'red')
+print(paste0("Smoothed peridogram peak is at ", smth_est$freq[which.max(smth_est$spec)]))
+```
+
+```{r echo=F,message=F}
+aic_est = spectrum(ts_train, method = "ar", main = "Spectrum estimated via AR(p) picked by AIC")
+abline(v=aic_est$freq[which.max(aic_est$spec)], lty="dotted", col = 'red')
+print(paste0("AR(p) by AIC peridogram peak is at ", aic_est$freq[which.max(aic_est$spec)]))
+```
+
+Another way to look for periodic behaviors is to decompose the time series into trend, noise and cycle by using loess smoothing function with different span parameters for high and low frequency. Looking at the cycle, we do see a peak every 8 observations.
+ 
+```{r echo=F,fig.align='center'}
+ts = ts_train
+trend <- ts(loess(ts~time_train,span=0.5)$fitted,
+start=1,frequency=12)
+noise <- ts(ts - loess(ts~time_train,span=0.1)$fitted,
+start=1,frequency=12)
+cycles <- ts - trend - noise
+plot(ts.union(ts, trend,noise,cycles),
+main="Decomposition of X-ray flux as trend + noise + cycles")
+```
+
+### SARIMA for seasonality
+
+Since  there is a seasonal effect every 8 observations, we consider ARIMA(p, q, P, Q, s). The SARIMA model is defined as $\phi_p(B) \Phi_P(B^{12})\left( ((1 -B)^d(1 - B^{12})^D)Y_n - \mu \right) = \psi(B) \Psi(B^{12}) \epsilon_n$ where the coefficients of $\Phi(B^{12}), \Psi(B^{12})$ are the seasonal parameters.
+
+As the X-ray time series has no obvious trend, d = D = 0. We choose p = 1, q = 4 and s = 8 from our analysis . Similar to last section, an AIC table can generated for the seasonal P and Q. The table again has many big jumps. Moreover, when including seasonal parameters, there's a big risk of overfitting data and the Occam's Razor principle tells us to select the simplest possible models. Ideally, we would like to stick to the upper left of the AIC table as much possible. Because the AIC scores have huge gaps after AR2-MA0 and AR0-MA2 and across the sub-table starting at AR1-MA1, we ignore these models and pick P = 2 and Q = 0 which is the simplest model with lowest AIC. 
+
+```{r echo=F,message=F, cache=T}
+require(astsa)
+set.seed(0)
+sea_aic_table <- function(data,i,j, P, Q, s) {
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(i,0,j), 
+                              seasonal = list(order= c(p,0,q),
+                              period=s))$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b> AR",0:P,"<b>", sep=""),paste("<b> MA",0:Q,"<b>",sep=""))
+  table
+}
+
+sea_aic_table <- sea_aic_table(ts_train,1,4,4,4,8)
+require(knitr)
+kable(sea_aic_table, digits = 2)
+```
+
+### SARIMA(1,4,2,0,8) GoF
+
+We go through the same routine as in the last section to produce 95\% CI for model parameters and evaluate SARIMA Goodness of Fit. SARIMA(1,4,2,0,8) are invertible and causal but residuals seem to be correlated and the fitted values still miss the peaks of the original time series.
+
+```{r echo=F,message=F}
+sarima20 <- Arima(ts_train,order=c(1,0,4), 
+                              seasonal = list(order= c(2,0,0),
+                              period=8))
+```
+
+```{r echo=F, message=F, fig.align='center',fig.cap='95% CI SARIMA Coefficients'}
+sarima20_ci_tab = matrix(NA, nrow = 8, ncol = 2)
+
+sarima20_ci_tab[1,1:2] = -12.6492 + c(-1.96,1.96) * 0.0501
+sarima20_ci_tab[2,1:2] = 0.5084  + c(-1.96,1.96) * 0.4739 
+sarima20_ci_tab[3,1:2] = -0.2384  + c(-1.96,1.96) * 0.4739 
+sarima20_ci_tab[4,1:2] = -0.1509 + c(-1.96,1.96) * 0.1332
+sarima20_ci_tab[5,1:2] = -0.1051 + c(-1.96,1.96) * 0.0391
+sarima20_ci_tab[6,1:2] = 0.0773 + c(-1.96,1.96) * 0.0647
+sarima20_ci_tab[7,1:2] = 0.0734 + c(-1.96,1.96) * 0.0377
+sarima20_ci_tab[8,1:2] = 0.0674  + c(-1.96,1.96) * 0.0382
+dimnames(sarima20_ci_tab) <- list(c("<b> Intercept<b>","<b> AR1<b>","<b> MA1<b>","<b>MA2<b>","<b> MA3<b>","<b> MA4<b>","<b> SAR1<b>","<b> SAR2<b>"), c("<b> 2.5%<b>","97.5%"))
+require(knitr)
+kable(sarima20_ci_tab)
+```
+
+
+```{r echo=F,message=F,fig.align='center', fig.cap="Plot of SARIMA Inverse Roots"}
+autoplot(sarima20)
+```
+
+```{r echo=F,fig.align='center',fig.cap='SARIMA(1,4,2,0,8) Residual Plot'}
+par(mfrow=c(2,2))
+plot(sarima20$resid, ylab = "Residuals [SARIMA(2,0)]")
+qqnorm(sarima20$residuals, main = "QQ-Plot: Residuals of ARMA(2,0)")
+qqline(sarima20$residuals)
+acf(sarima20$residuals, main = "ACF: Residuals of SAIRMA(2,0)")
+```
+
+```{r echo=F, fig.align='center',fig.cap="SARMIA(2,0) fitted values"}
+ggplot() + geom_point(data = data.frame(x = 1: length(ts_train), y = fitted(sarima20)), aes(x, y), color='blue') +  geom_line(data = data.frame(x = 1: length(ts_train), y = fitted(sarima20)), aes(x, y), color='blue') + geom_line(data = data.frame(x = 1: length(ts_train), y = ts_train), aes(x, y), color='gray',linetype='dashed') + scale_y_continuous(expand = c(0,0)) + theme_bw()
+```
+
+## Regression against Sunspot Count
+
+The geophysical properties of sunspots and solar flares are intimately connected and thus we want to study whether the daily sunspot counts help improve the solar flare prediction.
+
+### Sunspot Count Data
+
+We downloaded the daily sunspot number from this source: http://www.sidc.be/silso/DATA/EISN/EISN_current.csv. There are two things to note about this raw data. 2019 is a leap year yet the sunspot data doesn't include 02/29, so we added the missing data by simply taking the average of counts in 02/28 and 03/01. In addition, since our X-ray time series has one observation for every 12-hours or 0.5 days, we create the sunspot count every 12-hour time series by replicating one daily-count into two identical halfday-counts.
+
+Moreover, the sunspot time series seems to have a trend which can be seen by employing a loess function with low frequency span. As such, we need to detrend by the Hodrick-Prescott (HP) Filter. HP filter of $(x_1, \ldots, x_n)$ and the time series $(s^*_1, \ldots, s^*_n)$ such that:
+
+$$s^{*}_{1,n} = \text{arg min}_{s} \sum_{i=1}^n (x_i - s_i)^2 + \lambda\sum_{i=1}^n (s_{i+1} - 2s_i + s_{i-1})^2$$
+
+Lastly, we also split the sunspot time series into a train set and a test set. The reserved test set will be discussed in the section about model performance.
+
+
+```{r echo=F, message=F}
+require(mFilter)
+
+sunspots = read.csv('sunspots.csv', sep = ';')
+sunspots_2019 = sunspots[sunspots$Year == 2019,]
+sunspots_2019 = rbind(sunspots_2019, c(2019,2,29,2019.162, 0, 0.0, 34, 1))
+sunspots_2019 = sunspots_2019[order(sunspots_2019$Time),]
+
+sunspot_count_daily = sunspots_2019$Total
+sunspot_count_dh = rep(sunspots_2019$Total, each = 24 %/% d)
+
+sunspot_daily_hp = hpfilter(sunspot_count_daily, freq=100,type="lambda",drift=F)$cycle
+sunspot_dh_hp = hpfilter(sunspot_count_dh, freq=100,type="lambda",drift=F)$cycle
+
+sunspot_count_train = sunspot_count_dh[1:length(ts_train)]
+sunspot_count_test = sunspot_count_dh[(length(ts_train) + 1): (length(ts_train) + length(ts_test))]
+
+sunspot_hp_train = sunspot_dh_hp[1:length(ts_train)]
+sunspot_hp_test = sunspot_dh_hp[(length(ts_train) + 1): (length(ts_train) + length(ts_test))]
+```
+
+```{r echo=F,fig.align='center'}
+ts = sunspot_count_daily
+trend <- ts(loess(ts~seq(1:length(sunspot_count_daily)),span=0.5)$fitted,
+start=1,frequency=12)
+plot(ts.union(ts, trend),
+main="Trend in the sunspot train set")
+```
+
+```{r echo=F, message=F, fig.align='center', fig.cap='Sunspot Count Data'}
+p1 <- ggplot(data= data.frame(t=1:length(sunspot_count_daily), x=sunspot_count_daily)
+) + geom_line(aes(x = t, y = x)) + ggtitle("2019 daily Sunspot Count") + xlab("Time") + ylab("Number of Sunspots") + theme_bw()
+
+p2 <- ggplot(data= data.frame(t=1:length(sunspot_count_dh), x=sunspot_count_dh)
+) + geom_line(aes(x = t, y = x)) + ggtitle("2019 sunspot Count every-12h") + xlab("Time") + ylab("Number of Sunspots") + theme_bw()
+
+p3 <- ggplot(data= data.frame(t=1:length(sunspot_dh_hp), x=sunspot_dh_hp)
+) + geom_line(aes(x = t, y = x)) + ggtitle("HP Filtered daily count") + xlab("Time") + ylab("Number of Sunspots") + theme_bw()
+
+p4 <- ggplot(data= data.frame(t=1:length(sunspot_dh_hp), x=sunspot_dh_hp)
+) + geom_line(aes(x = t, y = x)) + ggtitle("HP Filtered  12h-count") + xlab("Time") + ylab("Number of Sunspots") + theme_bw()
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+### Regression with Sunspot Count
+
+If it's possible to predict the X-ray flux intensities from the number of sunspots, there should be correlation between the two time series. As noted from cross correlation plot, at significant level $\alpha = 5$%, we expect only 1/20 outside the acceptance reason. We noticed 2 lags outside and conclude that the X-ray and sunspot time series are correlated.
+
+```{r echo=F, message=F}
+ggCcf(ts_train, sunspot_hp_train, lag.max = 20) + ggtitle("CCF for hourly time series") + theme_bw()
+```
+
+Next, we select p and q of the ARIMA(p,q) regressing against sunspot count by constructing AIC, report 95% CI for relevant parameters and evaluate its goodness of fit as before. X-ray ARMA(1,4) regressing model has the most reasonable AIC. Unfortunately, the regression ARMA(1,4) model has the same problem like ARMA(1,4) and SARIMA(1,4,2,0,8). It could not capture the peaks of the flare intensities
+
+```{r echo=F, message=F, warning=F,cache=T, fig.align='center', fig.cap='ARIMA Regression AIC table'}
+cross_aic_table <- function(data,P,Q,xreg=NULL) {
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg=xreg)$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b>AR",0:P,"<b>", sep=""), paste("<b>MA",0:Q, "<b>",sep=""))
+  table
+}
+
+cross_hp_table <- cross_aic_table(ts_train, 4,4, xreg=sunspot_hp_train)
+require(knitr)
+kable(cross_hp_table,digits=2)
+```
+
+
+```{r echo=F}
+hp_reg = Arima(ts_train, order = c(1, 0, 4), xreg = sunspot_hp_train)
+```
+
+```{r echo=F, message=F, fig.align='center',fig.cap='95% CI Regression'}
+hpreg_ci_tab = matrix(NA, nrow = 7, ncol = 2)
+
+hpreg_ci_tab[1,1:2] = -12.6819 + c(-1.96,1.96) * 0.0080 
+hpreg_ci_tab[2,1:2] = 0.9928  + c(-1.96,1.96) * 0.0379
+hpreg_ci_tab[3,1:2] = -0.7290  + c(-1.96,1.96) * 0.0463
+hpreg_ci_tab[4,1:2] = -0.2937 + c(-1.96,1.96) * 0.0466 
+hpreg_ci_tab[5,1:2] = -0.0901 + c(-1.96,1.96) * 0.0360 
+hpreg_ci_tab[6,1:2] = 0.1319 + c(-1.96,1.96) * 0.0954
+hpreg_ci_tab[7,1:2] = 0.0109 + c(-1.96,1.96) * 0.0158
+dimnames(hpreg_ci_tab) <- list(c("<b> Intercept<b>","<b> AR1<b>","<b> MA1<b>","<b>MA2<b>","<b> MA3<b>","<b> MA4<b>","<b> Xreg<b>"), c("<b> 2.5%<b>","97.5%"))
+require(knitr)
+kable(hpreg_ci_tab)
+```
+
+```{r echo=F, fig.align='center',fig.cap='Plot of ARMA Regression Inverse Roots'}
+autoplot(hp_reg)
+```
+
+```{r echo=F, fig.align='center',fig.cap='ARMA Regression Residual Plot'}
+par(mfrow=c(2,2))
+plot(hp_reg$resid, ylab = "Residuals ARMA(1,4) Sunspot Regression")
+qqnorm(hp_reg$residuals, main = "QQ-Plot: Residuals of ARMA(1,4) Sunspot Regression")
+qqline(hp_reg$residuals)
+acf(hp_reg$residuals, main = "ACF: Residuals of ARMA(1,4) Sunspot Regression")
+```
+
+```{r echo=F, fig.align='center',fig.cap='Regression ARIMA Fitted Values'}
+ggplot() + geom_point(data = data.frame(x = 1: length(ts_train), y = fitted(hp_reg)), aes(x, y), color='orange') +  geom_line(data = data.frame(x = 1: length(ts_train), y = fitted(hp_reg)), aes(x, y), color='orange') + geom_line(data = data.frame(x = 1: length(ts_train), y = ts_train), aes(x, y), color='gray', linetype='dashed') + scale_y_continuous(expand = c(0,0)) + theme_bw()
+```
+
+
+## Section Conclusion 
+
+In summary, we conclude the following from our research investigation:
+
+1. The data indeed possess predictive power. This is supported by inspecting the autocorrelation of the time series which revealed significant correlation within the time series. It can also be seen by the fact that the AIC value of ARMA(0, 0) is unfavorable compared to ARMA($p \ne 0, q \ne 0$) models.
+
+2. Among ARMA(p,q), we find that ARMA(1, 4) fits the data best in term of AIC. In addition,  a seasonal effect every 8 observations can be observed from a smoothed periodogram. SARIMA(1,4,2,0,8) is selected by AIC to model seasonality. However, we remark that the SARIMA model may be overparameterized and we cautiously proceed with both ARMA and SARIMA in the next section.
+
+3. We also create the sunspot count every half-day time series and study whether it helps with predicting X-ray intensities. The cross correlation is significant between the two time series, X-ray flux and sunspot count. Following a similar routine, Regression ARMA(1, 4) is chosen to be the most suitable regression model.
+
+4. While each of the three models seems acceptable in term of the polynomial roots and residual diagnosis, their fitted values miss the high peaks of original time series data. We suspect it is because the sharp increase in intensity during a solar flare can not be captured adequately with linear relationships among past observations. The linear relationships are however the cornerstone of ARIMA models. 
+
+In the next section, we assess the fitted models' actual predictive power over the reserved test dataset.
+
+# Model Predictive Power Assessment
+
+## Test Set Data
+
+As mentioned in the Data section, we reserved a test set for this section. The test set size is 14 half-day data points. The reason for a relatively small test set is that state of the art solar flare models in the literature can not predict accurately more than a few days. The test set is also selected so that it includes a flare event of class M. The X-ray flux time series and flare category plots are shown in the below.
+
+```{r echo=F,message=F}
+ggplot(data=xray_test_df) + geom_line(aes(x = t, y = x)) + ggtitle("X-ray Flux Activities in 2019 - Test Set") + xlab("Time") + ylab("Intensties") + geom_hline(aes(yintercept=-4*log(10), color = "Orange")) +
+geom_hline(aes(yintercept=-5*log(10), color = "Red")) + 
+geom_hline(aes(yintercept=-6*log(10), color = "Blue")) +   
+scale_color_discrete(name = "Legend", labels = c("C", "M", "X")) +  
+theme_bw()  
+```
+
+```{r echo=F, fig.align='center', fig.cap='Test Set Flare Cateogry Distribution'}
+piedf_test <- data.frame(y = y_test) %>% group_by(y) %>% summarise(count=n())
+p1 <- ggplot(data = piedf_test, aes(x = "", y = count, fill = y)) + 
+  geom_bar(stat = "identity", color='black') +  coord_polar("y") + scale_fill_brewer(palette="Blues") + theme_void()
+p2 <- ggplot(data = data.frame(y = y_test)) + geom_bar(aes(y = y)) + ylab('Category') + xlab("Counts") + theme_bw()
+grid.arrange(p1, p2, nrow = 1)
+```
+
+## Model Performance
+
+```{r echo=F}
+whitenoise_fit = Arima(ts_train, order = c(0,0,0))
+```
+
+Given the fiited models from previous sections, in R, we can use forecast package to generate the point estimate and 95% CI prediction for the next 14 lags $\{y_1^*, \ldots, y_{14}^*\}$. The below 4 plots show the forecast of fitted White Noise, ARMA(1, 4), SARIMA(1, 4, 2, 0, 8) and Sunspot Regression ARMA(1, 4) in black and the ground truth test data series in red. Visually, the predicted point estimates don't seem to track the test set time series well.
+
+```{r echo=F}
+wn_pred <- forecast(whitenoise_fit, h =  length(ts_test))
+arma14_pred <- forecast(arma14,  h = length(ts_test))
+sarima20_pred <- forecast(sarima20, h = length(ts_test))
+hp_pred <- forecast(hp_reg, h=14, xreg = sunspot_hp_test)
+```
+
+```{r echo=F, fig.align='center', fig.cap='Mean Estimated and 95% CI Forecast (black) with X-ray true test (red)'}
+p1 <- ggplot(data=data.frame(mean = wn_pred$mean, upper = wn_pred$upper[,2], lower = wn_pred$lower[,2], t = seq(1:length(ts_test)))) + 
+    geom_line(aes(x = t, y = mean)) +
+    geom_ribbon(aes(x= t, ymin=lower,ymax=upper),alpha=0.3) +
+    geom_line(data = data.frame(y = ts_test, x =  seq(1:length(ts_test))), aes(x,y), color='red') +  xlab("Time") + ylab("Log Intensity") + scale_y_continuous(expand = c(0,0)) + ggtitle('White Noise') + theme_bw() 
+
+p2 <- ggplot(data=data.frame(mean = arma14_pred$mean, upper = arma14_pred$upper[,2], lower = arma14_pred$lower[,2], t = seq(1:length(ts_test)))) + 
+    geom_line(aes(x = t, y = mean)) +
+    geom_ribbon(aes(x= t, ymin=lower,ymax=upper),alpha=0.3) +
+    geom_line(data = data.frame(y = ts_test, x =  seq(1:length(ts_test))), aes(x,y), color='red')+ scale_y_continuous(expand = c(0,0)) + xlab("Time") + ylab("Log Intensity") + ggtitle('ARMA(1,4)') + theme_bw()
+
+p3 <- ggplot(data=data.frame(mean = sarima20_pred$mean, upper = sarima20_pred$upper[,2], lower = sarima20_pred$lower[,2], t = seq(1:length(ts_test)))) + 
+    geom_line(aes(x = t, y = mean)) +
+    geom_ribbon(aes(x= t, ymin=lower,ymax=upper),alpha=0.3) +
+    geom_line(data = data.frame(y = ts_test, x =  seq(1:length(ts_test))), aes(x,y), color='red') +  ggtitle('SARIMA(2,0)') + scale_y_continuous(expand = c(0,0)) + xlab("Time") + ylab("Log Intensity")  + theme_bw()
+
+p4 <- ggplot(data=data.frame(mean = hp_pred$mean, upper = hp_pred$upper[,2], lower = hp_pred$lower[,2], t = seq(1:length(ts_test)))) + 
+    geom_line(aes(x = t, y = mean)) +
+    geom_ribbon(aes(x= t, ymin=lower,ymax=upper),alpha=0.3) +
+    geom_line(data = data.frame(y = ts_test, x =  seq(1:length(ts_test))), aes(x,y), color='red') + ggtitle('Regression ARMA') +  xlab("Time") + ylab("Log Intensity") + scale_y_continuous(expand = c(0,0)) + theme_bw() 
+
+
+grid.arrange(p1, p2, p3, p4, nrow = 2,ncol = 2)
+```
+
+
+A more quantitative way to assess model performance is the root mean squared error (RMSE). Given the true intensities $\{y^0_1, \ldots, y^0_n\}$ and the predicted $\{y_1^*, \ldots, y^*_n \}$, RMSE is defined as 
+
+$$\text{rmse} = \sqrt{\cfrac{1}{n}\cdot \sum_{i=1}^n(y^0_i- y^*_i)^2}$$
+
+```{r echo=F}
+
+table = matrix(NA, nrow = 1, ncol = 4)
+
+wn_pred <- predict(whitenoise_fit, length(ts_test))$pred
+arma14_pred <- predict(arma14, length(ts_test))$pred
+sarima20_pred <- predict(sarima20, length(ts_test))$pred
+hp_pred <- forecast(hp_reg, h=14, xreg = sunspot_hp_test)$mean
+
+table[1,1] = sqrt(mean((ts_test - wn_pred)^2))
+table[1,2] = sqrt(mean((ts_test - arma14_pred)^2))
+table[1,3] = sqrt(mean((ts_test - sarima20_pred)^2))
+table[1,4] = sqrt(mean((ts_test - hp_pred)^2))
+
+dimnames(table) <- list(c("<b>rmse<b>"), c("White Nose","ARMA(1,4)","SARIMA(2,0)", "Reg ARMA(1,4)"))
+kable(table)
+```
+
+From the table, SARIMA(1,4,2,0,8) has the biggest RMSE, worse than white noise. This could be due to overfitting. ARMA(1,4) has the lowest rmse and surprisingly regression against number of sunspot counts doesn't improve the error though still do better than white noise.
+
+RMSE is a good metric. Nevertheless, it doesn't offer much room for interpretation. A more intuitive way to judge the performance is to convert the raw forecast intensities into flare categories and calculate the prediction accuracy. Let $\{z^0_1, \ldots, z^0_n\}$ be true category labels and $\{z^*_1, \ldots, z^*_n$\} predicted ones. Accuracy score = $\cfrac{1}{n}\cdot\sum_{i=1}^n \mathbb{1}(z^0_i = z^*_i)$.
+
+```{r echo=F}
+y_win_pred = convert_intensity_to_cat(wn_pred)
+y_arima14_pred = convert_intensity_to_cat(arma14_pred)
+y_sarima20_pred = convert_intensity_to_cat(sarima20_pred)
+y_hp_pred = convert_intensity_to_cat(hp_pred)
+
+acc_table = matrix(NA, nrow = 1, ncol = 4)
+acc_table[1,1]= sum(y_win_pred == y_test) / length(y_test)
+acc_table[1,2] = sum(y_arima14_pred == y_test) / length(y_test)
+acc_table[1,3] = sum(y_sarima20_pred == y_test) / length(y_test)
+acc_table[1,4]= sum(y_hp_pred == y_test) / length(y_test)
+
+
+dimnames(acc_table) <- list(c("<b>Accuracy Score<b>"), c("White Nose","ARMA(1,4)","SARIMA(2,0)", "Reg ARMA(1,4"))
+kable(acc_table)
+```
+
+At the first look, since there are 3 categories (B, C, M) in the test set, an accuracy score of 57.14 % seems like a fine score. However, by noticing that majority of the test set is C class, and so this score might not be that good. We see an obvious problems by printing out the prediction vector of all models. They all just predicted 'C'.
+
+```{r echo=F}
+y_win_pred = convert_intensity_to_cat(wn_pred)
+y_arima14_pred = convert_intensity_to_cat(arma14_pred)
+y_sarima20_pred = convert_intensity_to_cat(sarima20_pred)
+y_hp_pred = convert_intensity_to_cat(hp_pred)
+
+lab_table = matrix(NA, nrow = 4, ncol = 14)
+lab_table[1,]= as.character(y_win_pred)
+lab_table[2,] = as.character(y_arima14_pred)
+lab_table[3,] = as.character(y_sarima20_pred)
+lab_table[4,]= as.character(y_hp_pred)
+
+
+dimnames(lab_table) <- list(c("White Nose","ARMA(1,4)","SARIMA(2,0)", "Reg ARMA(1,4"), paste(1:14))
+kable(lab_table)
+```
+
+This problem can be quantitatively formulated in term of the Sensitivity, Specificity and F1 scores which are defined in the following link https://en.wikipedia.org/wiki/F-score. A detailed analysis of these scores will not add much value to the current discussion and we shall only remark the intuitive conclusion from this table that by completely focusing on one metric (Sensitivity/ Specificity) and ignoring the other, the overall balanced performance (f1-score) suffers.
+
+```{r echo=F,message=F, fig.align='center', fig.cap="Sensitivity, Specificity and F1 scores breakdown"}
+require(caret)
+arima14_metrics = confusionMatrix(y_arima14_pred, reference = y_test)$byClass[1:3,c('Sensitivity', 'Specificity','F1')]
+
+kable(arima14_metrics)
+```
+
+In summary, the result of this section means that even though ARIMA(1,4) and Sunspot Regression ARMA(1,4) perform better than the White Noise model in term of RMSE, they are not better in term of actual solar flare category classification prediction. This defection is probably linked to the fact that all of the models couldn't capture the peaks of the X-ray flux time series. In case of SARIMA(1,4,2,0,8), its RMSE is worse than White Noise, mostly due to overparameterization. 
+
+# Conclusion Summary & Discussion
+
+To summarize our findings in Section 3 and 4,
+
+1. We find that there is correlation within the X-ray flux time series and that implies that it's possible to use the past data to predict the future solar flares. In addition, a seasonality every 8 observations is discovered by the smoothed periodogram.
+
+2. ARMA(1, 4) and SARIMA(1,4,2,0,8) are the best fitted models in term of AIC. In addition, the cross correlation of the daily number of sunspots data and X-ray flux is significant and so we took advantage of this fact by fitting a Regression ARMA(1, 4) model.
+
+3. While ARMA(1, 4) and Regression ARMA(1, 4) do better than White Noise in term of RMSE. For practical purpose of classifying future Solar Flare category, they didn't do better than White Noise model. The SARIMA model in fact performed worse than white noise in term of RMSE which might be due to overparameterization.
+
+The bad performance is likely linked to the fact that none of the fitted models could correctly capture the peaks of the data. We suspect that the reason is that the sharp increase in intensities during solar flares can not be modeled accurately with only linear relationship among observations. As a consequence, a future work of exploring time series based on non-linear relationships is a reasonable direction to explore.
+
+
+**Reference:**
+
+[1] Edward Ionides.Stats 531 lecture notes and class material.https://ionides.github.io/531w21/
+
+[2] Robert H., David S. Stoffer.Time Series Analysis and Its Applications: With R Examples. Springer, 3rd ed, 2011.
+
+[3] Chen et al, Identifying Solar Flare Precursors Using Time Series of SDO/HMI Images and SHARP Parameters, AGU, 2019
+
+[4] Vlad Landa et al, Low Dimensional Convolutional Neural Network For Solar Flares GOES Time Series Classification, arXiv, 2021.
+
+[4] Sunspots and Solar Flares, https://spaceplace.nasa.gov/solar-activity/en/
+
+[5] What are the different types, or classes, of flares?, http://solar-center.stanford.edu/SID/activities/flare.html
+
+[6] 2019 GOES X-ray flux data, https://satdat.ngdc.noaa.gov/sem/goes/data/avg/2019/
+
+[7] 2019 Sunpot Count data, http://www.sidc.be/silso/datafiles

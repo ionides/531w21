@@ -1,0 +1,403 @@
+---
+title: 'STATS 531 WN21 Midterm Project: Time series analysis of PM10 concentration from Wanliu station in Beijing'
+output:
+  html_document: 
+    number_sections: yes
+---
+
+# Introduction
+
+PM10 is PM with particle size less than 10 microns. PM10 can get deep into the lungs and cause a broad range of health effects, in particular, respiratory and cardiovascular illnesses.[1] In this analysis, we are aimed to identify any seasonality or trend in the PM10 Concentration (ug/m3) distribution using the Beijing Multi-Site Air-Quality Dataset[2]. Finding potential patterns of PM10 concentration would enable air pollution forecast so that people could take relative protective measures to prevent harmful impacts. 
+
+The entire dataset that we work on includes 12 datasets of hourly air pollution data records from 12 nationally-controlled air-quality monitoring stations. The air-quality data are from the Beijing Municipal Environmental Monitoring Center. The meteorological data in each air-quality station are matched with the nearest weather station from the China Meteorological Administration. In each dataset, there are 18 columns, spanning from March 1st, 2013 to February 28th, 2017. The variables include year, month, day, hour, PM2.5, PM10, SO2, NO2, CO, O3, Temperature, Pressure, Dew Point Temperature, Rain, Wind, Wind Speed, and Station. 
+
+In this analysis, we are going to focus on one of twelve datasets which including air pollution data of Wanliu station. There are 35,064 records in total. However, we only focus on analyzing the data from October 6th to October 26th, 2014, which corresponds to 3-week time period. During the this time period, there are $24\ hours\ \times 7\ days\ \times 3\ weeks\ = 504$ hourly observations/records in total.
+
+# Data Preprocessing: Dealing with Missing Values
+
+Before diving into time series analysis, we conduct data preprocessings in order to make sure the data is cleaned. We find that there are 69 missing values in "PM10" column in 2014 data. We decide to impute the missing values with the closest non-NA value in the same column. For example, if the PM10 value at 9am on October 2nd is missing, we will impute the value with the PM10 value at 8am on October 2nd if available. 
+
+```{r,echo=FALSE,results='hide',message=FALSE,warning=FALSE}
+#load library
+library(data.table)
+library(ggplot2)
+WanliuPM10 = data.table(read.csv(file="PRSA_Data_Wanliu_20130301-20170228.csv",header=TRUE)) # entire dataset from 2013.3.1 to 2017.2.28
+#print(WanliuPM10)
+WanliuPM10_2014 = WanliuPM10[year==2014, c("No","year","month","day","hour","PM10","TEMP","RAIN","WSPM")] # subset of the dataset in 2014
+WanliuPM10_2014$No = as.numeric(rownames(WanliuPM10_2014)) # transfer the No to the row index number (1,2,...,8760)
+#print(paste0("Total number of records in 2014 is: ", nrow(WanliuPM10_2014)))
+#summary(WanliuPM10_2014) # PM10 column has 69 missing values, other years have too many missing values
+
+# before imputing numbers in missing values (if rerun this chunk, remember to re-read the data)
+print(WanliuPM10_2014[which(is.na(WanliuPM10_2014$PM10)),])
+
+# processing to impute missing values with previous closest non-NA values
+NA_No = unlist(WanliuPM10_2014[which(is.na(WanliuPM10_2014$PM10)),c("No")])
+for (row in NA_No){
+  i = 1
+  while(is.na(WanliuPM10_2014[row-i,c("PM10")])) {
+    print(paste0(row," ", i))
+    i = i + 1
+  }
+  WanliuPM10_2014[row,c("PM10")] <- WanliuPM10_2014[row-i,c("PM10")]
+}
+
+# check if the missing values are successfully imputed
+print(WanliuPM10_2014[No%in%NA_No,])
+print(WanliuPM10_2014[514,])
+```
+
+# Exploratory Data Analysis
+
+In order to investigate the time series data, we will start with the basic time plot. 
+
+```{r,echo=FALSE,fig.width=15,fig.height=5}
+# only select data from October 6th to 26th in 2014, corresponding to 3 weeks hourly PM10 data
+WanliuPM10_2014_Oct = WanliuPM10_2014[month==10, ]
+WanliuPM10_2014_Oct$Time_Day = WanliuPM10_2014_Oct$day + WanliuPM10_2014_Oct$hour/24 # create time variables
+WanliuPM10_2014_Oct = subset(WanliuPM10_2014_Oct, day >= 6 & day<=26)
+
+# plot the distribution of raw pm10
+plot(PM10~Time_Day,data=WanliuPM10_2014_Oct,type="l",main="PM10 Concentration data from Wanliu station in October, 2014",xlab="Day",ylab="PM 10 Concentration",xlim=c(6,27),cex.main=2, cex.lab=1.5)
+
+WanliuPM10_2014_Oct_loess <- loess(PM10~Time_Day,span=0.5,data=WanliuPM10_2014_Oct) 
+lines(WanliuPM10_2014_Oct_loess$x,WanliuPM10_2014_Oct_loess$fitted,type = 'l',col='red') 
+axis(side=1,at=1:27,labels=c(1:27))
+```
+
+## Logarithmic Transformation
+
+The variation of the data shown in the above plot increases and decreases with the level of the series, therefore we think that a logarithmic transformation would be useful [9]. As we can see from below plot, there seems to be a weekly seasonality (S = $24\ hours\ \times 7\ days\ = 168\ lags$) and a trend within one week for this 3-week hourly PM10 concentration data. The PM10 tend to start low at the beginning of a week, and then slowly increases and fluctuates around the peak during the week, finally drops sharply at the end of a week. The data seems to be a non-stationary data. 
+
+```{r,echo=FALSE,fig.width=15,fig.height=5}
+# # plot the distribution of log transformed pm10 
+plot(log(PM10)~Time_Day,data=WanliuPM10_2014_Oct,type="l",main="Log transformed PM10 Concentration data from Wanliu station in October, 2014",xlab="Day",ylab="PM 10 Concentration",xlim=c(6,27),cex.main=2, cex.lab=1.5)
+WanliuPM10_2014_Oct_loess_log <- loess(log(PM10)~Time_Day,span = 0.1,data=WanliuPM10_2014_Oct) 
+lines(WanliuPM10_2014_Oct_loess_log$x,WanliuPM10_2014_Oct_loess_log$fitted,type = 'l',col='red') 
+axis(side=1,at=1:27,labels=c(1:27))
+```
+
+As we can see from the difference of logarithmic transformed PM10 data, we noticed that the series has a invariant zero mean and a changing variation. This series also seems to be non-stationary. 
+
+```{r,echo=FALSE,fig.width=15,fig.height=5}
+# first difference of log transformed (non-seasonal difference)
+plot(diff(log(WanliuPM10_2014_Oct$PM10)),type="l",ylab="Difference of log transformed PM10", main="The difference of log transformed PM10 in October, 2014")
+
+# seasonal difference of log transformed
+# plot(diff(log(WanliuPM10_2014_Oct$PM10),168),type="l",ylab="Difference of log transformed PM 10", main="The seasonal difference of log transformed PM10 in October, 2014")
+```
+
+## Trend and Seasonality 
+
+### ACF Plot
+
+The following plot is the ACF plot of the logarithmic transformed PM10 concentration data from Wanliu station. As we can see from the plot, the autocorrelations at small lags are large and positive and then the correlations start decreasing as lags increase, indicating a potential trend in the data. At the large lags, we can also see some "scalloped" shape which are potentially due to the seasonality.
+
+```{r,echo=FALSE,fig.width=15,fig.height=8}
+acf(log(WanliuPM10_2014_Oct$PM10), main = "ACF of log transformed PM 10 Concentration",lag.max=24*7*3)
+```
+
+### Spectrum Density Plots
+
+```{r stationary and seasonality,echo=FALSE,warning=FALSE,message=FALSE,fig.width=15}
+can_spe <- spectrum(WanliuPM10_2014_Oct$PM10,spans=c(3,5,3),main = 'Smoothed Periodogram')
+abline(v=can_spe$freq[which.max(can_spe$spec)],col='red',lty='dotted')
+1/can_spe$freq[which.max(can_spe$spec)]/24
+```
+
+In spectrum density plot, we can see the dominant frequency is around 0.004. This indicates that the dominant period is around 11 days. Although there are a lot of other local peaks, the one around 0.004 is much higher. This result agrees what the ACF plots indicates. 
+
+### Decomposition Plot
+```{r logcycle,echo=FALSE,warning=FALSE,message=FALSE,fig.width=15,fig.height=9}
+## log version
+PM10=WanliuPM10_2014_Oct$PM10
+low <-ts(loess(log(PM10)~Time_Day,span = 0.5,data=WanliuPM10_2014_Oct) $fitted,start = 0,frequency = 24)
+high <-ts(log(PM10)-loess(log(PM10)~Time_Day,span = 0.1,data=WanliuPM10_2014_Oct) $fitted,start = 0,frequency = 24)
+cycles <- PM10 - high - low
+plot(ts.union(log(PM10),low,high,cycles),main='Decomposition of log(PM10) as trend + noise +cycles')
+```
+
+Then we decomposed the log(PM10) data into trend, noise and cycles parts. In the decomposition plot, low frequency refers to the trend, middle frequency refers to the cycles and high frequency refers to the noise. 
+
+The trend shows that the PM10 concentration goes up and down twice in October 2014. This might indicate that we might have a waving trend. 
+
+The middle frequency shows that we meight have a circle of around a week. The high frequency plot indicates that we may not have stationary noises.
+
+Since all the three plots seem to agree with each other, we now assume that there is a seasonality in our data, i.e. our null hypothesis is the data has seasonality.
+
+# Time Series Analysis
+
+## ARMA Model
+### Logarithmic Transformation
+Although we observe some potential trend and seasonality in the data, we will still start with fitting a stationary Gaussian ARMA(p,q) model with parameter vector $\theta=(\phi_{1:p},\psi_{1:q},\mu,\sigma^2)$ given by 
+$$\phi (B)(log(Y_n)-\mu)=\psi (B)\epsilon_n,$$ 
+where $$\mu=\mathbb{E} [Y_n],$$
+
+$$\phi (x) = 1 - \phi_1 x - ... - \phi_px^p ,$$
+$$\psi (x) = 1 + \psi_1 x + ... + \psi_q x^q ,$$
+$$\epsilon_n \sim iid N[0,\sigma^2] .$$
+
+#### Choosing p and q for ARMA(p,q) Model
+
+Next, we seek to decide where to start in terms of values of p and q by tabulating AIC values for a range of different choices p and q.
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+# code from Chapter 5 page 29 "choosing p and q"
+aic_table <- function(data,P,Q){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for (q in 0:Q) {
+      table[p+1,q+1] <- arima(data, order=c(p,0,q),method="ML",optim.control=list(maxit = 1000))$aic
+    }
+  }
+  dimnames(table) <- list(paste0("AR",0:P),paste0("MA",0:Q))
+  table
+}
+arma_table <- aic_table(data=log(WanliuPM10_2014_Oct$PM10),5,5) 
+require(knitr)
+print(paste0("The minimum AIC is: ",min(arma_table)))
+kable(arma_table, digits=2)
+```
+
+Based on Akaike's information criterion, we want to select the model with lowest AIC scores. In our case, ARMA(5,3) has the lowest AIC score of 266.23. 
+
+#### Fit ARMA(5,3) Model Recommended by AIC
+
+```{r,echo=FALSE}
+pm_arma53 = arima(log(WanliuPM10_2014_Oct$PM10), order=c(5,0,3),method="ML",optim.control=list(maxit = 1000))
+pm_arma53
+```
+
+According to the results, the fitted model is $$ (1 +1.4114B-0.1045 B^2 -1.4178B^3- 0.7908B^4+0.0769B^5)(log(Y_n)-4.5621) = (1+2.3216B+2.1735B^2+0.8107B^3)\epsilon_n$$
+
+
+#### Diagnostic Analysis
+
+The standard errors of estimated coefficients of AR and MA are close to 0, which are fairly small. While the standard error of intercept is around 0.5, which is fairly large, indicating the model does not provide a good estimate for the intercept. The variance of the model is around 0.09 while the log likelihood is around -123.12. In order to further investigate that if the model has captured the information in the data, we decide to conduct residual diagnostics. 
+
+According to the histogram of the residuals, the mean of the residuals is close to zero. The left tail seems to be longer than the right tail.
+
+By looking at autocorrelation function (ACF) plot of the residuals, we can check if the residuals are uncorrelated or not. In our case, the ACF are all close to zero for small lags. However, we can see there are some autocorrelations at lag around 40 to 50 are significantly lower than zero.
+
+In order to check the normality assumption of the residuals, we look at the QQ-plot and find that the points curve far away from the line at each end in opposite direction. The residuals clearly does not follow normal distribution.
+
+Consequently, the Gaussian white noise assumption might not be valid. We might need more advanced model to fit the data.
+
+```{r,echo=FALSE,fig.height=5,fig.width=15}
+par(mfrow=c(1,3))
+hist(resid(pm_arma53),breaks=100,main = "Histogram: Residuals of ARMA(5,3)")
+acf(resid(pm_arma53), lag.max=24*7, main = "ACF: Residuals of ARMA(5,3)")
+qqnorm(resid(pm_arma53), pch = 1, frame = FALSE, main = "QQ-Plot: Residuals of ARMA(5,3)")
+qqline(resid(pm_arma53), col = "steelblue", lwd = 2)
+```
+
+### Suqare Root Transformation
+
+The QQ-plot above indicates that we do not meet the Gaussian assumption. The reason might be that we have a lot of small values near 0. So in this case, a square root transformation of the data might be more appropriate. Therefore, our model changes as following:
+
+$$\phi (B)(sqrt(Y_n)-\mu)=\psi (B)\epsilon_n,$$ 
+where $$\mu=\mathbb{E} [Y_n],$$
+
+$$\phi (x) = 1 - \phi_1 x - ... - \phi_px^p ,$$
+$$\psi (x) = 1 + \psi_1 x + ... + \psi_q x^q ,$$
+$$\epsilon_n \sim iid N[0,\sigma^2] .$$
+
+#### Choosing p and q for ARMA(p,q) Model
+
+```{r xreg, echo=FALSE}
+set.seed(531)
+# [4] code reference from project 27
+xreg_aic = function(data,P,Q){
+  set.seed(1234)
+  aic = matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      aic[p+1,q+1] = arima(data,order=c(p,0,q), optim.control = list(maxit = 10000))$aic
+    }
+  }
+  dimnames(aic) = list(paste("<b> AR",0:P, "</b>", sep=""),paste("MA",0:Q,sep=""))
+  return(aic)
+}
+xreg_table = xreg_aic(sqrt(WanliuPM10_2014_Oct$PM10), 6, 6)
+kable(xreg_table)
+```
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+print(paste0("The minimum AIC is: ",min(xreg_table)))
+```
+
+As the table above shows, ARMA(6,4) has the lowest AIC of 1533.73. This value is much larger than what we get from the model derived by log transformed data. The reason behind it is that when the the value of PM10 concentration is pretty large, the log transformed data will be much smaller than the square root transformed data and that will lead to a smaller AIC value. So, these two AICs are not comparable.
+
+#### Fit ARMA(6,4) Model Recommended by AIC
+
+```{r xreg_model43, fig.width=15, echo=FALSE}
+pm_arma64 = arima(sqrt(WanliuPM10_2014_Oct$PM10), order=c(6,0,4),method="ML",optim.control=list(maxit = 1000))
+pm_arma64
+```
+
+According to the results, the fitted model is $$(1 -0.05B-1.39B^2-0.79B^3+0.93B^4+0.46B^5-0.16B^4)(sqrt(Y_n)-12.3) = (1+1.11B-0.25B^2-1.27B^3-0.58B^4)\epsilon_n$$
+
+
+#### Diagnostic Analysis
+
+```{r evalute_xreg43,fig.height=5,fig.width=15,echo=FALSE}
+par(mfrow=c(1,3))
+hist(resid(pm_arma64),breaks=100,main = "Histogram: Residuals of ARMA(6,4)")
+acf(resid(pm_arma64), lag.max=24*7, main = "ACF: Residuals of ARMA(6,4)")
+qqnorm(resid(pm_arma64), pch = 1, frame = FALSE, main = "QQ-Plot: Residuals of ARMA(6,4)")
+qqline(resid(pm_arma64), col = "steelblue", lwd = 2)
+```
+
+As the histogram of the residuals shows, the mean of the residuals is close to zero. Except some outliers, the two tails become shorter and the histogram looks more symmetric.
+
+The autocorrelation function (ACF) plot also has some improvements. There are less number of lags with autocorrelations that are significantly not equal to zero.
+
+Most importantly, QQ-plot shows that except for some outliers, we are almost fine with the normality assumption, although we still have a distribution with tails a bit longer than Gaussion. 
+
+```{r pl34,echo=FALSE,warning=FALSE,fig.width=15,message=FALSE}
+## [3] code reference
+allp <- ggplot(data=WanliuPM10_2014_Oct) + geom_line(aes(x=Time_Day,y=sqrt(PM10)),col ='navy') + geom_line(aes(x=Time_Day,y=sqrt(PM10)-pm_arma64$residuals),col='orange') + labs(title='ARMA Fitted(sqrt transformed)',x='Time index',y='sqrt(PM10)') + theme(plot.title = element_text(hjust=0.5))
+plot(allp)
+```
+
+As it shows in the plot above, ARMA(6,4) can catch almost every peak and pattern of the data. Since the model derived by the square root transformed can fit the data pretty well, and it seems to meet all the assumptions, we might go with the square root transformation and pick ARMA(6,4) as our best model. This also indicates that there might not be any seasonality in this data. 
+
+
+## SARMA Model
+
+Since we observe some weekly seasonality in the data as discussed at the beginning, we will then try to fit a seasonal autoregressive moving average (SARMA) model.
+
+The model we want to fit is $SARMA(p,q) \times (P,Q)_{24\ \times 7} = SARMA(p,q) \times (P,Q)_{168}$ for hourly data is 
+$$\phi (B) \Phi(B^{168})(log(Y_n)-\mu)=\psi (B) \Psi(B^{168})\epsilon_n,$$ 
+where $$\mu=\mathbb{E} [Y_n],$$
+
+$$\phi (x) = 1 - \phi_1 x - ... - \phi_px^p ,$$
+$$\psi (x) = 1 + \psi_1 x + ... + \psi_q x^q ,$$
+$$\Phi (x) = 1 - \Phi_1 x - ... - \Phi_P x^P ,$$
+$$\Psi (x) = 1 + \Psi_1 x + ... + \Psi_Q x^Q ,$$
+$$\epsilon_n \sim iid N[0,\sigma^2] .$$
+
+### Fit SARMA(1,0) Model
+
+Due to the computation complexity, we will not choose the p and q values based on AIC. We will fit $SARMA(1,0) \times (P,Q)_{168}$ for simplicity.
+
+```{r,echo=FALSE,fig.height=5,fig.width=15}
+pm_sarma = arima(log(WanliuPM10_2014_Oct$PM10), order=c(1,0,0),seasonal=list(order=c(1,0,0),period=168),method="ML",optim.control=list(maxit = 1000))
+print(pm_sarma)
+```
+
+As we can see from the results, the fitted model is $$ (1-B)(1-0.022B^{168})(log(Y_n)-4.7238)=\epsilon_n,$$ 
+
+However, we can notice that the standard error of AR(1) coefficient is exactly zero while the standard error of the intercept is significantly high, indicating the fitted model is inappropriate for the data. The results is consistent with the following residual diagnostic analysis. The histogram and the QQ-plot indicates the residuals are heavy-tail distributed. While the ACF plot seems to have oscillatory components, suggesting AR(2) for the residuals. Thus $SARMA(3,0) \times (P,Q)_{168}$ might be a good fit for the data or potentially the existence of seasonality is suspicious.
+
+### Diagnostic Analysis
+
+```{r,echo=FALSE,fig.height=5,fig.width=15}
+par(mfrow=c(1,3))
+hist(resid(pm_sarma),breaks=100,main = "Histogram: Residuals of SARMA(1,0)")
+acf(resid(pm_sarma), main = "ACF: Residuals of SARMA(1,0)")
+qqnorm(resid(pm_sarma), pch = 1, frame = FALSE, main = "QQ-Plot: Residuals of SARMA(1,0)")
+qqline(resid(pm_sarma), col = "steelblue", lwd = 2)
+```
+
+### STL(Seasonal and Trend decomposition using Loess) decomposition
+
+In order to further investigate the seasonality existence in the data, we use $mstl()$function in $forecast$ library to assist us to deal with seasonality[8]. This function provides a convenient automated STL (Seasonal and Trend decomposition using Loess) decomposition, i.e. decompose the time series data into components such as trend, seasonality, cycles and remainder. As we can see from below plot that PM10 series data can be only decomposed to trend and remainder components. The results suggests that there are no seasonal patterns in the data, which is consistent with our previous analysis.
+
+```{r,echo=FALSE,fig.height=8,fig.width=15,warning=FALSE,message=FALSE}
+# only select data from October 6th to 26th in 2014, corresponding to 3 weeks hourly PM10 data
+library(forecast)
+library(ggfortify) # enables autoplot to use more different object types.
+pm_ts = as.ts(data.matrix(log(WanliuPM10_2014_Oct[,6])))
+pm_ts %>% mstl(iterate = 100,t.window=505,s.window = 505) %>% autoplot() 
+```
+
+## Modeling Trend using Linear Regression with ARMA Errors
+
+Next, we want to model the trend in the PM10 data using liner regression with ARMA Errors. 
+
+In order to fully utilize the dataset to model the trend of PM10 concentration, we want to incorporate extra information such as temperature (degree Celsius), precipitation (mm) and wind speed (m/s), and allow autocorrelation in the regression error term instead of using white noise. 
+
+We want to consider a regression model of the form
+
+$$sqrt(Y_n) = \mu + \beta_1\ TEMP + \beta_2\ RAIN + \beta_3\ WSPM + \eta_n,$$ 
+$$\phi (B)\ \eta_n=\psi (B)\epsilon_n,$$ 
+which is equivalent to $$\phi (B)\ (sqrt(Y_n) - \mu - \beta_1\ TEMP - \beta_2\ RAIN - \beta_3\ WSPM) = \psi (B)\epsilon_n,$$ 
+where 
+$$\phi (x) = 1 - \phi_1 x - ... - \phi_px^p ,$$
+$$\psi (x) = 1 + \psi_1 x + ... + \psi_q x^q ,$$
+
+$$\epsilon_n \sim iid N[0,\sigma^2] .$$
+Our null model is $$H_0: \beta_1=\beta_2=\beta_3=0$$,
+
+
+and the alternative hypothesis is $$H_1: \exists \beta_i \ne 0.$$
+
+
+Based on the AIC table, ARMA(4,2) seems to be appropriate. We conducted Z-test on the slope $\beta_1,\ \beta_2, and\ \beta_3$. 
+
+$$Z_{\beta_1} = \frac{\hat{\beta_1}}{SE(\hat{\beta_1})} = \frac{0.0061}{0.0435} = 0.1402\ \rightarrow |Z_{\beta_1}| < 1.96 \rightarrow fail\ to\ reject\ H_0$$
+
+$$Z_{\beta_2} = \frac{\hat{\beta_2}}{SE(\hat{\beta_2})} = \frac{-0.2654}{1.1770} = -0.2255\ \rightarrow |Z_{\beta_1}| < 1.96 \rightarrow fail\ to\ reject\ H_0$$
+
+$$Z_{\beta_3} = \frac{\hat{\beta_3}}{SE(\hat{\beta_3})} = \frac{-0.0336}{0.0701} = -0.4793\ \rightarrow |Z_{\beta_1}| < 1.96 \rightarrow fail\ to\ reject\ H_0$$
+
+All the coefficients are statistically insignificant. We do not have enough evidence to reject the null hypothesis, indicating the fitted model might not be appropriate. Temperature, rain and wind speed may not be helpful in explaine the trend of the data.
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+# [4] code reference
+xreg_aic = function(data,P,Q){
+  set.seed(1234)
+  aic = matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      aic[p+1,q+1] = arima(data,order=c(p,0,q), xreg=WanliuPM10_2014_Oct[,c('TEMP', 'RAIN', 'WSPM')], optim.control = list(maxit = 10000))$aic
+    }
+  }
+  dimnames(aic) = list(paste("<b> AR",0:P, "</b>", sep=""),paste("MA",0:Q,sep=""))
+  return(aic)
+}
+
+xreg_tablesqrt = xreg_aic(sqrt(WanliuPM10_2014_Oct$PM10), 5, 4)
+kable(xreg_tablesqrt)
+
+print(paste0("The minimum AIC is: ",min(xreg_tablesqrt)))
+
+xreg_model42 = arima(sqrt(WanliuPM10_2014_Oct$PM10),order=c(4,0,2), xreg=WanliuPM10_2014_Oct[,c('TEMP', 'RAIN', 'WSPM')], optim.control = list(maxit = 10000))
+xreg_model42
+```
+
+# Conclusion
+
+Inspired by our observations from previous exploratory data analysis, we assume that there is a seasonality in PM10 concentration data from Wanliu station during 3-week period of October, 2014. We conducted time series analysis by fitting ARMA(p,q) model with logarithmic and square-root transformed data and fitting SARMA model with logarithmic transformed data. We conducted residuals diagnostic analysis for each fitted model as discussed above. By carefully investigating our residual plots and the STL(Seasonal and Trend decomposition using Loess) decomposition plot, we safely concluded that we need to reject our null hypothesis. The "seasonality" we observed previously might potentially come from the waving trend in the data. 
+
+Therefore, we fitted a linear regression model with ARMR errors in order to model the trend in the data. We incorporated extra information from the dataset such as temperature (degree Celsius), precipitation (mm) and wind speed (m/s) to help model the trend. However, the result of the fitted model showed that none of the coefficients of the variables are statistically significant, indicating that the trend may not be explianed by them. What's more, by carefully looking at the vertical scale of STL decomposition plot [11], we can see that the trend has relatively narrow range of value. It will stay in a reletively high level for a long time and just drops dramatically. Since this special property, a polinomial trend may also not be able to fit the data. Both results implied there is little trend in data. 
+
+In conclusion, there is no seasonality and trend in PM10 concentration data from Wanliu station during 3-week period of October, 2014. Therefore, we could safely conclude that the square-root transformed data can be fitted by a stationary Gaussian ARMA(6,4) model as following: 
+$$(1-0.05B-1.39B^2-0.79B^3+0.93B^4+0.46B^5-0.16B^4)(sqrt(Y_n)-12.3) = (1+1.11B-0.25B^2-1.27B^3-0.58B^4)\epsilon_n$$
+where $${\epsilon_n} \sim N(0, 1.171)$$.
+
+
+# Reference
+
+[1] Health effects of air pollutants https://www.aqhi.gov.hk/en/health-advice/health-effects-of-air-pollutants9b5f.html?start=5
+
+[2] Data resource from: https://archive.ics.uci.edu/ml/datasets/Beijing+Multi-Site+Air-Quality+Data#
+
+[3] 2020 midterm projects 1 https://ionides.github.io/531w20/midterm_project/project1/Midterm-Project.html#trend-noise-and-cycles
+
+[4] 2020 midterm projects 27 https://ionides.github.io/531w20/midterm_project/project27/midterm_proj.html#linear-regression-with-sarima-errors
+
+[5] ARMA model https://ionides.github.io/531w21/05/index.html
+
+[6] SARMA model https://ionides.github.io/531w21/06/index.html
+
+[7] Regression with ARIMA errors in R https://otexts.com/fpp2/regarima.html
+
+[8] STL with multiple seasonal periods https://otexts.com/fpp2/complexseasonality.html
+
+[9] Transformations and adjustments https://otexts.com/fpp2/transformations.html
+
+[10] Interpretating STL decomposition plot https://otexts.com/fpp2/complexseasonality.html
+
+[11] Regression with ARIMA errors in R https://otexts.com/fpp2/regarima.html

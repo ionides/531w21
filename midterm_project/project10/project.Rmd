@@ -1,0 +1,143 @@
+---
+title: "531 midterm proj"
+output: html_document
+---
+
+# 1 Introduction
+Bitcoin is a cryptocurrency invented in 2008 by an unknown person or group of people using the name Satoshi Nakamoto. The currency began use in 2009 when its implementation was released as open-source software.
+Bitcoin is a decentralized digital currency. No person, company, or organization is in control of Bitcoin: it is powered by a huge, distributed network of computers. As such, when we own Bitcoin, only we have access to your funds. We’ll typically send, receive, and store it using a secure digital wallet app which we can download for free. It is called the digital gold and has been aproved by more and more companies and organizations. Its prices has been rise to 58000$ in Feb, 2021, which increased more than 1200% since the lowest price in 2020. 
+The purpose of this anaylsis is to forecast Bitcoin price based on time series model. In this analysis I try to find a reasonable time series model by analysing historical behaviour of the currency. The Techniques I used in the analysis are Auto-Regressive Moving Average (ARIMA). I used historical daily closed prices of the market from Apr 01, 2011 to Feb 28, 2021 publised by Investing.com (https://www.investing.com/crypto/bitcoin/historical-data)
+
+```{r echo=FALSE, results='hide', message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(fpp2)
+library(astsa)
+library(plotly)
+bit_df <- read.csv('Bitcoin.csv')
+colnames(bit_df)[1] <- "Date"
+bit_df$Date <- format(mdy(bit_df$Date),"%d-%m-%Y")
+names(bit_df)[7] = 'Change'
+
+## The tibble
+bit_df = bit_df %>%
+  mutate(Date = dmy(Date)) %>%
+  mutate(Vol. = as.numeric(str_sub(Vol., end = -2))*1000,
+         Change = as.numeric(str_sub(Change, end = -2))) %>%
+  arrange(Date)
+```
+
+# 2 Exploratory Data Analysis  
+## 2.1 Bitcoin prices in the last decade
+```{r}
+#set the x-axis unit to be daily and plot the data
+plot(bit_df$Price~bit_df$Date,type="l",xlab="Time(Years)",ylab="Bitcoin($)")
+```
+
+```{r , include=TRUE, cache = FALSE}
+plot(log(bit_df$Price)~bit_df$Date,type="l",xlab="Time(Years)",ylab="Bitcoin($)")
+```
+
+
+According to the plot of Bitcoin prices, we can find there is not much increase during the first three years until around 2017. There exists a substantial increase around the 2017. But according to the plot of log of the close Bitcoin price, we can find there is an overall steady increase since 2010 although with some fluctuations.
+
+# 2.2 Stationary and Seasonality
+Firstly, I check the auto-correlation of Bitcoin price series with its lagged values using auto-correlation function (ACF).(https://en.wikipedia.org/wiki/ACF)
+Secondly, I test the stationary property of this time series, using the Augmented Dickey-Fuller test. An augmented Dickey–Fuller test (ADF) tests the null hypothesis that a unit root is present in a time series sample. The augmented Dickey–Fuller (ADF) statistic, used in the test, is a negative number. The more negative it is, the stronger the rejection of the hypothesis that there is a unit root at some level of confidence. (https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test)
+
+
+```{r setup, include=TRUE, cache = FALSE}
+ACF_log_BT<-acf(log(bit_df$Price),xlab="Lag(Days)", main = "Log(Bitcoin price)")
+library(tseries)
+adf.test(log(bit_df$Price))
+```
+By looking at the ACF plot, we find that the Bitcoin price appears strong correlation with the previous data, suggesting that we should take difference of the data into account in our model. After taking the difference, the result became better.
+By looing at the ADF plot, we can find that the p-value is larger than 0.05 which means that we cannot reject non hypothesis. This means that the series is noo-stationary.
+
+```{r}
+spec_unsmooth = spectrum((log(bit_df$Price)), main = "Unsmoothed periodogram for Log data", xlab = 'frequency (cycle per day)')
+```
+
+To find out the seasonal trend in this data, we need to exam the time series on the frequency domain. The following is the unsmoothed periodogram for the Bitcoin price series with x axis unit of cycle per day. The result shows that there is not clear trend for the transformed data. So we will use the ARIMA directly. 
+
+
+## 2.3 Differencing
+In case of differencing to make the time series stationary the current value is subtracted with the previous values. Due to the mean is stabilized and hence the chances of stationarity of time series are increased.
+```{r,  echo=FALSE}
+acf(diff(log(bit_df$Price)),lag.max = 100,xlab="Lag(Days)",main="Diff(log(Bitcoin price))")
+adf.test(diff(log(bit_df$Price)))
+```
+Our time series is now stationary as our p value is less than 0.05, therefore we can apply time series forecasting models.
+
+## 2.4 Detrend
+According to the result at the beginning, the price of Bitcoin is always staying in a increasing trend. So we need remove the trend. Before applying ARIMA, we check its seasonality again to make sure the transformed data do not have a seasonal model.
+```{r, echo=FALSE,message=FALSE}
+#install.packages("mFilter")
+#install.packages("pracma")
+library(pracma)
+library(mFilter)
+BP_dif = as.numeric(diff(log(bit_df$Price)))
+BP_dif.detrend <- detrend(BP_dif, tt = 'linear')
+BP_dif.detrend = ts(BP_dif.detrend)
+plot(BP_dif.detrend,xlab="Time(Days)",ylab=" ",main=" Detrended data ")
+```
+
+The result shows that there is not clear trend for the transformed data, either. So we will use the ARIMA directly. 
+```{r}
+spec_unsmooth = spectrum(diff(log(bit_df$Price)), main = "Unsmoothed periodogram for Diff(Log) data", xlab = 'frequency (cycle per day)')
+```
+
+
+# 3 Time Series Analysis
+## 3.1 ARIMA Model
+Here, the auto.arima() function comes in very handy. When applied to data, it can tell you what ARIMA model is best suited by minimizing AIC and BIC values. When this function is applied to our transformed data, here is the result:
+```{r}
+auto.arima(log(bit_df$Price))
+```
+Apparently, an ARIMA(4, 1, 1) model is best at the moment. When we use this model to fit our data, checkresiduals() is another useful function that will show us whether or not it’s a good fit. Let’s fit an ARIMA(4, 1, 1) model and see how it looks.
+
+## 3.2 Diagnostic Analysis
+
+So this function shows us a number of valuable things. At the top, you get a plot of the residuals. This allows us to visually inspect the outcome to see if it at least resembles something similar to white noise. Here we can see there is a constant mean, and possibly a constant variance.
+Under that and to the left we see the ACF ploted out for the residuals. If the ACF is almost within the dashed line and that can be a indication of the mean statinarity of the model and which is also an evidence that our model fit the data well. But We can see from the plot of residual that there exists several ACF lines out of dashed line. So it is not a good model.
+To the right we are shown a histogram of the residuals. Here our residuals look close to a normal distribution, which is the desired result, but there are still a good number of outliers.
+```{r, echo=FALSE}
+checkresiduals(auto.arima(log(bit_df$Price)))
+Box.test (log(bit_df$Price), lag = 10, type = "Ljung")
+```
+
+
+# 4 Prediction
+```{r}
+library(forecast)
+set.seed(409622)
+fitARIMA <- Arima(ts(log(bit_df$Price)), order=c(4,1,1),include.drift=TRUE)
+
+ff <- forecast(fitARIMA,h=1000)
+ff$x <- exp(ff$x)
+ff$mean <- exp(ff$mean)
+ff$lower <- exp(ff$lower)
+ff$upper <- exp(ff$upper)
+plot(ff,xlab="Time points",ylab="US Rates($)",main="Forecast: Bitcoin price")
+text(3500, ff$mean[1000]*20, ff$mean[1000]) 
+arrows(4000, ff$mean[1000]*20, 4850, ff$mean[1000]*2, code = 2)
+
+```
+
+According to the plot above, we can predict that the Bitcoin price will reach to one million dollar. The value is predicted based on assumption that Bitcoin price raise in the same way as it used to be. But we know everything will reach to a balanced state after rapid increase and tend to be stable. It is hard to quantify the value of Bitcoin because it is a new product of this era and there is not any corresponding good with same value.
+
+# Conclusion
+In the report, we analyze the traffic fatality time series. After the overall exploratory data analysis, fitting models and diagnostic analysis, we can get two main conclusions:
+
+1) I find ARIMA(4,1,1) model fits log return of Bitcoin price time series. And after 3 yeras later, Bitcoin price might reach to more than one million.
+
+2) Right now, Bitcoin price does not show a seasonal trend. It stays an increased trend, which seems to the trend of gold price in the previous time.
+
+3) From diagnostic analysis of residual, we find residuals are almost the Gaussian White Noise Process,but the acf plot shows that the model deviates from the independent normal distribution residual assumption. Maybe weekly or monthly data may help to this problem.
+
+
+# Reference 
+[1] Dataset https://www.investing.com/crypto/bitcoin/historical-data
+[2] STATS 531 course notations: Some R codes are modified from course notations
+[3] Basic steps of conducting a time series analysis
+https://www.quora.com/My-project-work-is-on-time-series-using-the-ARMA-model-or-ARIMA-model-How-do-I-start-analyzing-my-data-1

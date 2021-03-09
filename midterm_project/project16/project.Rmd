@@ -1,0 +1,261 @@
+---
+title: "Utah Covid Cases- Stats 531 Midterm"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+\usepackage(hyperref)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#install.packages("mFilter", "forecast", "astsa")
+library(tidyverse)
+library(mFilter)
+library(forecast)
+library(astsa)
+#library(astsa)
+```
+
+```{r read and format data, echo=FALSE}
+tests <-  read.csv("Overview_COVID-19 Cases by Date of Symptom Onset or Diagnosis_2021-02-24.csv")  
+
+deaths <- read.csv("Overview_Seven-Day Rolling Average Mortality by Date of Death_2021-02-24.csv")
+
+death <- deaths %>% select("Date", "Mortality.Count", "Seven.day.Average") %>%
+    rename("Average.Deaths" = "Seven.day.Average")
+
+test <- tests %>% 
+  select("Onset.Date", "Confirmed.Case.Count", "Seven.day.Average") %>%
+  rename("Date" = "Onset.Date", "Average.Cases" = "Seven.day.Average")
+
+dat <- merge(test,death, by = c("Date"))
+dat$Date <- as.Date(dat$Date, format = "%Y-%m-%d")
+
+```
+
+
+# Introduction
+
+In the year 2020, the disease COVID-19 caused a world-wide pandemic. In March of that year stores/resturants/universities and more were all shut down as stay in place orders were issued through out the country and the world. People were instructed to wash hands, wear masks and limit their interactions with others in an effort to "flatten the curve" and limit the ammount of death. The world changed, and it would take longer than most expected to return to any sense of normality. Sadly, on February 22, 2021, almost a year after the tragic virus became headline news in the states, the number of US deaths due to COVID-19 reached half a million. Despite all this, there are still debates about whether or not the nation has over-reacted, if the virus really is as big of a deal as we have made it out to be.
+
+The question of this analysis does not center around whether the curve was flattened, but rather if there was a persitent trend to the number of people who tested positive and the number of deaths. This project focuses on trying to find the lag, in days, between spikes in the number of new cases of COVID-19 (categorized by date of symptom onset or positive test which ever came first) and spikes in the number of COVID-19 related deaths in the state of Utah, and examining the strength of the relationship betwen these two variables. The data analyzed here focuses on cases in the state of Utah from March 6, 2020 to February 23 2021. The [state's coronavirus website](https://coronavirus-dashboard.utah.gov/) is updated daily, however it is most accessable through download, and that is the date of my last download. I am not sure how this data was gathered or how COVID-19 related deaths are classified in the state of Utah, but as the data comes from an official government website, I am trusting that the data is acurate, clean and good.
+
+
+# Exploratory Data Analysis
+Below is the raw data for the number of new cases (graphed in black) and deaths (graphed in red) each day. There appears to be alot of noise in the data; some smoothing is necessary. Note that the deaths data looks like it has more variance in the data, however the scale is smaller, so a difference of one or two is a lot more noticable than in the new case data. With the change in scale it is important to note that this graph shows that for about every 200 people who get diognosed with COVID-19 1 will die from it. It appears that the two graphs have similar trends, and that the line representing the number of deaths each day is slightly (possibly two weeks) behind the line representing the number of new cases. Intuitively this trend makes sense as a portion of those new cases each day will statistically result in death, and death from COVID-19 cannot occur unless people actually have the disease. 
+
+```{r Preliminary graphs- Cases, echo=FALSE}
+ggplot(data = dat) +
+  geom_line(mapping = aes(x = Date, y = Confirmed.Case.Count) ) +
+  geom_line(mapping = aes(x = Date, y = Mortality.Count*200), color = "red")+ 
+  scale_x_date(name = "Date") +
+  scale_y_continuous(name = "New Cases per Day", 
+    sec.axis = sec_axis(~./200, name = "New Deaths per Day")) +
+  theme(axis.title.y.right = element_text(color = "red"))
+  #Two axis help:
+  #https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+```
+
+The data on the website also provided a seven day average, which would account for the "seasonality" caused by weekends. With this Thinking about my data, it might not seem like weekends affect the times people get sick or die, however doctor's schedules do affect testing, and some of the data is dependant on positive tests. The two graphs below show the raw data (in black) and the 7 day averages (in red) for the number of confirmed cases (on top) and the number of deaths (on bottom).
+
+
+```{r Preliminary graphs- Cases vs Smoothed, echo=FALSE}
+ggplot(data = dat, aes(x  = Date)) +
+  geom_line(mapping = aes(y = Confirmed.Case.Count) ) +
+  geom_line(mapping = aes(y = Average.Cases), color = "red")+ 
+  scale_x_date(name = "Date") +
+  scale_y_continuous(name = "New Cases per Day", 
+    sec.axis = sec_axis(~./1,name = "7 day average"))+
+  theme(axis.title.y.right = element_text(color = "red"))
+
+```
+
+```{r Preliminary graphs- Deaths vs Smoothed, echo=FALSE}
+ggplot(data = dat, aes(x  = Date)) +
+  geom_line(mapping = aes(y = Mortality.Count) ) +
+  geom_line(mapping = aes(y = Average.Deaths), color = "red")+ 
+  scale_x_date(name = "Date") +
+  scale_y_continuous(name = "New Deaths per Day", 
+    sec.axis = sec_axis(~./1,name = "7 day average"))+
+  theme(axis.title.y.right = element_text(color = "red"))
+
+```
+
+To better understand the "seasonal" differences, or the impact of different days of the week on the data, I used a spectrum analysis To look at the smoothed periodograms for both new cases and new deaths. The dashed red lines represent the seven-day averaged data. In both graphs the x axis represents the number of cycles per week picked out in the data, and the  y axis relates to us the spectrum on a log scale. For the new cases data, the black spikes indicate that there is some periocidy in the data. The red lines, or seasonal data remove that. For the deaths data, there doesn't appear to be any spikes, meaning there is likely no periocidy. This makes sense as people getting tested depends on doctors and nurses working, while sadly people don't need a doctor or nurse nearby to die.
+
+```{r Preliminary graphs- Cases Peropdogram , echo=FALSE}
+cases_ts <- ts(dat$Confirmed.Case.Count, frequency = 7)
+AvCases_ts <- ts(dat$Average.Cases, frequency = 7)
+spectrum(ts.union(cases_ts, AvCases_ts), spans= c(3,3,3),
+  main = 'New COVID-19 Cases: Raw (black), /"Seasonally" adjusted (red)')
+
+```
+
+```{r Preliminary graphs- Cases Periodogram , echo=FALSE}
+deaths_ts <- ts(dat$Mortality.Count, frequency = 7)
+AvDeaths_ts <- ts(dat$Average.Deaths, frequency = 7)
+spectrum(ts.union(deaths_ts, AvDeaths_ts), spans = c(3,3,3),
+   main = 'New COVID-19 Deaths: Raw (black), "Seasonally" adjusted (red)')
+
+```
+To further look at the fit of the seven day average data, I have created frequency response plots, which tells us how much the smoother contracts or inflates the sine and cosine components at each frequency. Both of these ratios are low-pass filters, meaning the smoothers don't just smooth the high noise, but it also removes some of the low as well. In my data, low and high points both could have equal amount of noise and meaning, especially the farther we get from having 0 new cases or deaths a day, thus I won't worry about the low-pass filters and moveforward with the seasonal data. Even though the death data didn't seem seasonal, I want to keep the same data types (raw or averaged) in both of my variables for consitency.
+```{r frequency response Cases, echo=FALSE}
+sCases <- spectrum(ts.union(cases_ts, AvCases_ts), plot = FALSE)
+
+plot(sCases$freq, sCases$spec[,2]/sCases$spec[,1], type = "l", log = "y", 
+     ylab = "Frequency Ratio", xlab = "frequency", main = "frequency response (red line at 1)") 
+abline(h = 1, col = "red")
+```
+
+
+
+
+```{r frequency response Deaths, echo=FALSE}
+sDeaths <- spectrum(ts.union(deaths_ts, AvDeaths_ts), plot = FALSE)
+
+plot(sDeaths$freq, sDeaths$spec[,2]/sDeaths$spec[,1], type = "l", log = "y", 
+     ylab = "Frequency Ratio", xlab = "frequency", main = "frequency response (red line at 1)") 
+par(new=TRUE)
+abline(h = 1, col = "red")
+```
+
+#Determining the lag
+
+I will determine the lag using a sample cross-correlation function (CCF), as shown below. The most extreme points are 
+
+
+```{r lag ccf, echo=FALSE}
+
+ccf(dat$Average.Deaths, dat$Average.Cases, lag.max = 25)
+
+
+```
+From the plot it is difficult to see where the exact lags are, but plotting them will help us see the relationships. The plots below plot the average cases at a certain lag on the x axis, and the average deaths on the y axis. The blue numbers in the upper right hand corners are the cross-correlation values between them. The higest possible cross-correlation value is 1, and the highest I got was 0.94 at lags 7-11. This means that high spikes in new cases will lead to high spikes in COVID-19 related deaths 7-11 days later.
+
+```{r lag plots, echo=FALSE}
+astsa::lag2.plot( dat$Average.Cases,dat$Average.Deaths, 15)
+
+#https://online.stat.psu.edu/stat510/lesson/8/8.2
+```
+
+
+```{r applying lag, echo=FALSE}
+dt <- dat %>% mutate("l.AvDeaths" = lead(Average.Deaths,9))
+lAvDeaths_ts <- ts(dt$l.AvDeaths, frequency = 7)
+```
+
+I will thus adjust the average death case data to a 9 (median of 7 and 11) day lead, which will align the spikes in the two datasets and use that to create an ARIMA model. In the graph below, the two seven-day averages are plotted on top of each other, with the lags adjusted by the nine   days. The average number of new cases is plotted in black, and the average number of deaths is in red. They seem to line up pretty well, as expected. Again, they are being measured on different scales, so the seemingly more variability in the number of deaths, is due to the fact that a change of one or two has much more impact on the number of deaths than the number of new cases. Again, the ratio between the two scales show that for about every 200 new cases of COVID-19, 9 days later there is 1 COVID-19 related deaths.
+```{r graph averaged data with lag, echo=FALSE}
+dt.Nna <- filter(dt, !is.na(lAvDeaths_ts))
+
+ggplot(data = dt.Nna) +
+  geom_line(mapping = aes(x = Date, y = Average.Cases) ) +
+  geom_line(mapping = aes(x = Date, y = l.AvDeaths*200), color = "red")+ 
+  scale_x_date(name = "Date") +
+  scale_y_continuous(name = "New Cases per Day", 
+    sec.axis = sec_axis(~./200, name = "New Deaths per Day")) +
+  theme(axis.title.y.right = element_text(color = "red"))
+  #Two axis help:
+  #https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales
+```
+
+
+
+
+# Regression Analysis with ARMA
+
+Now that I have decided on the averaged data and adjusted the data for the lag, I want to examine the the dependence between them using a regresion with ARMA errors model. This would give us a model to predict, based on the number of new cases, how many people would die in 9 days due to COVID-19.  The table below shows that the best model would be an  ARMA(5,1,4) model as it has the lowest AIC score on the table.
+
+
+```{r finding best ARIMA, echo=FALSE}
+best.aic<-1e8
+n<-length(AvCases_ts)
+
+for(p in 0:5) for(d in 0:3) for(q in 0:5){   
+        fit<-arima(lAvDeaths_ts, xreg = AvCases_ts,order=c(p,d,q),optim.control = list(maxit = 1000))
+    fit.aic<--2*fit$loglik+(log(n)+1)*length(fit$coef)
+    if(fit.aic<best.aic)
+    {
+        best.aic<-fit.aic
+        best.fit<-fit
+        best.model<-c(p,d,q)
+    }
+}
+best.model
+#https://stats.stackexchange.com/questions/53051/simulate-arima-by-hand
+```
+
+```{r arima AIC table, echo=FALSE}
+
+aic_table <- function(data1, data2,P,Q) {  
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data1, xreg = data2, order = c(p,1,q),optim.control = list(maxit = 1000))$aic
+    } 
+  }
+  dimnames(table) <- list(paste('AR', 0:P, sep = ''), 
+                          paste('MA', 0:Q, sep = ''))
+
+  table
+}
+
+
+(aic <- aic_table(lAvDeaths_ts, AvCases_ts, 5, 5))
+```
+
+Calling this particular ARIMA functions, we can see the given model below, and use it to figure out the z-statistic of 0.66666667 for the coefficent of the seven-day averaged number of new cases. the p-value from the liklihood ration test is very small, 0.00176, thus there is significant statistical evidence that the negatively lagged seven average death data and the seven day average new case data are associated.
+
+```{r calling arima, echo=FALSE}
+(a0 <- arima(lAvDeaths_ts, xreg = AvCases_ts, order = c(5,1,4)))
+
+```
+
+Z- Statistic for the seven-day averaged number of new cases coefficent.
+```{r z statistic, echo=FALSE}
+(z <- 4e-04/6e-04)
+```
+P-value for the model. As it is so low, it indicates that the model does a good job of predicting the number of deaths in nine days given todays number of new cases.
+```{r loglikelihood, echo=FALSE}
+log_lik_ratio <- as.numeric(
+  logLik(arima(lAvDeaths_ts, xreg = AvCases_ts,order = c(2,1,0))) -
+  logLik(arima(lAvDeaths_ts, order = c(2,1,0)))
+)
+(LRT_Pval <- 1 - pchisq(2 * log_lik_ratio, df = 1))
+```
+# Residual diognostics.
+
+The residuals appear to be pretty normal. Plotted against time, the spikes seem to enlarge about 3/4ths of the way through the data. Those spikes correlate with the November-January data, where the counts were larger, and thus the variablity was also larger. On the ACF plot, one out of the 20+ lags is outside the dashed lines showing the pointwise acceptance regions at the 5% level under a null hypothesis of Gaussian white noise. Again this could be due to different variablility at different points, or indicating that for some region of time the model doesn't quite fit. Howeever as it is only one out of 20+ lags, this is still an adequate model.
+```{r check residuals, echo=FALSE}
+
+checkresiduals(a0)
+
+#https://otexts.com/fpp2/arima-r.html
+
+```
+
+# Conclusions
+
+I have found that the lag between spikes in positive Covid-19 tests, and spikes in Covid-19 deaths for the state of Utah are aproximately 9 days apart. When adjusting the data for this lag, there is a significant correlation between these two values. In this case, it is probably safe to say that a spike in Covid-19 cases will cause a spike in Covid-19 related deaths about 9 days later. 
+
+This study could be enlarged or transfered to data for a different state, the whole United States or the world to see if this 9 day lag is consistant for different regions. In addition to the data I have used, the state of Utah's covid website has data on different demographics, hospitalizations, counties, etc. Another idea for future analysis would be to look at the mid-step of Covid-19 hospitalizations: the lag between confirmed cases and hospitalization spikes and between hospitializations and death spikes, or to look at data broken up by demographics and regions to see if one area or certain demographic has a longer or shorter lag, or a stronger or weaker tie between the number of new cases and the number of COVid-19 related deaths.
+
+# Resources 
+
+  The data sets were downloaded from https://coronavirus-dashboard.utah.gov/. I downloaded them because I could not find the exact data I was looking for online. 
+
+I borrowed code from: https://stackoverflow.com/questions/3099219/ggplot-with-2-y-axes-on-each-side-and-different-scales to help me format two axis.
+
+When I was struggling with the ARIMA function (getting weird errors) I went to https://stats.stackexchange.com/questions/53051/simulate-arima-by-hand which not only helped get rid of my errors, but also gave me a good idea for finding the optimum (p,d,q) combination.
+
+
+I looked at https://online.stat.psu.edu/stat510/lesson/8/8.2 to help me interpret a ccf plot when there is a clear lag.
+
+I went to https://otexts.com/fpp2/arima-r.html for help plotting residuals
+
+Past Midterm projects I used for general outlines: 
+https://ionides.github.io/531w20/midterm_project/project9/midtermProject.html
+https://ionides.github.io/531w20/midterm_project/project26/midterm-project.html
+https://ionides.github.io/531w20/midterm_project/project15/Midterm_Project.html
+https://ionides.github.io/531w20/midterm_project/project17/STATS531MidProject.html

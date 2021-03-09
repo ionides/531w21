@@ -1,0 +1,224 @@
+---
+title: "Time Series Analysis of PM2.5 in Delhi"
+output: 
+  html_document:
+    toc: true
+    theme: united
+---
+### 1. Introduction
+High levels of fine particulate matter, especially PM2.5 (i.e., atmospheric particulate matter with a diameter smaller than 2.5 um), is one of the most injurious pollutants with impact on economic loss and human health including cardiovascular disease and respiratory disease.The World Health Organization estimated that the 3 million population die every year due to ambient outdoor pollution. In addition, the PM2.5 guideline values from World Health Organization (WHO) is 10 μg/m3 [1]. However, the median value in Delhi is 124 (shown in summary table below) which is 10 times higher than the WHO guideline value. Therefore, our project aims to fit a time series model to find the pattern of PM 2.5 concentration, which maybe helpful for the India Government to formulate the relative policy to mitigate PM 2.5 pollution.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 2. Exploratory data analysis
+We collected the data of daily PM2.5 concentration in Delhi from January 2015 to December 2018 [2]. There are 1461 entries with 2 missing points. We impute the missing values by its previous value.
+```{r data summary, echo=FALSE}
+data <- read.csv(file="PM2.5.csv",header=TRUE)
+# data <- read.csv(file="PM2.5.csv")
+summary(data$PM2.5)
+data[955, 3] <- data[954, 3] 
+data[956, 3] <- data[954, 3] 
+data$Date <- as.Date(data$Date , format = "%m/%d/%y")
+```
+
+After imputing the missing data, we plotted the daily PM2.5 and the its histogram. The results showed that daily PM 2.5 concentration is significantly skewed. It showed that there is no mean stationary and covariance stationary for the data. In addition, the size of the dataset is too large, which might influence our the seasonality analysis[3]. Therefore, we decide to continue decreasing the size of dataset by integrating the mean for each week, and take log transformation. 
+
+```{r time series plot, echo=FALSE}
+par(mfrow=c(1,2))
+plot(data$PM2.5~data$Date, data=data, type="l", col='blue', ylab="Daily PM2.5", xlab="Day (Jan 2015-Dec 2018)")
+hist(data$PM2.5,xlab="PM2.5", main="Histogram of daily PM2.5")
+```
+
+
+```{r data summary1, echo=FALSE}
+# week_data <- vector()
+# for (i in 1:208) {
+#   ha<-data[(7*(i-1)+1):(7*i),2]
+#   mean_value<-mean(ha)
+#   week_data<-rbind(week_data,mean_value)
+# }
+# week_log<-log(week_data)
+# Z<-week_log
+# Z<-vector()
+# for (i in 2:length(week_log)) {
+#   z=week_log[i]-week_log[i-1]
+#   Z=rbind(Z,z)
+# }
+
+data$Week <- as.Date(cut(data$Date, "week"))
+Z <- aggregate(data$PM2.5, list(data$Week), mean)
+colnames(Z)[1] <- "Week"
+colnames(Z)[2] <- "PM2.5"
+Z[2] <- log(Z[2])
+# head(Z)
+```
+
+After the log transformation, we also plotted the weekly PM2.5 concentration and its histogram. We saw that the variance of the data is relatively stable, and the mean is nearly constant. In addition, the histogram seems to follow the normal distribution. We used the Shapiro Wilk test (p value =0.053>0.05) to confirm the normal distribution of the dataset.
+
+```{r data summary2, echo=FALSE}
+par(mfrow=c(1,2))
+plot(Z$PM2.5~Z$Week,type="l", col='blue', ylab="Weekly PM2.5 (log PM2.5)", xlab="Week (Jan 2015-Dec 2018)")
+hist(Z$PM2.5, xlab="Weekly PM2.5", main = "Histogram of weekly PM2.5")
+shapiro.test(Z$PM2.5)
+```
+
+Before establishing the ARMA model, we also conducted the spectrum analysis to test the frequency of the log weekly data. First, we plotted the spectrum density, which difficult to interpret. Therefore, we use the periodogram smoother to make the plot more smoother. The peak is around 0.019 to 0.025, which means there might have a cycle around a 0.77 (i.e., 1/0.025/52) to 1 (i.e., 1/0.019/52) year. This validates the visual observation of seasonality, as well as the logical one that PM2.5 would follow a yearly cycle. 
+
+
+```{r Smoothed span, echo=FALSE}
+par(mfrow=c(3,1))
+spectrum(Z$PM2.5, main="Unsmoothed periodogram")
+smooth = spectrum(Z$PM2.5,spans=c(5,5,5), main="Smoothed periodogram")
+abline(v=smooth$freq[which.max(smooth$spec)], lty="dotted")
+AR_smmoth = spectrum(Z$PM2.5, method = "ar", main = "Spectrum estimated via AR model picked by AIC")
+abline(v=AR_smmoth$freq[which.max(AR_smmoth$spec)], lty="dotted")
+```
+
+```{r, include=FALSE}
+spectrum1 <- spectrum(Z$PM2.5,spans=c(5,5,5))
+spectrum2 <- spectrum(Z$PM2.5, method = "ar")
+period1 = spectrum1$freq[which.max(spectrum1$spec)]
+period2 = spectrum2$freq[which.max(spectrum2$spec)]
+print(period1)
+print(period2)
+```
+
+### 3. Model selection and analysis
+#### 3.1 ARMA model analysis
+As we have already confirmed the weak stationary of the weekly data, we established the general $ARMA(p,q)$ model to fit the data to see the effect. The formula of the general stationary $ARMA(p,q)$ model [3] is
+
+\begin{align*}
+\phi(B)(Y_n -\mu) = \psi(B)\varepsilon_n
+\end{align*}
+
+where
+
+\begin{align*}
+&\mu = \mathbb{E}[Y]\\
+&\phi(x) =1 - \phi_1 x - \phi_2 x^2 - \dots - \phi_p x^p\\
+&\psi(x) = 1 + \psi_1 x + \psi_2 x^2 + \dots + \psi_p x^p\\
+&\varepsilon_{n} \in iid N(0, \sigma^2)
+\end{align*}
+
+Next, we choose value p and q for $ARMA(p,q)$. Akaike’s information criterion (AIC) is a general approach to select p and q. It is a method to compare likelihoods of different models by penalizing the likelihood of each model by a measure of its complexity. From the AIC table below, when (p,q) = (4,2), (4,1) and (5,2) the model have relatively low AIC values. We consider these three models as our candidates.
+
+```{r arma1, echo=FALSE, warning=FALSE, message = FALSE}
+AIC_table <- function(data,P,Q){
+  aic_table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      aic_table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
+    }
+  }
+dimnames(aic_table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+aic_table
+}
+PM_aic_table <- AIC_table(Z$PM2.5,5,5)
+require(knitr)
+kable(PM_aic_table,digits=2)
+```
+
+
+We first establish the ARMA(4,2), ARMA(5,2) and ARMA(4,1) models. Result shows all the models are causal and invertible. The roots of ARMA(4,1) are close the the unit root, so we are therefore disregarding. 
+
+We plot the ACF of the residuals of ARMA(5,2) and ARMA(4,1) models. Result show there is no substantial autocorrelation for the residuals of the two models. However, the corresponding ACF (lag = 52) is out of the confidence interval. Also, when checking the Q-Q plot, we find that there is a little bit heavier tail, which means the model is generally acceptable but not perfectly fit the data.
+
+While the ARMA(4,2) and ARMA(5,2) are very similar, we have decided to go with the simpler model. Therefore, we selected ARMA(4,2) as our candidate.
+
+```{r arma2, echo=FALSE, warning=FALSE, message = FALSE}
+PM_arma42 <- arima(Z$PM2.5,order=c(4,0,2))
+PM_arma42
+AR_roots_42 <- polyroot(c(1,-coef(PM_arma42)[c("ar1","ar2", "ar3", "ar4")]))
+MA_roots_42 <- polyroot(c(1,-coef(PM_arma42)[c("ma1","ma2")]))
+abs(AR_roots_42)
+abs(MA_roots_42)
+
+PM_arma52 <- arima(Z$PM2.5,order=c(5,0,2))
+PM_arma52
+AR_roots_52 <- polyroot(c(1,-coef(PM_arma52)[c("ar1","ar2","ar3","ar4","ar5")]))
+MA_roots_52 <- polyroot(c(1,-coef(PM_arma52)[c("ma1","ma2")]))
+abs(AR_roots_52)
+abs(MA_roots_52)
+
+PM_arma41 <- arima(Z$PM2.5,order=c(4,0,1))
+PM_arma41
+AR_roots_41 <- polyroot(c(1,-coef(PM_arma41)[c("ar1","ar2","ar3","ar4")]))
+MA_roots_41 <- polyroot(c(1,-coef(PM_arma41)[c("ma1")]))
+abs(AR_roots_41)
+abs(MA_roots_41)
+
+par(mfrow=c(1,2))
+acf(PM_arma42$residuals, lag.max=60,na.action=na.pass, xlab="Lag(Weeks)", main="Residuals of ARMA(4,2) model")
+qqnorm(PM_arma42$residuals, pch = 1, frame = FALSE)
+qqline(PM_arma42$residuals, col = "steelblue", lwd = 2)
+```
+
+
+Because there appeared to still be some seasonality in the ACF plot, we are tried to see if adding a difference term improves performance. We see that visually the graphs are comparable, though the log likelihood is lower and the AIC is higher. Also, the MA root is inside the unit circle and is therefore not invertible. The model ARMA(4,2) model looks to be preferred to the ARMA(4,1,2).
+```{r, echo=FALSE}
+PM_arma42_diff <- arima(Z$PM2.5,order=c(4,1,2))
+PM_arma42_diff
+AR_roots_42 <- polyroot(c(1,-coef(PM_arma42_diff)[c("ar1","ar2","ar3","ar4")]))
+MA_roots_42 <- polyroot(c(1,-coef(PM_arma42_diff)[c("ma1","ma2")]))
+abs(AR_roots_42)
+abs(MA_roots_42)
+
+par(mfrow=c(1,2))
+acf(PM_arma42_diff$residuals, lag.max=60,na.action=na.pass, xlab="Lag(Weeks)", main="Residuals of ARMA(4,1,2) model")
+qqnorm(PM_arma42_diff$residuals, pch = 1, frame = FALSE)
+qqline(PM_arma42_diff$residuals, col = "steelblue", lwd = 2)
+```
+
+#### 3.2 SARMA model analysis
+Due to the imperfection of the ARMA model and frequency plot in 2.2, we also tried the SARMA models. We chose to include a seasonal AR term rather than MA term because we observed a potential seasonal trend both in the spectrum analysis and the ACF analysis of residuals of the ARMA model. We therefore used SARMA(P, Q)(1,0,0) rather than SARMA(P,Q)(1,0,1) model. 
+
+From the above specturm density and the acf of the residuals. We select the period of 52. The formula of $SARMA(p,q)\times(1,0,0)_{52}$ model [3] is
+
+\begin{align*}
+\phi(B)\Phi(B^{52})(Y_n -\mu) = \psi(B)\Psi(B^{52})\varepsilon_n
+\end{align*}
+
+where
+
+\begin{align*}
+\mu &= \mathbb{E}[Y]\\
+\phi(x) &=1 - \phi_1 x - \phi_2 x^2 - \dots - \phi_p x^p\\
+\psi(x) &= 1 + \psi_1 x + \psi_2 x^2 + \dots + \psi_p x^p\\
+\Phi(x) &=1 - \Phi_1 x - \Phi_2 x^2 - \dots - \Phi_p x^p\\
+\Psi(x) &= 1 + \Psi_1 x + \Psi_2 x^2 + \dots + \Psi_p x^p\\
+\varepsilon_{n} &\in iid N(0, \sigma^2)
+\end{align*}
+
+```{r arma3, echo=FALSE, warning=FALSE, message = FALSE}
+PM_sarima402_52<- arima(x=Z$PM2.5,order=c(4,0,2), seasonal =list(order = c(1, 0, 0), period = 52))
+PM_sarima402_52
+par(mfrow=c(1,2))
+acf(PM_sarima402_52$residuals,lag.max=60,xlab="Lag(Weeks)", main=expression("Residuals of "*SARMA(4,2)(1,0,0)[52]*"model"))
+qqnorm(PM_sarima402_52$residuals, pch = 1, frame = FALSE)
+qqline(PM_sarima402_52$residuals, col = "steelblue", lwd = 2)
+```
+
+#### 3.3 Likelihood ratio test
+To further confirm the necessity to keep the seasonal term in the model, we use the likelihood ratio test. The parameter space of the model is 
+
+
+\begin{align*}
+H^{<0>}:\theta \in \Theta{(0)}\\
+H^{<1>}:\theta \in \Theta{(1)}
+\end{align*}
+
+where $H^{<0>}$ is the $ARMA(4,2)$ model and $H^{<1>}$ is the $SARMA(4,2)\times(1,0,0)_{52}$ model. 
+
+The log likelihood of the $ARMA(4,2)$ model is  `r round(PM_arma42$loglik,2)`, and the log likelihood of the $SARMA(4,2)\times(1,0,0)_{52}$ model is `r round(PM_sarima402_52$loglik,2)`. The difference of log likelihood is `r round(PM_sarima402_52$loglik - PM_arma42$loglik,2)`, which is much smaller than the 1.92 cutoff for a test at 5% size. This means we should not keep the seasonal term. As the lecture 6 mentioned, SARMA model may not work well for the higher frequency data. Thus, we could conclude that $ARMA(4,2)$ fits the data better.  
+
+
+### 4. Conclusion
+Our project aims to fit a time series model to find the pattern of PM 2.5 concentration in Delhi. We collected the daily data and found it was not stationary. Then we integrated it into weekly data and took the log to make it stationary. We then established the ARMA and SARMAR model to fit the data. Our result shows compared with the $ARMA(4,2)$ model, the $SARMA(4,2)\times(1,0,0)_{52}$ model fits the data worse. This means there is no seasonality (annual cycle) among the weekly data. In the future work, we could make some predictions using our established $SARMA(4,2)$ and find the impact factors of the PM2.5 pollutants. 
+
+
+### 5. Reference
+1.https://www.who.int/phe/health_topics/outdoorair/outdoorair_aqg/en \
+2.https://www.kaggle.com/rohanrao/air-quality-data-in-india \
+3.slides on https://ionides.github.io/531w20/

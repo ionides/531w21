@@ -1,0 +1,371 @@
+---
+title: "A seasonal variation of the phosphorus discharged from Detroit, and its correlations with potential causation for algae blooms in the Lake Erie of Michigan"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(warn=-1) # disable the warnings
+library(zoo)
+library(mFilter)
+require(knitr)
+```
+
+# 1. Introduction
+
+Algae Bloom is a critical problem in preserving the sound water environment, ecosystem, and people's health. Bloom means tiny small greenish microbes flourished in water, resulting in several problems in our ecosystem like choking marine life and contaminating the drinking water source. In August 2014, Toledo had a severe bloom at lake Erie. In fact, the algae bloom at Lake Erie was not the first case; it has occasionally occurred every year, which is a big headache to Michigan.
+ 
+Generally, two phosphorus sources cause a bloom in the water body. First, the non-point source that runs off from the agricultural area, and another is the point source, for example, the wastewater treatment plant (WWTP). Thus, the Michigan state has tried to control both sources to reduce phosphorus amounts entering the water body.
+ 
+This report will account for a wastewater dataset including daily phosphorus amounts discharged from 300 million residences of Detroit. The wastewater (herein phosphorus that we are interested in) from the city is collected, and pollutants (including phosphorus) are removed from the WWTP, then flown into lake Erie. We will look over the two different types of data: phosphorus amount produced from residences and phosphorus amount treated and discharged from WWTP to lake Erie.
+
+Two general analyses would be carried out; 1) Characterizing the varying pattern of phosphorus amount produced from the city and entered into WWTP, and 2) Figure out a correlation between phosphorus generation and its potential burden to water receiving body (lake Erie). In other words, we will see how well the WWTP has handled the influent phosphorus amount to reduce possible bloom in lake Erie.    
+
+# 2. Exploratory analysis
+
+We will denote the generated phosphorus amounts from Detroit city's residence (collected and entered into WWTP) as InfP (InfPhosphorus) and discharged phosphorus amount from WWTP (remains after removed from WWTP) as EffP (Effluent Phosphorus). The time scale we will analyze is 7.5 years, from Jan. 2013 to May. 2020.
+
+## 2.1 Raw Data Processing 
+We did data processing works to filter available dataset and plotted to take a view of the InfP variation during the period on a daily basis. The black line indicates InfP, again the discharged phosphorus amounts from Detroit and entering into WWTP. The red line shows the trend estimated by loess smoother. The daily variation data seems too noisy to perform a neat analysis, so we performed additional work to smooth these fluctuations. 
+
+```{r, day infP with trend, echo=FALSE}
+x <- read.csv(file="Raw dataset_Phosphorus discharged from Detroit.csv", nrows=2709, header=TRUE)
+x <- x[-1,]
+complete_x <- subset(x, Influent.TP..Mass.!="#VALUE!")
+Influent <- as.numeric(gsub(",", "", complete_x$Influent.TP..Mass.))
+Effluent <- as.numeric(gsub(",", "", complete_x$Effluent.TP..Mass.))
+Influent_Temp <- as.numeric(gsub(",", "", complete_x$Influent.Temp))
+Flow_rate <- as.numeric(gsub(",", "", complete_x$Daily.Flow.Rate))
+IDate <- as.Date(complete_x$Date, format="%m/%d/%Y")
+plot(Influent~IDate, type="l", xlab="Date", ylab="Influent Phospohrus [kg-P/l]", main="Discharged Phosphorus Amount from Detroit")
+Influent_loess <- loess(Influent~as.numeric(IDate),span=0.25)
+lines(Influent_loess$x,Influent_loess$fitted,type="l",col="red")
+```
+
+## 2.2 Monthly Averaged Phosphorus Variation and Observations
+The monthly averaged InfP was computed and plotted with its trend line to smooth the daily volatility, which shows two clear patterns.
+1) The monthly averaged InfP (the black) shows somewhat seasonal patterns approximately on yearly basis: relatively lower InfP in the early of a year and higher InfP during summer. 
+2) Second, the trend of InfP estimated by loess smoother (the red line) indicates a decreasing phosphorus mass trend over time series.  
+Now, we will conduct several statistical analyses from the next section to check the two observations are relevant.  
+
+```{r, monthly averaged, echo=FALSE}
+#  Aggregate 'X2' on months and year and get mean
+Monthly <- format(IDate, "%Y-%m")
+y <- aggregate(cbind(Influent, Effluent, Influent_Temp, Flow_rate) ~ Monthly , complete_x , mean )
+y <- as.data.frame(y)
+i <- y$Influent
+e <- y$Effluent
+```
+
+```{r, plot monthly averaged, echo=FALSE}
+plot(y$Influent~as.yearmon(y$Monthly, format="%Y-%m"), type="l", ylab="Influent", xlab="Date", main="Monthly average of discharged phosphorus", tck=0)
+Influent_loess_monthly <- loess(y$Influent~as.numeric(as.yearmon(y$Monthly, format="%Y-%m")),span=0.5)
+abline(v=c(2013,2014,2015,2016,2017,2018,2019,2020),lty=2)
+lines(Influent_loess_monthly$x,Influent_loess_monthly$fitted,type="l",col="red")
+```
+
+# 3. Statistical analysis
+## 3.1 Frequency Domain Analysis
+The two general patterns identified from the InfP dataset forced us to investigate a more in-depth analysis of the observations. We did work to define a seasonal pattern by periodogram analysis. The spectrum suggests a robust seasonal pattern between the one-year(Black Dot) period and the two-year (Red Dot) period.
+
+```{r, echo=FALSE}
+spectrum(i, spans=c(3,5,3), main="Smoothed periodogram")
+abline(v=1/24.,lty=2)
+abline(v=1/12.,lty=2, col="red")
+```
+
+Several factors can influence the InfP variation along the time span, including variations of temperature, precipitation, and population. Given those factor’s variations could gradually change the pattern of InfP, the higher seasonal patterns in adjacent years seem reasonable. 
+
+Then, the seasonal patterns were decomposed by the Hodrick-Prescott filter to separate trend, noise, and cycles from the monthly averaged InfP. The decomposition function shows a clear decreasing long-term trend and seasonal variation that was inferred from the periodogram analysis.
+
+```{r, decomposition, echo=FALSE}
+Influent_low <- ts(loess(y$Influent~as.numeric(as.yearmon(y$Monthly, format="%Y-%m")),span=0.5)$fitted,
+start=2013,frequency=12)
+Influent_hi <- ts(i - loess(y$Influent~as.numeric(as.yearmon(y$Monthly, format="%Y-%m")),span=0.1)$fitted,
+start=2013,frequency=12)
+Influent_cycles <- i - Influent_hi - Influent_low
+plot(ts.union(InfP=i, Low=Influent_low,Hi=Influent_hi,cycles=Influent_cycles),
+main="Decomposition of Influent Phosphorus as trend + noise + cycles")
+```
+
+## 3.2 Construction of ARMA Model having Trend
+
+### 3.2.1 Investigate models by Akaike Information Criteria 
+Now, we would construct a signal plus ARMA noise model to describe the decreasing trend. To decide the value of $p$ and $q$ of the ARMA(p, q) model, we will start by tabulating Akaike Information Criteria (AIC). A model with low AIC values implies precise prediction. Note that the AIC method might not be appropriate to select the most privileged mode for our dataset solely. Still, it is useful to eliminate some of the models that return relatively poorer predictions. 
+
+```{r,hpfilter, include=FALSE}
+Influent_hp <- hpfilter(i, freq=100,type="lambda",drift=F)$cycle
+Effluent_hp <- hpfilter(e, freq=100,type="lambda",drift=F)$cycle
+```
+
+```{r, AIC, echo=FALSE}
+year <- as.numeric(as.yearmon(y$Monthly, format="%Y-%m"), format='%Y')
+sarma_aic_table <- function(data,P,Q,xreg=NULL){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+       table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg=xreg)$aic
+    }
+  }
+  dimnames(table) <- list(paste("<b> AR",0:P, "</b>", sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+sarmamod_aic_table <- sarma_aic_table(i,4,4,xreg=year)
+require(knitr)
+kable(sarmamod_aic_table,digits=2)
+```
+
+The lowest value of AIC criteria is 1330.42 computed from the ARMA(3,4) model. The next lowest value is 1330.76 from ARMA(4,3). However, both models are relatively heavy, so we will also consider two simpler models, AR(1) and MA(2), whose models also have low AIC values, 1330.73 and 1330.48 repeatedly.  
+
+Then we can perform formal hypothesis tests on those selected models to finalize our decision.
+The general form of signal plus ARMA noise model is:
+$$Y_n = \mu_n + \eta_n$$
+where {$\eta_n$} is a stationary, causal invertible ARMA(p, q) with mean zero and {$\mu_n$} is the mean function. The mean function here has a linear specification: $\mu_n=Z_n\beta$
+
+### 3.2.2 Model Comparison
+The descriptions for each model are shown below. 
+
+```{r, arima report, echo=FALSE}
+arima(i,order=c(1,0,0),xreg=year)
+arima(i,order=c(0,0,2),xreg=year)
+arima(i,order=c(4,0,3),xreg=year)
+arima(i,order=c(3,0,4),xreg=year)
+```
+
+The coefficient of "MA3" in the ARMA(4,3) model is 1, which means that the estimated ARMA(4,3) is at the boundary of invertibility, in other words, unstable. Therefore, we will exclude ARMA (4,3) from our inventory and perform additional work to decide the final model among the other three models, ARMA(3,4), AR(1), and MA(2)
+
+###3.2.3 Model Selection with a hypothesis test
+Before comparing the three models with trends (ARMA(3,4), AR(1), and MA(2)), we did one more analysis to prevent hesitation in selecting the fittest model to our dataset, which was performed by adding a model without a trend. It suggests that AR(1) model is best for the non-trend analysis. The procedures in selecting the fitted model are introduced at the supplementary part (end of the report) 
+
+To select the fitted model, we considered the formal hypothesis testing methods, Wilks approximation. To construct this hypothesis test, we will first state our null hypothesis $H_0$ and our alternative hypothesis $H_1$:
+
+$H_0$: The AR(1) without trend model is better to fit the data with a higher likelihood (or AR(1) with trend, or MA(2) with trend).
+$H_1$: The ARMA(3,4) model with regression better fits the data with higher likelihood.
+And we denote the log-likelihood that maximized over each of the hypotheses as follows:
+$$l_0 =\sup_{\theta \in \Theta_0} l(\theta)$$
+$$l_1 =\sup_{\theta \in \Theta_1} l(\theta)$$
+Then, the Wilks' approximation asserts that the cutoff between the null hypothesis and the alternative hypothesis is (Wikipedia, Wilks' Theorem):
+$$ D = 2 \times (l_1 - l_0) \approx \chi^2_{D_1-D_0}$$
+
+```{r, likelyhood ratio1, echo=FALSE}
+# ARMA(3,4) vs. AR(1) with no trend
+log_lik_ratio <- as.numeric(
+  logLik(arima(i,xreg=year,order=c(3,0,4))) -
+  logLik(arima(i,order=c(1,0,0)))
+)
+LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
+LRT_pval
+```
+
+```{r, likelyhood ratio2, echo=FALSE}
+# ARMA(3,4) vs. AR(1)
+log_lik_ratio_2 <- as.numeric(
+  logLik(arima(i,xreg=year,order=c(3,0,4))) -
+  logLik(arima(i,xreg=year,order=c(1,0,0)))
+)
+LRT_pval_2 <- 1-pchisq(2*log_lik_ratio_2,df=6)
+LRT_pval_2
+```
+
+```{r, likelyhood ratio3, echo=FALSE}
+# ARMA(3,4) vs. MA(2)
+log_lik_ratio_3 <- as.numeric(
+  logLik(arima(i,xreg=year,order=c(3,0,4))) -
+  logLik(arima(i,xreg=year,order=c(0,0,2)))
+)
+LRT_pval_3 <- 1-pchisq(2*log_lik_ratio_3,df=5)
+LRT_pval_3
+```
+
+```{r echo=FALSE}
+# Summary table
+table2 <- matrix(1,3)
+dimnames(table2) <- list(c("AR(1) without trend","AR(1) with trend","MA(2) with trend"), c("ARMA(3,4) with trend"))
+table2[1,1] = 0.00
+table2[2,1] = 0.03279867
+table2[3,1] = 0.04265722
+kable(table2,digits=2, caption = "The result table for likelihood ratio test. The number shown is the p-value of each test", align="c")
+```
+
+All p-values of the three hypothesis tests are lower than 0.05 significance level. Therefore, we reject the all null hypothesis, suggesting the conclusion is that ARMA(3,4) model with regression is more favored in our time series data. Thus, the selected model is:
+$$I_n -0.038I_{n-1}  -0.817I_{n-2}  -0.216I_{n-3}=  \epsilon_{n}+0.588\epsilon_{n-1}+  1.223\epsilon_{n-2}+  0.743\epsilon_{n-3}+  0.587\epsilon_{n-4}+  283467.150  -137.472\times year$$
+
+## 3.3  Model Assessment for Influent Phosphorus Amount
+We evaluate the performance of our model by checking residual, QQ-plot, and an autocorrelation plot. 
+
+### 3.3.1 Check residual and QQ-Plot
+The residual shows that there is no apparent pattern in the data from our model. There is little evidence for fluctuations increasing in amplitude over time, which precipitation patterns might induce. However, it is not significant and could be studied in a future analysis.
+
+```{r echo=FALSE}
+best <- arima(i,order=c(3,0,4),xreg=year)
+plot(best$residuals,type="l",ylab="residuals")
+```
+
+### 3.3.2 Sample Autocorrelation plot
+
+Then we construct the autocorrelation (ACF) plot to determine whether the residuals are uncorrelated. From the ACF plot, we notice that there is no significant correlation other than lag 0. Therefore, we can conclude that the residuals are indeed uncorrelated.
+
+```{r, echo=FALSE}
+acf_plot = acf(best$residuals, main="ACF-plot for Residuals of ARMA(3,4) with regression model")
+acf_plot
+```
+
+### 3.3.3 QQ-Plot
+
+Finally, we check our normality assumption by the QQ-plot. Also, the QQ plot shows the residuals well follow a normal distribution. The majority of residuals lie on the diagonal guideline, which implies that our model has normal residuals.
+
+```{r, echo=FALSE}
+qqnorm(best$residuals, pch = 1, frame = FALSE, ylab="Residuals", main="QQ-plot for Residuals of ARMA(3,4) with regression model")
+qqline(best$residuals, col = "steelblue", lwd = 2)
+```
+
+## 3.4 Correlations between Influent Phosphorus and Effluent Phosphorus from Wastewater Treatment Plant. 
+
+We defined the characteristics of InfP so far, which indicates that there are consistent decreasing trends and seasonal variations. The constructed model ARMA(3,4) well fit the characteristics of InfP. 
+
+In this section, we will conduct the next analysis to define the correlation between InfP and EffP. Suppose there are statistically significant correlations between them. In that case, it can be concluded that the more efficient plan for preventing bloom in Lake Erie is to reduce the produced phosphorus amount from Detroit. Otherwise, if there are no distinct correlations, it can be concluded that WWTP has a crucial role in suppressing phosphorus discharged amounts from the point source. Then, the efficient plan is to enforce WWTP to optimize phosphorus removal from their system strictly. Currently, Michigan has conducted a strategy to regulate EffP from WWTP, and the result of this section could clear whether their regulation is a practical approach or not. Let’s see.
+
+### 3.4.1 Investigation of the Monthly Averaged Dataset
+
+First, we draw out the smoothed plots to directly compare the monthly averaged patterns each model has. 
+
+```{r echo=FALSE}
+plot(ts(cbind(InfP=i,EffP=e)), main="Comparison Monthly Averaged Phosphorus Variation", xlab="months")
+```
+
+There seems to be no clear correlation from the monthly averaged plots. So, we did detrend both data and plotted again. 
+
+```{r, detrended, echo=FALSE}
+plot(as.numeric(as.yearmon(y$Monthly, format="%Y-%m")),Influent_hp,type="l",xlab="Year",ylab="[kg-P/l]", main="Detrended Influent and Effluent phosphorus amounts")
+par(new=TRUE)
+plot(as.numeric(as.yearmon(y$Monthly, format="%Y-%m")),Effluent_hp,col="red",type="l",axes=FALSE,xlab="",ylab="")
+axis(side=4, col="red")
+legend(2000,0.85, c("u_hp","s_hp"),lwd=c(1,1),col=c("black","red"),cex=0.5)
+```
+
+### 3.4.2 Likelihood Test for determining the correlation between influent phosphorus and effluent phosphorus. 
+
+Detrended plots show some evidence of positive correlation and also show a negative correlation, indicating that inspection with eyes would be inappropriate. Then, we try to see the ARMA regression models on the two monthly averaged datasets to test the correlation between InfP and EffP. 
+
+```{r echo=FALSE}
+corr_aic_table <- function(data,P,Q,xreg=NULL){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q),xreg=xreg)$aic
+    }
+  }
+  dimnames(table) <- list(paste("AR",0:P, sep=""),
+    paste("MA",0:Q,sep=""))
+  table
+}
+e_aic_table <- corr_aic_table(Influent_hp,3,3,xreg=Effluent_hp)
+require(knitr)
+kable(e_aic_table,digits=2)
+```
+
+MA(3) model shows the lowest value, 1290.64. Then, we take a hypothesis test with this model.
+Here, $H_0$ and $H_1$ are,
+
+$H_0$: The InfP and EffP are equal in MA(3) model, which shows they have correlations between each other. 
+$H_1$: There are no correlations between InfP and EffP as predicted by MA(3) model
+
+```{r echo=FALSE}
+a0m3 <- arima(Influent_hp,xreg=Effluent_hp,order=c(0,0,3))
+a0m3
+```
+
+```{r echo=FALSE}
+log_lik_ratio <- as.numeric(
+  logLik(arima(Influent_hp,xreg=Effluent_hp,order=c(0,0,3))) -
+  logLik(arima(Influent_hp,order=c(0,0,3)))
+)
+LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1)
+LRT_pval
+```
+The model shows an invertibility feature, and the computed likelihood ratio test is 0.2864, which suggests that we cannot reject the null hypothesis. There is no substantial evidence that the InfP is correlated with the EffP, which is an interesting inference. It means the WWTP has played a key role in managing phosphorus amounts that flow into the receiving body. Thus, if the systemic problem occurred at the WWTP, more potential for bloom increased. 
+
+### 3.4.3 Association and Causation
+We did perform a cross-correlation analysis. The results shown below are impressive, which seems to be affected by seasonal variations. However, it should be analyzed further in detail. Note that the elevated monthly averaged EffP is strongly related to the previous monthly averaged InfP, which tells us that the EffP can be roughly estimated beforehand by about one month. It would then be great inference for WWTP operators to adjust their strategies for proper phosphorus removal in terms of InfP variations.   
+
+```{r echo=FALSE}
+ccf(Influent_hp,Effluent_hp)
+```
+
+Such oscillatory patterns are also shown in the coherency plot below. The coherence is most considerable at a period of 3 months, which also offers a seasonal pattern. These results also suggest that InfP predicts effP variability before around 3months ahead, associated with the cross-correlation analysis as shown above.
+
+```{r echo=FALSE}
+s <- spectrum(cbind(Influent_hp,Effluent_hp),spans=c(3,5,3),plot=F)
+plot(s,plot.type="coherency",main="")
+```
+
+The phase is also plotted below, which illustrates that the phase between these two-time series is unstable. Note the phase oscillates around 1, which also shows the monthly averaged InfP can allow a cyclic prediction for the monthly averaged EffP. 
+
+```{r echo=FALSE}
+plot(s,plot.type="phase",main="")
+abline(h=0,col="red")
+```
+
+To sum up this section, there seems to be no clear correlation between InfP and EffP, but some spurious patterns exist, which is interesting and needs to be investigated later. Nevertheless, it is important to remember that the elevated EffP could be predicted by monitoring InfP from one to three months ahead, allowing an operator to have appropriated actions for reducing EffP to the treated water receiving body. 
+
+# 4. Conclusion
+## 4.1 The patterns and characteristics of the influent phosphorus amount
+We observed the seasonal variation and decreasing trend by smoothing its variations, which confirmed that the seasonal variation is statistically significant by a smoothed periodogram, which shows about 1-year patterns. The decreasing trend is also confirmed by the decomposition of the dataset, which shows that the long-term trend is decreasing. 
+
+The selected model is ARMA(3,4) with trends, which is carefully done by AIC modeling and three different hypothesis tests based on the Wilks’ approximation. Lastly, model assessments conducted show a well-fitted model we obtain without any significant problems. 
+
+## 4.2 Correlation between influent phosphorus and effluent phosphorus from wastewater treatment plants. 
+We plotted both datasets and detrended one either, which shows no clear correlations between each other. Then, we did AIC modeling to select the fitted model and hypothesis tests to validate observations. From the hypothesis test, we concluded there are no clear correlations from the monthly averaged phosphorus variations. These results suggested that WWTP has a crucial role in controlling phosphorus amount entering into the water body. Michigan’s policy, regulating EffP, seems to be the proper approach for preventing occasional bloom at lake Erie. However, an interesting feature is that the monthly averaged InfP is positively related to EffP in one to three months ahead. This inference might be helpful for operators of WWTP to plan appropriate phosphorus removal strategies in advance. 
+
+Consequently, our work suggested a fitted model for reflecting InfP variation and defined the correlation between InfP and EffP. Then, we argue that an operator from WWTP can prepare in advance at least one month early by monitoring InfP variation. There are still tasks to be investigated to enhance our understanding, for instance, what can cause the seasonal variation of InfP, but we would leave it later and would like to finalize this report here. 
+
+
+# Supplementary Analysis
+## ARMA model with no trend
+```{r, echo=FALSE}
+aic_table <- function(data,P,Q){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
+    }
+  }
+  dimnames(table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+
+Influent_aic_table <- aic_table(i,4,4)
+kable(Influent_aic_table,digits=2)
+```
+From the table above, we could see that models that have relatively low AIC values are AR(1), and ARMA(3,2). The summary of two model are listed below.
+
+```{r echo=FALSE}
+ar1 <- arima(i,order=c(1,0,0))
+ar3ma2 <- arima(i,order=c(3,0,2))
+```
+
+```{r}
+ar1
+ar3ma2
+```
+
+The summary of ARMA(3,2) model have a MA(2) coefficient 1 which is located at the unit circle. To avoid the problem in further analysis, we choose an invertible AR(1) model to be the potential model in our model selection.
+
+# Work distribution
+The coding part is mainly done by Hao Rong and other write-ups are mainly done by Changyoon Jun. Hao Rong put more efforts on the section 2 and section 3.1-3.3. Changyoon Jun contribute to section 1, 3.4 and 4 more. The idea of each analysis part is shared and discussed before writing the report. We split the work in this way to make sure that the variables in coding part is coherent and avoid to redundantly define multiple variables that point to same thing. Beside, we can have our description and abbreviation consistent through the whole report.
+
+# References
+1. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 6: Extending the ARMA model: Seasonality, integration and trend"
+2. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 7: Introduction to time series analysis in the frequency domain"
+3. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 8: Smoothing in the time and frequency domains"
+4. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 9: Case study: An association between unemployment and mortality?"
+5. Wikipedia: Wilks' theorem. URL:https://en.wikipedia.org/wiki/Wilks%27_theorem. access at 02/22/2020.
+6. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Midterm project: "Weekly Maximum Solar Radiation Prediction Report"
+7. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Midterm project: "Time Series Analysis in US Total Retail Revenue"
+8. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Midterm project: "Non-Metallic Mineral Products Research Project"
+9. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Midterm project: "The thickness of the total Ozone in the Earth"
+10. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Midterm project: "Association between PM2.5 and temperature difference"
+11. Ionides, L. E. "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Midterm project: "The correlation between the suicide rate and unemployment in U.S."
+12. Articles with regards to the blooming problem in Michigan, and Michigan's strategies to hande it.

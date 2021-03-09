@@ -1,0 +1,691 @@
+---
+title: "Stats 531, W21, Midterm Project"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    code_folding: hide
+    theme: united
+    highlight: pygments
+---
+\newcommand\prob{\mathbb{P}}
+\newcommand\E{\mathbb{E}}
+\newcommand\var{\mathrm{Var}}
+\newcommand\cov{\mathrm{Cov}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, echo = TRUE)
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(lubridate)
+  library(astsa)
+  library(forecast)
+})
+```
+
+## About
+
+### Research Question
+
+"Trick or treat!" When Halloween is approaching, candy consumption surges. But all this consumption first needs production. The industrial candy production index is therefore  believed to be strongly related with festivals and may show some intriguing seasonality and cyclical properties.
+
+In this project, we are going to study the time seires from$^{[1]}$ 
+[US Candy Production Data](https://www.kaggle.com/rtatman/us-candy-production-by-month).
+We will use methods and models that we learned in the class to figure out the following question:
+
+> Whether or not candy production seires contain seasonal variation and thus can be well fitted by a SARIMA Model?
+
+
+### Data Description
+
+The [US Candy Production Data](https://www.kaggle.com/rtatman/us-candy-production-by-month) tracks industrial production every month from January 1972 to August 2017.
+There are two variables in this data:
+
+- `observation_date` is the index variable and takes month as a unit of measurement of time.
+- `IPG3113N` is the industrial production index which measures the real output of all relevant establishments located in the United States.
+
+## Analysis
+
+### Exploratory Data Analysis
+
+We plot the time series first to have an overview of the data. A linear regression line is added to the plot so we can see that there is an obvious linear trend in the data. What's more, the variation seems to be cyclical and exhibit a strong seasonal pattern. But first of all, let's consider how to deal with this linear trend, since modeling an ARIMA model requires stationarity in the data.
+
+```{r load, fig.cap=cap_fig1}
+## data loading
+path = './'
+candy_file = sprintf('%s/candy_production.csv', path)
+candy = read_csv(candy_file)
+names(candy) = c("Date", "Production")
+
+cap_fig1 = paste(
+  "**Figure 1.** *US Candy production data by month.*",
+   "Grey region indicates 95% confidence intervel for linear regression line."
+)
+## time series: ---------------------------------------------------------------
+candy %>%
+  ggplot(aes(x = Date, y = Production)) +
+  geom_line() +
+  geom_smooth(method = 'lm',
+              formula = y ~ x) +
+  xlab("Month") +
+  ylab("Candy Production") +
+  theme_bw()
+```
+
+There are many ways to eliminate the linear trend, but here we would try the first order difference operator, which has the following form:
+$$Z_n = \Delta y_n = y_n - y_{n-1}$$
+
+Let's see what would happen after applying a difference operator to the time series:
+
+```{r difflag1, fig.cap=cap_fig2}
+## transformation to stationarity: --------------------------------------------
+## Center the data using first order difference operation
+cap_fig2 = paste(
+  "**Figure 2.** *Difference of US Candy production data with lag = 1.*",
+   "Grey region indicates 95% confidence intervel for linear regression line."
+)
+diff_lag = 1
+diff_candy = candy %>%
+  select(Production) %>%
+  .[[1]] %>%
+  diff(lag = diff_lag)
+
+df_candy = tibble(candy, diff = prepend(diff_candy, rep(0, diff_lag)))
+
+df_candy %>%
+  ggplot(aes(x = Date, y = diff)) +
+  geom_line() +
+  geom_smooth(method = 'lm',
+              formula = y ~ x) +
+  xlab("Month") +
+  ylab("Candy Production") +
+  theme_bw()
+```
+
+The data becomes more stationary and this can be told both by the slope of the linear regression line and the overall trend of the data. But since there is also a pattern of seasonality, we may wonder that a difference operation with a seasonal lag can also contribute to a stationary transformation.
+
+Let's plot the auto-correlation function to see what value of lag can we take.
+
+```{r acf, fig.cap=cap_fig3}
+acf(candy$Production, main = "ACF: Candy Production")
+cap_fig3 = paste(
+  "**Figure 3.** *Auto-correlation of US Candy production data*",
+   "The accpetance region is constructed by the dashed line."
+)
+```
+
+Here, we see that there is an apparent pattern in the auto-correlation plot, which shows a period roughly equal to 12. So lag = 12 may also have an effect in transforming the data to stationary. We show the result in the following plot:
+
+```{r difflag12, fig.cap=cap_fig4}
+cap_fig4 = paste(
+  "**Figure 4.** *Difference of US Candy production data with lag = 12.*",
+   "Grey region indicates 95% confidence intervel for linear regression line."
+)
+diff_lag = 12
+diff_candy = candy %>%
+  select(Production) %>%
+  .[[1]] %>%
+  diff(lag = diff_lag)
+
+df_candy = tibble(candy, diff = prepend(diff_candy, rep(0, diff_lag)))
+
+df_candy %>%
+  ggplot(aes(x = Date, y = diff)) +
+  geom_line() +
+  geom_smooth(method = 'lm',
+              formula = y ~ x) +
+  xlab("Month") +
+  ylab("Candy Production") +
+  theme_bw()
+```
+
+It shows that lag = 12 also works, though lag = 1 seems to work better. But this reminds us that both arima with D = 1 and SARMA model with D = 1 should be attempted later.
+
+### Spectral analysis {.tabset .tabset-fade .tabset-pills}
+
+Before we move on to model fitting, we consider the spectral analysis first, since periodogram and spectrum plot can often shed some light on understanding the basic structure of the time series.
+
+As what we do in the class, we here plot spectra using unparametric and parametric methods separately in the following chunks. The spectra are all scaled by the $\log10$ to reach a better visualization effect.
+
+#### Unsmoothed Spectrum
+
+```{r unsmoothed specturm, fig.cap=cap_fig5}
+### raw spectrum
+raw_spec = mvspec(candy$Production, plot = FALSE)
+candy_spec = tibble(freq = raw_spec$freq, spec = raw_spec$spec)
+max_omega = candy_spec$freq[which.max(candy_spec$spec)]
+cap_fig5 = paste(
+  "**Figure 5.** *Unsmoothed periodogram of US Candy production monthly data.*"
+)
+## transformed by logarithm (log10)
+candy_spec %>%
+  ggplot(aes(x = freq, y = spec)) + 
+  geom_line(colour = "dodgerblue4") + 
+  scale_x_continuous(name = "Frequency") + 
+  scale_y_continuous(name = "Spectrum",
+                     trans = "log10") +
+  ggtitle("Candy: Unsmoothed periodogram") + 
+  theme_bw() +
+  geom_vline(xintercept = max_omega,
+             colour = "tomato3",
+             linetype = "dashed") +
+  geom_text(aes(x = max_omega,
+                label = sprintf("%.3f", max_omega),
+                y = 0.05),
+            colour = "darkred")
+```
+
+#### Smoothed Spectrum
+
+```{r Smoothed Spectrum, fig.cap=cap_fig6}
+## Smoothed spectrum: ---------------------------------------------------------
+smoothed_spec = mvspec(candy$Production,
+                       spans = c(5, 5),
+                       plot = FALSE)
+candy_smoothed_spec = tibble(freq = smoothed_spec$freq,
+                             spec = smoothed_spec$spec)
+max_omega_smoothed = candy_smoothed_spec$freq[which.max(candy_smoothed_spec$spec)]
+cap_fig6 = paste(
+  "**Figure 6.** *Smoothed periodogram of US Candy production monthly data.*"
+)
+candy_smoothed_spec %>%
+  ggplot(aes(x = freq, y = spec)) + 
+  geom_line(colour = "dodgerblue4") + 
+  scale_x_continuous(name = "Frequency") + 
+  scale_y_continuous(name = "Spectrum",
+                     trans = "log10") +
+  ggtitle("Candy: Smoothed periodogram") + 
+  theme_bw() +
+  geom_hline(yintercept = max(candy_smoothed_spec$spec),
+             colour = "darkred",
+             linetype = "dashed") + 
+  geom_vline(xintercept = max_omega_smoothed,
+             colour = "tomato3",
+             linetype = "dashed") +
+  geom_text(aes(x = max_omega_smoothed,
+                label = sprintf("%.3f", max_omega_smoothed),
+                y=0.05),
+            colour = "darkred")
+```
+
+#### Spectrum via AR model
+
+```{r spec_ar, fig.cap=cap_fig7}
+## Parametric method: ---------------------------------------------------------
+spec_ar = spectrum(candy$Production,
+                   method = "ar",
+                   plot = FALSE)
+
+candy_AR = tibble(freq = spec_ar$freq, spec = spec_ar$spec)
+max_ar = candy_AR$freq[which.max(candy_AR$spec)]
+cap_fig7 = paste(
+  "**Figure 7.** *Smoothed periodogram via AR model.*",
+  "US Candy production monthly data"
+)
+candy_AR %>%
+  ggplot(aes(x = freq, y = spec)) + 
+  geom_line(colour = "dodgerblue4") + 
+  scale_x_continuous(name = "Frequency") + 
+  scale_y_continuous(name = "Spectrum",
+                     trans = "log10") +
+  ggtitle("Candy: Spectrum via AR model") + 
+  theme_bw() +
+  geom_hline(yintercept = max(candy_AR$spec),
+             colour = "darkred",
+             linetype = "dashed") + 
+  geom_vline(xintercept = max_ar,
+             colour = "tomato3",
+             linetype = "dashed") +
+  geom_text(aes(x = max_ar,
+                label = sprintf("%.3f", max_ar),
+                y = 0.05),
+            colour = "darkred")
+```
+
+Since the spectrum of any stationary ARMA model can be well approximated by a AR model, the spectrum smoothed via AR model in a parametric way is also interesting to be considered.
+
+### Explanation of Spectrum
+
+All these three spectra have the peak at the same frequency $\omega = 0.083$, as we denoted on the plot. This indicates the dominant frequency corresponds to a peoriod $T = \frac{1}{\omega} = 12.05$, which means the predominant period is roughly 1 cycle per 12 months i.e 1 cycle per year. Also, we see that the spectrum of the signals displayed minor peaks at the harmonics. **Harmonics** often imply the existence of complicated combination of underlying frequencies components.
+
+### Decomposition
+
+From the spectral analysis, we know that the period is about 1 cycle per 12 months, but we can also investigate the information of period through the so-called trend, noise and circle decomposition and Spectrum response ratio.
+
+#### Trend, noise, circle
+
+```{r decomp, fig.cap=cap_fig8}
+## Decomposition: -------------------------------------------------------------
+cap_fig8 = paste(
+  "**Figure 8.** *Decomposition of candy production.*",
+  "The plots are raw data, trend, noise, and circle."
+)
+prod = candy$Production
+date = seq(from = 1972,length = length(prod) , by = 1 / 12)
+
+candy_low = ts(loess(prod ~ date, span = 0.5)$fitted,
+            start = 1972, 
+            frequency = 12)
+candy_high = ts(prod - loess(prod ~ date, span = 0.1)$fitted,
+           start = 1972,
+           frequency = 12)
+candy_cycles = prod - candy_high - candy_low
+plot(ts.union(prod, candy_low, candy_high, candy_cycles),
+     main = "Decomposition of candy production as trend + noise + cycles")
+```
+
+High frequency variation might be considered “noise” and low frequency variation might be considered "trend". A band of mid-range frequencies might be considered to correspond to the candy production cycle.
+
+Therefore, we can calculate the spectrum response ratio and use a cutoff value to filter the noise and trend, and thus extract the specific frequencies we want that corresponds to the candy production cycle.
+
+#### Spectrum response ratio
+
+```{r spec_ratio, fig.cap=cap_fig9}
+spec_union = spectrum(ts.union(prod, candy_cycles), plot = FALSE)
+cap_fig9 = paste(
+  "**Figure 9.** *Spectrum response ratio.*",
+  "The ratio are obtained by dividing the smoothed spectrum by the spectrum of unsmoothed data."
+)
+spec_rps = tibble(freq = spec_union$freq,
+       ratio = spec_union$spec[,2]/spec_union$spec[,1])
+
+xlim = spec_rps %>%
+  filter(ratio > 0.5) %>%
+  summarize(mini = min(freq), maxi = max(freq)) %>%
+  unlist()
+
+spec_rps %>%
+  ggplot(aes(x = freq, y = ratio)) +
+  geom_line()+
+  scale_x_continuous(name = "Frequency") + 
+  scale_y_continuous(name = "Spectrum Ratio(scaled by log10)",
+                     trans = "log10") +
+  geom_hline(yintercept = 0.5,
+             col = "tomato3",
+             lty = "dashed") +
+  geom_hline(yintercept = max(spec_rps$ratio),
+             col = "tomato3",
+             lty = "dashed") +
+  geom_vline(xintercept = xlim,
+             col = "tomato3",
+             lty = "dashed") + 
+  geom_text(aes(x = xlim[1],
+                label = sprintf("%.3f", xlim[1]),
+                y = 1e-15),
+            colour = "darkred") +
+  geom_text(aes(x = xlim[2],
+                label = sprintf("%.3f", xlim[2]),
+                y = 1e-15),
+            colour = "darkred")
+```
+
+Here we set the cutoff value to be 0.5.
+  
+So essentially we are keeping at least half the power for frequencies with cycle length between $\frac{1}{0.396} = 2.5$ and $\frac{1}{0.083} = 12$ months, and frequencies within this interval could be interpreted as frequencies that related to candy production cycle. And these frequencies can be the explanation of harmonics that we have seen in the spectrum density plot.
+
+### Model Selection
+
+We begin this section by introducing the basic structure of the seasonal ARIMA model first, so this would clarify any unnecessary ambiguity in notation.
+
+A seasonal ARIMA model with parameters $(p,d,q)\times(P,D,Q)_{12}$ for monthly data is
+$$\phi(B)\Phi(B^{12})\triangledown^{d}\triangledown_{12}^D(Y_n-\mu)=\psi(B)\Psi(B^{12})\epsilon_n$$
+where $\epsilon_n$ is the white noise process and 
+\begin{equation}
+\begin{split}
+\triangledown^d &= (1-B)^d \\
+\triangledown_{12}^D &= (1-B^{12})^{D}
+\end{split}
+\end{equation}
+$\phi(x),\Phi(x),\psi(x),\Psi(x)$ are AR or MA polynomials.
+
+Sometimes we expect the $\epsilon_n$ to be Gaussian white noise, but this is not always the case. However, we will still test the normality of residuals later in the Diagnosis section.
+
+#### Automatic selection
+
+The `auto.arima` function in R can select the arima model automatically, but it also has some limitation. Typically by default, this function will only try a limited number of arima models, and thus can omit some information occasionally, like in this case, the seasonal structure cannot be ignored but you will see in the following result that R did not take seasonality into account. But taking this result as a reference is very useful because it gives us a baseline model to compare with.
+
+```{r auto}
+auto.arima(candy$Production)
+```
+
+The model that R fitted automatically is arima(3,1,2). We will keep this result for later comparison.
+
+#### AIC Based Model Selection
+
+##### Seasonal Part
+
+Now, we select the best P and Q values for the model's seasonal part based on the Akaike’s information criterion (AIC), which is given by
+$$AIC = -2 \times \ell(\theta) + 2D$$
+Since the raw data is not stationary, we set d = 1 in the `arima` function to apply a first order difference operator on the time series, and then calculate the AIC for each (P, Q) pair. The results are displayed in the following formatted table.
+
+```{r aic_tab1, warning=FALSE}
+## fitting a SARIMA(0,1,0)x(P,Q)12 model based on AIC
+aic_table_S = function(data, P, Q){
+  table = matrix(NA, (P + 1), (Q + 1) )
+  for(p in 0:P){
+    for(q in 0:Q){
+      table[p+1, q+1] = arima(data,
+                              order = c(0, 1, 0),
+                              seasonal = list(order = c(p, 0, q),
+                                              period = 12)
+      )$aic
+    }
+  }
+  dimnames(table) = list(paste("SAR", 0:P),
+                         paste("SMA", 0:Q) )
+  table
+}
+
+aic_table_sd = function(data, P, Q){
+  table = matrix(NA, (P + 1), (Q + 1) )
+  for(p in 0:P){
+    for(q in 0:Q){
+      table[p+1, q+1] = arima(data,
+                              order = c(0, 1, 0),
+                              seasonal = list(order = c(p, 1, q),
+                                              period = 12)
+      )$aic
+    }
+  }
+  dimnames(table) = list(paste("SAR", 0:P),
+                         paste("SMA", 0:Q) )
+  table
+}
+cap_tab1 = paste(
+ "**Table 1.** *AIC values with d = 1 for a range of different choices of",
+ "seansonal component P and Q.*",
+ "Numbers are rounded to three decimal places."
+)
+aic_table_S(candy$Production, 3, 3) %>%
+  knitr::kable(cap = cap_tab1, digits = 3)
+```
+
+As we can see in the table, the minimum AIC is reached by the model with P=1 and Q=2. 
+  
+However, note that the AIC value decreased rapidly when the autoregressive and moving average componenst were first introduced to the model. Then the AIC value still decreases when model complexity increases but these values are roughly of the same magnitude.
+  
+One can compare the AIC of $(1,1)$ to first column and first row, and then compare the AIC of $(1,1)$ to the lower-right table, and you will find this straightforwardly.
+
+So in this sense, we should not blindly accept whatever model AIC might suggest, and we have to be careful sometimes because model complexity also matters.
+What's more, recall that as we mentioned earlier, the $lag = 12$ which stands for seasonal difference also contributes to the stationary transformation. Let's try this and integrate this with $d=1$.
+  
+The AIC value with both $d=1$ and $D=12$ for a range of $(P,Q)$ pairs are displayed in the following table.
+
+```{r aic_tab2, warning=FALSE}
+cap_tab2 = paste(
+ "**Table 2.** *AIC values with d = 1 and D = 12 for a range of different choices of",
+ "seansonal component P and Q.*",
+ "Numbers are rounded to three decimal places."
+)
+aic_table_sd(candy$Production, 3, 3) %>%
+  knitr::kable(cap = cap_tab2, digits = 3)
+```
+
+After applying the seasonal difference, one can immediately find that the overall performance of the model is enhanced by simply comparing these two tables. So seasonal difference dooes have an effect here in reducing the AIC values and thus may provide a better model.
+
+Now, based on these two tables, we decide to select the P = 1 and Q = 1 for our model. There are several reasons for this:
+
+- As we argue in the first table, (1,1) may be the optimal choice if we take both AIC and model complexity into consideration.
+- In fact, SARMA$(p,d,q)\times(P,D,Q)_S$ model is essentially a high order sparse ARMA$(PS+p, QS+q)$ model with many coefficients equal to 0. This can be obtained if we expand both sides of the seasonal model and then many coefficients of ARMA$(PS+p, QS+q)$ will be zero. Sparse model may lead to sparsity in the auto-covariance matrix and thus result in numerical instability. Therefore we tend choose a relatively small $(P,Q)$ pair.
+- Singular auto-covariance matrix also causes estimation of coefficients to become difficult.
+
+Therefore, taking all these factors into consideration, we decide to set P = 1 and Q = 1.
+
+##### ARIMA Part
+
+Now let's decide what values little $(p,q)$ pairs can take. 
+
+```{r aic_tab3, warning=FALSE}
+cap_tab3 = paste(
+ "**Table 3.** *AIC values of ARIMA(p,1,q)x(1,1,1)",
+ "for a range of different choices of p and q.*",
+ "Numbers are rounded to three decimal places."
+)
+
+aic_table_S11 = function(data, P, Q){
+  table = matrix(NA, (P + 1), (Q + 1) )
+  for(p in 0:P){
+    for(q in 0:Q){
+      table[p+1, q+1] = arima(data,
+                              order = c(p, 1, q),
+                              seasonal = list(order = c(1, 1, 1),
+                                              period = 12)
+      )$aic
+    }
+  }
+  dimnames(table) = list(paste("AR", 0:P),
+                         paste("MA", 0:Q) )
+  table
+}
+aic_table_S11(candy$Production, 4, 3) %>%
+  knitr::kable(cap = cap_tab3, digits = 3)
+```
+
+$(p,q) = (4,3)$ gives the smallest AIC value, but $(3,3)$ is also very close in terms of AIC value. However, a close scrutiny into $ARIMA(3,1,3)\times(1,1,1)_{12}$ model shows a convergence problem in estimating the standard deviation of the coefficients, whereas  $ARIMA(4,1,3)\times(1,1,1)_{12}$ tends to be more stable in numeric. Therefore, both AIC and numeric stability indicate that $ARIMA(4,1,3)\times(1,1,1)_{12}$ is a better model.
+
+We would set $ARIMA(4,1,3)\times(1,1,1)_{12}$ to be our final model.
+
+## Diagnosis
+
+### Fitted value
+
+We plot the fitted value together with the original time series to have a quick look at how well the model is fitted.
+
+```{r, warning=FALSE, fig.cap=cap_fig10}
+cap_fig10 = paste(
+  "**Figure 10.** *Fitted value(Red) and Original time series(Black).*"
+)
+Mod_candy = Arima(candy$Production,
+      order = c(4, 1, 3),
+      seasonal = list(order = c(1, 1, 1),
+                      period = 12)
+      )
+
+candy %>%
+  ggplot(aes(x = Date, y = Production)) +
+  geom_line() +
+  geom_line(aes(y = fitted(Mod_candy)),
+            col = "tomato3") +
+  xlab("Month") +
+  ylab("Candy Production") +
+  theme_bw()
+```
+
+The red line is of fitted value and the black line represents the original time series. This model seems to fit well and can explain the majority of the underlying structure. However, a single plot can only show some qualitative properties but is not enough for statistical significance. We need other diagnosis methods and some formal tests to decide whether this is a good model for US candy production data.
+
+### Residual Assumption
+
+Residual is a direct estimate of the $\epsilon_n$. Based on our assumption, the residuals are Gaussian white noise series, which indicate **uncorrelation**, **normality** and **mean zero**.
+
+#### Mean zero
+
+```{r sd}
+sd = candy %>%
+  summarise(sd = sqrt(var(Production))) %>%
+  unlist()
+sprintf("The standard deviation of candy production data is %.3f", sd)
+```
+
+We plot the residuals below. These residuals seems to distributed **uniformly** around y = 0, and there is no specific pattern in this plot. One may think that the variation is high from the plot, however, given the standard deviation of the time series is 18.1 (which is calculated above), the residuals at this magnitude should not be considered large.
+
+```{r residual, fig.cap=cap_fig11}
+## Residual plot
+cap_fig11 = paste(
+  "**Figure 11.** *Residuals of the SARIMA model.*"
+)
+tibble(Date = candy$Date, Residual = Mod_candy$resid) %>%
+  ggplot(aes(x = Date, y = Residual)) +
+  geom_line() +
+  xlab("Year") +
+  ylab("Residuals") +
+  geom_hline(yintercept = 0,
+             col = "tomato3") + 
+  theme_bw()
+```
+
+#### Uncorrelation {.tabset .tabset-fade .tabset-pills}
+
+Uncorrelation is an important assumption we made about the residuals. 
+
+Formally, our null hypothesis is:
+$$H_0: \epsilon_n \sim i.i.d \quad N(0,\sigma^2)$$
+which means they are simple random samples from the Gaussian white noise.
+
+##### Ljung-Box-Pierce Chi Square test
+
+The first method for testing the uncorrelation is to construct the following Ljung-Box-Pierce$^{[2][3]}$ statistics, which is given by:
+$$\hat{Q} = N(N+2)\sum_{k=1}^{L(N)}\frac{1}{N-k}|\hat{\rho_k}|^2$$
+where $L(N)$ is usually set as $L(N) = [\sqrt{N}]$ or $L(N) = [\frac{N}{10}]$.
+
+Ljung and Box proved that 
+$$\hat{Q} \sim \chi^2\left(L(N)-p-q\right)$$
+Therefore we can compute the p-value of this statistic, and if 
+$$\prob\left(\hat{Q}\geq \chi^2_\alpha\right) > \alpha=0.05$$
+We can not reject the null hypothesis.
+
+This test can be done by R base function `Box.test`
+Since the sample size of our data is 548, $[\sqrt{548}]=23$, $[\frac{548}{10}]=54$, we try lags with value 24, 36, and 48. The results are shown below.
+
+```{r box}
+Box.test(Mod_candy$residuals, lag = 24, type = "Ljung-Box", fitdf = 9)
+Box.test(Mod_candy$residuals, lag = 36, type = "Ljung-Box", fitdf = 9)
+Box.test(Mod_candy$residuals, lag = 48, type = "Ljung-Box", fitdf = 9)
+```
+
+All the p-values are significantly larger than the cutoff value $\alpha = 0.05$, thus we can **NOT** reject the null hypothesis.
+
+##### Autocorrelation function
+
+The second method to examine the uncorrelation is through the following auto-correlation plot. A result from Bartlett$^{[4]}(1946)$ has shown that as $N \rightarrow \infty$,
+$$\hat{\rho_k} \sim N(0,\frac{1}{N}), \qquad k=0,1,\cdots,N-1$$
+So we should check if 
+$$|\hat{\rho_k}|\leq\frac{1.96}{\sqrt{N}}$$
+which corresponds to the dashed line constructed by R `acf` function, as shown below.
+
+```{r acf_resi, fig.cap=cap_fig12}
+cap_fig12 = paste(
+  "**Figure 12.** *Residuals of the SARIMA model.*"
+)
+acf(Mod_candy$residuals, main = "Residuals Autocorrelation")
+```
+
+All the lags are fallen into the the dashed lines showing pointwise acceptance regions at the 5% level, thus we can **NOT** reject $H_0$ and can believe that the uncorrelation assumption holds.
+
+#### Normality
+
+A common way to check normality is to use the qq plot.
+
+```{r qqplot, fig.cap=cap_fig13}
+cap_fig13 = paste(
+  "**Figure 13.** *QQ-plot of residuals.*"
+)
+qqnorm(Mod_candy$residuals, main = "QQ-Plot: Residuals")
+qqline(Mod_candy$residuals)
+```
+
+With the exception of a few points along the tails of the residual plot that deviate from the line, the residuals seem to be sufficiently normal to make this assumption valid. We therefore know that the distribution is somewhat close to normal.
+
+### Causality and Invertibility
+
+Testing causality and invertibility is equivalent with testing stationarity, and thus is of great significance to our test of model.
+
+Causality and invertibility require having roots of AR and MA polynomials outside the unit circle in the complex plane. And this is equivalent to having the inverse characteristic roots in the unit circle.
+  
+We plot the inverse roots below. As we mentioned earlier, SARMA model is equivalent to a high order sparse ARMA model, so there are many roots of each polynomial.
+  
+Specifically, our model is
+$$SARIMA(4,1,3)\times(1,1,1)_{12}$$
+which is equivalent to 
+$$ARMA(16, 15)$$
+By fundamental theorem of algebra, the exact numbers of roots for AR polynomials and MA polynomials should be 16 and 15 respectively. And you would see that it is in line with the plot below.
+  
+Since the `Arima` function will never return a model with inverse roots outside the unit circle, we should be really careful with these roots that are at the edge of the unit circle.
+
+```{r root, fig.cap = cap_fig14}
+cap_fig14 = paste(
+  "**Figure 14.** *Inverse AR roots and inverse MA roots displayed in a complex plane.*"
+)
+plot(Mod_candy, type = "both")
+```
+
+The AR roots distribute perfectly in the unit circle, but MA roots should be treated carefully. However, since this is a sparse ARMA model, sometimes we have to accept this possible risk of sigularity, which is like a tradeoff between seasonality and stationarity.
+
+### Wilk's approximation
+
+As we mentioned earlier, the `auto.arima` gives an automatically selected model, ARIMA(3,1,2). Now we will use the Wilk's approximation to see if this model is significantly different from our model.
+
+Let's write down the nested hypotheses formally:
+\begin{equation}
+\begin{split}
+H^{<0>} &: \theta \in \Theta^{<0>} = (\mu, \sigma^2, \phi_{1:3},\psi_{1:2})\\
+H^{<1>} &: \theta \in \Theta^{<1>} = (\mu, \sigma^2, \phi_{1:4}, \psi_{1:3}, \Phi_{1},\Psi_{1})\\
+\ell^{<1>} - \ell^{<0>} &\approx \frac{1}{2}\chi^{2}_{D_{<1>} - D_{<0>}}
+\end{split}
+\end{equation}
+So here, $D_{<1>} - D_{<0>}=4$. We calculate the cutoff value using R function `qchisq(0.95, df = 4)`.
+```{r likelihood}
+arima_auto = arima(candy$Production, order = c(3, 1, 2))
+log_diff = 2 * (Mod_candy$loglik - arima_auto$loglik)
+chisq_cutoff = qchisq(0.95, df = 4)
+diagnose = ifelse(log_diff > chisq_cutoff,
+                  "Two models are significantly different",
+                  "Our model is NOT significant from ARIMA(3,1,2)")
+print(diagnose)
+```
+
+The cutoff value is approximately 9.45, two times the log likehood difference is 729.7974. Since 9.45 < 729.7974, we conclude that our model is significant from ARIMA(3,1,2) at confidence level $\alpha = 0.05$. Combined with the other analysis we did above, our model is simply much better than the automatically selected model.
+
+## Conclusion
+
+Based on our analysis, our final model is $SARIMA(4,3,1)\times(1,1,1)_{12}$. Plugging in the coefficients we get from R, the formal model is:
+$$\phi(B)\Phi(B^{12})\triangledown\triangledown_{12}(Y_n-\mu)=\psi(B)\Psi(B^{12})\epsilon_n$$
+where $\epsilon_n$ is the white noise process and 
+\begin{equation}
+\begin{split}
+\triangledown &= 1-B \\
+\triangledown_{12} &= 1-B^{12} \\
+\phi(x) &= 1 + 0.4571x + 0.1016x^2 - 0.8053x^3 - 0.0944x^4 \\
+\psi(x) &= 1 +0.2098x - 0.1023x^2 - 0.9502x^3 \\
+\Phi(x) &= 1 -0.0711x \\
+\Psi(x) &= 1-0.7485x \\
+\mu(x) &= 0
+\end{split}
+\end{equation}
+
+The model obatained has passed several diagnoses and assumption tests, so we conclude that the seasonality in US candy production data can be well fitted by SARIMA model.
+
+## References
+
+[1] Kaggle Dataset, US Candy Production by Month, Rachael Tatman, https://www.kaggle.com/rtatman/us-candy-production-by-month#candy_production.csv, 2018
+
+[2] Box, George; Jenkins, Gwilym (1970). Time Series Analysis: Forecasting and Control. San Francisco: Holden-Day.
+
+[3] Ljung, G. M., and Box, G. E. P. “On a Measure of a Lack of Fit in Time Series Models”, Biometrika, 65 (2), 297-303, 1978.
+
+[4] Bartlett, M.S. (1946) On the theoretical specification and sampling properties of autocorrelated time series. Supplement to the Journal of the Royal Statistical Society 8 27-41. 
+
+------------
+
+## Acknowledgements
+
+The data we used just happens to be the same as one 
+[previous project](https://ionides.github.io/531w20/midterm_project/project35/531Midterm_project.html). However, this is not intended, and except for some routine procedures of modeling, our analysis is totally different from theirs. These differences are listed below to clarify the issues.
+
+- We apply the difference operator step by step, which is more detailed. Aside from a first order difference operation with lag=1, we also add **lag=12** to further transform the data.
+- Spectrum response ratio has been added in spectral analysis. 
+- Our **Trend, Noise, Circle plot** rectifies some of the mistakes they made.
+- We are not blindly selecting models on AIC, but also consider the convergence problem and model complexity.
+- We introduce a **Ljung-Box** test, and provide some formulas to illustrate the idea.
+- we use the **Wilk approximation** to compare two models, one which is automatically selected by `auto.arima`, and one which is our manually selected model.
+- We examine the AR roots and MA roots for causality and invertibility.
+- Some explanation like sparse ARMA model etc. is new from the previous years project.
+- Our plot and table is nicely formatted and visualize the data in a different persespective.
+
+It takes us a lot time to finish this project, so we just put these things here to clarify any unnecessary misunderstanding.
+
+The idea of AIC table are adapted from the lecture slides.
+
+Function `mvspec` are taken from book **Robert H. Shumway. David S. Stoffer. Time Series Analysis and Its Applications**, page 200
+
+-----------

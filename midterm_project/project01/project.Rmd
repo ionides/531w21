@@ -1,0 +1,289 @@
+---
+title: "STATS 531 Midterm Project : Bitcoin Historical Data"
+date: "`r format.Date(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+---
+
+```{r read_data, include=FALSE}
+library(readxl)
+library(fpp2)
+library(tidyverse)
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+# Read bitcoin data
+data <- read_excel("Bitcoin Historical Data - Investing.com.xlsx")
+# Subset data to get date and price
+data_price <- data[,c(1,2)]
+# reverse order so earliest dates come first 
+data_price <- data_price[seq(nrow(data_price),1),]
+# Convert data to a time series object
+doy <- strftime("2010-07-18", format = "%j")
+data_ts <- ts(rev(data_price[,c(2)]), start = c(2010,as.numeric(doy) ), 
+              frequency = 365)
+# Start data at 2013
+data_ts_2013 <- window(data_ts, start=2013)
+```
+
+# Introduction 
+
+Bitcoin is a type of decentralized cryptocurrency in which encryption techniques are used to govern the creation of units of currency and verify the transfer funds between multiple parties. It has gained popularity worldwide, motivating possible studies about how its price changes. Because Bitcoin is a decentralized market there is price volatility. 
+
+In this project, we aim to investigate the price and volatility of Bitcoin from January 1, 2013 to February 12, 2021, and answer the following questions: 
+
+  - Can we fit a model for Bitcoin prices and possibly predict future prices?
+  - Are there any seasonal changes or trends for Bitcoin prices?
+  - Can we model the volatility of Bitcoin prices?
+  
+We use historical Bitcoin price data on Investing.com for this project\(^{[1]}\). By observing this dataset and testing various statistical models, a better understanding can be gained on models that may be used to predict Bitcoin prices and variability.   
+
+
+# Exploratory Data Analysis
+
+Bitcoin closing price data from Jan 1 2013 to Feb 12 2021 was examined. In total there were 2,965 observations. 
+
+```{r fig1, out.width = '100%', echo=F}
+knitr::include_graphics("bitcoin_ts_plot_summary.png")
+```
+
+The time series plot above highlights notable events over the observed time period. The plot summary above shows that the Bitcoin price remains relatively flat until around the year 2017, when volatility and price sharply increase. The reason for this price increase is still disputed, however it is important to note that the popularity of Bitcoin increased substantially around this time period. 
+
+Given there is evidence of non-stationarity, non-stable variance and mean, we take the log and first difference of the time series. This is performed because the log is a known variance stabilizing transformation, and the first-difference helps stabilize the mean of a time series by reducing the trend in the closing price over the level of the time series. This results in the following time series plot, autocorrelation plot, and histogram:  
+
+```{r, fig.align='center',out.width = '100%'}
+data_ts_2013_log <- log(data_ts_2013)
+data_ts_2013_log %>% diff() %>% ggtsdisplay(main="Log and First Difference of Bitcoin Closing Price ", plot.type = "hist", lag.max=20)
+data_ts_2013_logdiff <- log(data_ts_2013) %>% diff()
+
+```
+
+The transformed time series, apart from a few time periods, appears to be stationary. The time periods when the time series is not stationary (e.g., beginning of 2014) are largely due to the high Bitcoin price volatility, even after logarithm transformation of the time series is performed. 
+
+# Models for Bitcoin Prices
+
+In this section we will fit various time series models to the Bitcoin data and identify which, if any, performs best. 
+
+## ARIMA Model
+
+We will first try fit data to ARIMA(p,1,q) model\(^{[3]}\), under the assumption that differencing has eliminated the trend of data. We will vary p between 0 and 5, and q between 0 and 6. The AIC table of the fitted 42 models are below: 
+
+```{r}
+aic_table <- function(data,P,Q){
+table <- matrix(NA,(P+1),(Q+1))
+for(p in 0:P) {
+for(q in 0:Q) {
+table[p+1,q+1] <- arima(data,order=c(p,1,q))$aic
+}
+}
+dimnames(table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+table
+}
+Low_aic_table <- aic_table(data_ts_2013_log,5,6)
+require(knitr)
+kable(Low_aic_table,digits=2)
+```
+
+Since ARIMA(5,1,4) gives the lowest AIC value, we will fit an ARMIA(5,1,4).
+
+```{r}
+model_arima514 <- arima(data_ts_2013_log, order=c(5,1,4))
+model_arima514
+```
+
+$\sigma^2$ of fitted model is very close to 0, however all model coefficients appear to be statistical significant. A 95% confidence interval of the coefficients are below. 
+
+```{r}
+t(confint(model_arima514))
+```
+
+None of the confidence intervals include 0. Next we verify the model is both causal and invertible. This can be easily done in R by checking the inverse roots. Because we are checking the inverse roots and not the "normal" roots, we want the inverse roots to lie within the unit circle to confirm the model is both causal and invertible. 
+
+```{r}
+autoplot(model_arima514, main = "Plotting the ARIMA(5,1,4) characteristic roots")
+```
+
+All the roots lie within the unit circle implying the model is both causal and invertible, however 2 of the AR coefficients and 2 of the MA coefficients are near the boundaries of the unit circle. Hence, in addition to fitting and checking the residuals of the ARIMA(5,1,4) model, we will also fit the smaller ARIMA(3,1,2) model. 
+
+The residuals diagnostic plots of the ARIMA(5,1,4) are shown below. 
+
+```{r, fig.width=12}
+par(mfrow=c(1,2))
+acf(model_arima514$residuals, main = "ARIMA(5,1,4) Autocorelation Plot")
+qqnorm(model_arima514$residuals, main = "ARIMA(5,1,4) Q Q Plot")
+qqline(model_arima514$residuals)
+```
+
+From the autocorrelation plot we observe that there does not appear to exist any serial correlation amongst the residuals, however the qqnorm shows heavy tails on both side, which violates the assumption that noises are normally distributed. We could conclude that ARIMA(5,1,4) does not meet all the assumptions of the arima model for the log-differenced Bitcoin data set. 
+
+Next, we will repeat this for the ARIMA(3,1,2) model. The model fit is as follows:
+```{r}
+model_arima312 <- arima(data_ts_2013_log, order=c(3,1,2))
+model_arima312
+```
+
+95% confidence intervals of the coefficients is shown below.
+
+```{r}
+t(confint(model_arima312))
+```
+
+None of the confidence intervals of the coefficients include 0. Next, check if the ARIMA(3,1,2) model is both causal and invertible. 
+
+```{r}
+autoplot(model_arima312, main = "Plotting the ARIMA(3,1,2) characteristic roots")
+```
+
+All the inverse roots lie within the unit circle implying the model is both invertible and casual. Contrary to the ARIMA(5,1,4) model, none of the inverse roots lie on the boundaries of the unit circle. Next, we can check its' residuals. 
+
+```{r, fig.width=12}
+par(mfrow=c(1,2))
+acf(model_arima312$residuals, main = "ARIMA(3,1,2) Autocorelation Plot")
+qqnorm(model_arima312$residuals, main = "ARIMA(3,1,2) Q Q Plot")
+qqline(model_arima312$residuals)
+```
+
+From the ACF plot we observe that autocorrelations are high at the beginning and decrease to be within the confidence interval. The qqnorm plot shows heavy tails on both side, which violates the assumption that noises are normally distributed. 
+
+The ARIMA(3,1,2) model appears to perform almost identical to the ARIMA(5,1,4) model in regards to the autocorrelation and qqplots. We can choose the simpler ARIMA(3,1,2) model as a reasonable model. Given the heavy tails observed in the Q-Q plots of the residuals of both models a time series model that can handle non-normal residuals may be needed.
+
+## ARFIMA model
+
+First, in order to determine whether long-term effects are obvious, we will compare the ACF plot of the Bitcoin time series and the random walk time series. 
+
+```{r}
+library(arfima)
+acf(log(data_ts_2013), 100, main="ACF plot of the data")
+acf(cumsum(rnorm(1000)), 100, main="ACF plot of random walk") # compare to ACF of random walk
+```
+
+The plots show that the ACF of Bitcoin prices decays slower than the random walk when increasing lags. This suggest that there are possible long-memory effects. In order to take the possible long-memory effects into consideration, an ARFIMA model  \(^{[4]}\) can be fitted. The summary is shown below. R examples for the ARFIMA model was found in the text "Time Series Analysis and Its Applications" by Shumway and Stoffer.  \(^{[8]}\)
+
+```{r}
+summary(data_ts_2013.fd <- arfima(log(data_ts_2013)))
+```
+
+As shown from the summary, the estimate of \(d\) for the \(ARFIMA(0,d,0)\) model is about 0.5. The residuals for this model can also be plotted to show the correlations. We observe that the residuals are correlated, implying that the residuals are not white noises. Because the residuals are not white noises we can deduce that the ARFIMA model does not perform well using this bitcoin dataset.
+
+```{r}
+innov = resid(data_ts_2013.fd)  
+plot.ts(innov[[1]],ylab="Residuals")  
+acf(innov[[1]], main="ACF plot of residuals")  
+```
+
+# Frequency and Trend Analysis
+
+## Frequency Analysis
+
+Using frequency analysis We can try to identify cycles for Bitcoin prices. The smoothed periodogram can be used to determine whether there are any cyclic patterns for Bitcoin prices. The default kernel smoothing will be used for this analysis.\(^{[5]}\)
+
+```{r spectrum}
+a = spectrum(data_ts_2013, spans=c(30, 30), plot=TRUE, main="Smoothed Periodogram")
+```
+
+From the plot above, we see that the error bar covers any possible peak of the estimated spectral density. Therefore, there is no obvious seasonal behavior for the Bitcoin prices. There is still variability for the prices however, there are no cycles at predictable lengths. This could be contributed to the high volatility of Bitcoin data.
+
+Since the Bitcoin data doesn't show enough sign of seasonality, we don't need to fit SARIMA models to this time series.
+
+## Trend Analysis
+
+Using trend analysis we can try to identify the general trend for Bitcoin prices from 2013 to 2021. Is the increasing trend for Bitcoin prices statistically significant? We use the logarithm of prices, and fit a linear regression model with ARMA errors\(^{[6]}\). We have previously found that ARMA(3,2) model may be a reasonable model for the prices since the AIC of an ARMA(3,2) model is significantly smaller than the AIC of an ARMA(0,0) model. 
+
+The model with ARMA errors can be written as:
+
+$$Y_t=\beta_0+\beta_1D_t+\eta_t$$
+
+where \(D_t\) is days and \(\eta_t\) is an ARMA(3,2) error.
+
+First, we will need to fit the ARMA(3,2) model with no trends. Then we can fit a linear regression model with ARMA errors and compare the results.
+
+```{r arma_with_trend}
+m0 = arima(data_ts_2013_log, order=c(3, 0, 2))
+m0
+days = time(data_ts_2013_log)
+m1 = arima(data_ts_2013_log, order=c(3, 0, 2), xreg=days)
+m1
+```
+
+The difference of log likelihoods can now be calculated to determine whether the trend is statistically significant.
+
+```{r comparing_results}
+cat("Difference of log likelihoods:",m1$loglik-m0$loglik)
+```
+
+Since 6.61 >> 1.92, the general increasing trend for Bitcoin prices is significant.
+
+# Volatility Analysis
+
+To further investigate the Bitcoin price from 2013 and onward, we will attempt to model the timeseries as conditionally heteroskedastic, meaning with non-constant variance throughout time. This is easily motivated by the plot of the growth rate $y_t = \nabla log(x_t)$ where $x_t$ is price at time t, as the data presents different variance at different points in time. 
+
+```{r growth_rate, echo=FALSE, eval=TRUE}
+plot(data_ts_2013_logdiff)
+```
+
+This motivates the use of an auto-regressive conditionally heteroskedastic model, or ARCH (similarly GARCH for generalized-ARCH). GARCH models\(^{[9]}\) model the return as a function of the variance at time t and the volatility as a function of both past returns and volatilities. The simplest GARCH model, the GARCH(1,1), models the return and volatility as $$r_t=\sigma_t\epsilon_t \\ \sigma^2_t = \alpha_0+\alpha_1r^2_{t-1}+\beta_1\sigma^2_{t-1}$$ where $\epsilon_t \sim iid. \mathcal{N}(0,1)$. The first term of the GARCH(p,q) model accounts for the order of lags of squared returns in the $\sigma_t$ equation, and the second term accounts for the order of lags of the volatility. The GARCH(p,q) model retains the return model $r_t=\sigma_t\epsilon_t$ but allows for greater lags in the volatility model, extending to $$\sigma_t = \alpha_0 + \sum_{j=1}^p\alpha_jr^2_{t-j}+\sum^q_{j=1}\beta_j\sigma^2_{t-j}$$
+
+Building on the ARIMA(3,1,2) model, a low order model we investigated with relatively low AIC, we include a GARCH term in the model to account for the autocorrelation observed in the residuals. We examine the GARCH(1,1), GARCH(1,2), GARCH(2,1), and GARCH(0,1) models by fitting them to the residuals of the ARIMA(3,1,2) fit. We use the R package "tseries" and its "garch" function\(^{[7]}\) to do this.
+
+```{r GARCH Analysis of Bitcoin Returns, message=FALSE, results=FALSE}
+library(tseries)
+data.arima <- arima(data_ts_2013_log,order=c(3,1,2))
+data_ts_2013_logdiff.g11 <- tseries::garch(data.arima$residuals, order = c(1,1))
+data_ts_2013_logdiff.g12 <- tseries::garch(data.arima$residuals,order=c(1,2),maxiter=3000)
+data_ts_2013_logdiff.g21 <- tseries::garch(data.arima$residuals,order=c(2,1))
+data_ts_2013_logdiff.g01 <- tseries::garch(data.arima$residuals,order=c(0,1))
+```
+
+We achieve convergence on all models except the GARCH(1,2). We now use the parameters estimated from the GARCH(1,1) model to predict the variance of the time series as it had the highest log likelihood among the four models. 
+
+```{r variance plot}
+sigPred <- predict(data_ts_2013_logdiff.g11,data_ts_2013_logdiff)
+
+plot(data_ts_2013_logdiff,type='l')
+lines(sigPred[,1]^2,col="red", lwd=2)
+```
+
+Above is a plot of our time series with the predicted variance superimposed in red. By applying the GARCH(1,1) model to the residual of the ARIMA(3,1,2) fit, we see that the predicted variance matches rather well with the periods of high volatility in the data. Investigating the ACF of the squared residuals, we see that the GARCH(1,1) fit's residuals have no significant autocorrelation. We can be confident that the GARCH(1,1) model fit to the ARIMA(3,1,2) model's residuals provide a satisfactory explanation for the correlation in the data, as what is left appears to be uncorrelated noise.
+
+```{r garch plot}
+len <- length(data_ts_2013_logdiff.g11$residuals)
+garch_res2 <- data_ts_2013_logdiff.g11$residuals[7:len]^2
+garch_res2_acf <- acf(garch_res2,plot=FALSE)
+plot(garch_res2_acf,main="ACF of GARCH(1,1) fit squared residuals")
+
+arima_res2 <- data.arima$residuals^2
+arima_res2_acf <- acf(arima_res2,plot=FALSE)
+plot(arima_res2_acf,main="ACF of ARIMA(3,1,2) fit squared residuals")
+```
+
+# Conclusion
+
+In this project we analyzed the Bitcoin prices from 2013 to 2021. After using all the time series analysis above, we have drawn the following conclusions:
+
+  - ARIMA(3,1,2) is a reasonable model for Bitcoin prices on a log scale, it can probably be used to predict the approximate range of future Bitcoin prices.
+
+  - As can be seen from the volatility analysis, Bitcoin prices are very volatile and difficult to predict. GARCH(1,1) model is reasonable for this time series considering the volatility.
+
+  - The price of Bitcoin doesn't show signs of apparent seasonal or cyclic changes. However, the increasing trend for Bitcoin price is statistically significant.
+  
+Bitcoin price is affected by many factors, like government policies, market situation and other unpredictable events like COVID-19, so it is hard to predict. Our models are based on basic time series techniques, so they might not fully account for the variability of Bitcoin price. Our models can be improved by making use of other relevant data.
+
+# References
+
+[1] Investing.com. [Bitcoin prices historical data](https://www.investing.com/crypto/bitcoin/historical-data).
+
+[2] Ionides, Edward. [Analysis of Time Series lecture notes](https://ionides.github.io/531w21/).
+
+[3] Wikipedia. [ARIMA models](https://en.wikipedia.org/wiki/Autoregressive_integrated_moving_average).
+
+[4] Wikipedia. [ARFIMA models](https://en.wikipedia.org/wiki/Autoregressive_fractionally_integrated_moving_average).
+
+[5] Wikipedia. [Kernel smoother](https://en.wikipedia.org/wiki/Kernel_smoother).
+
+[6] Otexts.com. [Regression with ARMA errors](https://otexts.com/fpp2/regarima.html).
+
+[7] Garch, tseries R package. [garch: Fit GARCH Models to Time Series](https://rdrr.io/cran/tseries/man/garch.html).
+
+[8] Shumway and Stoffer. [Long Memory Models and Fractional Differences](https://online.stat.psu.edu/stat510/lesson/13/13.1).
+
+[9] Shumway and Stoffer. [GARCH MODELS](https://online.stat.psu.edu/stat510/lesson/13/13.1).
+
