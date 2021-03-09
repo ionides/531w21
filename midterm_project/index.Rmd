@@ -1,0 +1,58 @@
+---
+title: "STATS 531 Winter 2021 <br>Midterm projects"
+output:
+  html_document:
+      theme: flatly
+      toc: yes
+csl: ecology.csl
+---
+
+---------
+
+* Projects are posted anonymously below. Source code and data are available from [https://github.com/ionides/531w21/midterm_project](https://github.com/ionides/531w20/tree/master/midterm_project).
+
+* After the course is over and the class grades are assigned, you may choose to request to have your name attached to your project.
+
+-----------
+
+----------
+
+1. [Bitcoin Historical Data](https://ionides.github.io/531w21/midterm_project/project1/project.html)
+
+2. [US Candy Production Data](https://ionides.github.io/531w21/midterm_project/project2/project.html)
+
+3. [Seattle Weather](https://ionides.github.io/531w21/midterm_project/project3/project.html)
+
+4. [Crop Acreage and Warming Temperature in US](https://ionides.github.io/531w21/midterm_project/project4/project.html)
+
+5. [U.S. 10-year Treasury Bond Yield](https://ionides.github.io/531w21/midterm_project/project5/project.html)
+
+6. [Vancouver Temperature](https://ionides.github.io/531w21/midterm_project/project6/project.html)
+
+7. [Climate in Delhi](https://ionides.github.io/531w21/midterm_project/project7/project.html)
+
+8. [Lake Michigan-Huron Water Levels](https://ionides.github.io/531w21/midterm_project/project8/project.html)
+
+9. [PM10 concentration from Wanliu station in Beijing](https://ionides.github.io/531w21/midterm_project/project9/project.html)
+
+10. [Bitcoin Price Forecast](https://ionides.github.io/531w21/midterm_project/project10/project.html)
+
+11. [Bike sharing in London](https://ionides.github.io/531w21/midterm_project/project11/project.html)
+
+12. [PM2.5 in Delhi](https://ionides.github.io/531w21/midterm_project/project12/project.html)
+
+13. [Pharma Sales](https://ionides.github.io/531w21/midterm_project/project13/project.html)
+
+14. [PM2.5 Concentration in Beijing](https://ionides.github.io/531w21/midterm_project/project14/project.html)
+
+15. [Solar Flare from X-ray Flux](https://ionides.github.io/531w21/midterm_project/project15/project.html)
+
+16. [Utah Covid Cases](https://ionides.github.io/531w21/midterm_project/project16/project.html)
+
+17. [Phosphorus discharged from Detroit](https://ionides.github.io/531w21/midterm_project/project17/project.html)
+
+18. [USA-China Trade](https://ionides.github.io/531w21/midterm_project/project18/project.html)
+
+----------
+
+-----------
