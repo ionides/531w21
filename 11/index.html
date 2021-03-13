@@ -9,10 +9,10 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Instructor: Edward L. Ionides" />
+<meta name="author" content="Kidus Asfaw, Edward L. Ionides and Aaron A. King" />
 
 
-<title>STATS/DATASCI 531 (Winter 2021)  ‘Analysis of Time Series’</title>
+<title>Analysis of Time Series STATS/DATASCI 531, Winter 2021 Chapter 11: Introduction to simulation-based inference for epidemiological dynamics via the pomp R package</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -385,171 +385,61 @@ summary {
 
 
 
-<h1 class="title toc-ignore">STATS/DATASCI 531 (Winter 2021) <br>‘Analysis of Time Series’</h1>
-<h4 class="author">Instructor: Edward L. Ionides</h4>
+<h1 class="title toc-ignore">Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 11: Introduction to simulation-based inference for epidemiological dynamics via the pomp R package</h1>
+<h4 class="author">Kidus Asfaw, Edward L. Ionides and Aaron A. King</h4>
 
 </div>
 
-<div id="TOC">
+
+<p>We are borrowing material from a short course on <a href="https://kingaa.github.io/sbied/">Simulation-Based Inference for Epidemiological Dynamics</a> (SBIED). This short course uses the same notation as STATS/DATASCI 531 and shares an emphasis on likelihood methods for inference. Indeed, SBIED can be viewed as a sub-course within STATS/DATASCI 531. Although SBIED focuses on epidemiological examples, you can check from previous final projects for <a href="http://ionides.github.io/531w16/final_project/">2016</a>, <a href="http://ionides.github.io/531w18/final_project/">2018</a> and <a href="http://ionides.github.io/531w20/final_project/">2020</a> that the ideas extend readily to a variety of other situations. Later, in Chapter 16, we will consider models for financial markets, which is another major area of application for nonlinear time series techniques.</p>
+<p>Chapter 11 is Lecture 1 of SBIED.</p>
 <ul>
-<li><a href="#course-description">Course description</a></li>
-<li><a href="#class-notes-and-lectures">Class notes and lectures</a></li>
-<li><a href="#homework-assignments">Homework assignments</a></li>
-<li><a href="#midterm-project">Midterm project</a></li>
-<li><a href="#final-project">Final project</a></li>
+<li><p>Part 1. Time series analysis and mechanistic models in ecology and epidemiology.</p></li>
+<li><p>Part 2. Introduction to POMP models. This part has overlap with Chapter 10. It may be no bad thing to see the foundational material again, from a slightly different perspective. You are welcome to watch at 1.5 x speed if you are already comfortable with Chapter 10.</p></li>
+<li><p>Part 3. Introduction to the pomp R package for POMP models.</p></li>
 </ul>
-</div>
-
+<table>
+<thead>
+<tr class="header">
+<th align="left"> </th>
+<th align="center"> </th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Lecture: Chapter 11, Part 1</td>
+<td align="center"><a href="https://youtu.be/1MY8NuJ5fr4">Video (20 mins)</a></td>
+</tr>
+<tr class="even">
+<td align="left">Lecture: Chapter 11, Part 2</td>
+<td align="center"><a href="https://youtu.be/-P4lwVDHxjQ">Video (22 mins)</a></td>
+</tr>
+<tr class="odd">
+<td align="left">Lecture: Chapter 11, Part 3</td>
+<td align="center"><a href="https://youtu.be/1MY8NuJ5fr4">Video (7 mins)</a></td>
+</tr>
+<tr class="even">
+<td align="left">Lecture slides</td>
+<td align="center"><a href="https://kingaa.github.io/sbied/intro/slides.pdf">PDF</a></td>
+</tr>
+<tr class="odd">
+<td align="left">Lecture notes</td>
+<td align="center"><a href="https://kingaa.github.io/sbied/intro/notes.pdf">PDF</a></td>
+</tr>
+</tbody>
+</table>
 <hr />
-<div id="course-description" class="section level2">
-<h2>Course description</h2>
-<p>This course gives an introduction to time series analysis using time domain methods and frequency domain methods. The goal is to acquire the theoretical and computational skills required to investigate data collected as a time series. The first half of the course will develop classical time series methodology, including auto-regressive moving average (ARMA) models, regression with ARMA errors, and estimation of the spectral density. The second half of the course will focus on state space model techniques for fitting structured dynamic models to time series data. We will progress from fitting linear, Gaussian dynamic models to fitting nonlinear models for which Monte Carlo methods are required. Examples will be drawn from ecology, economics, epidemiology, finance and elsewhere.</p>
-<p>A course outline, course information and grading policies are described in the <a href="syllabus.html">syllabus</a>.</p>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/1MY8NuJ5fr4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/-P4lwVDHxjQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/1MY8NuJ5fr4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
 <hr />
-</div>
-<div id="class-notes-and-lectures" class="section level2">
-<h2>Class notes and lectures</h2>
-<ol style="list-style-type: decimal">
-<li><p><a href="01/index.html">Introduction</a></p></li>
-<li><p><a href="02/index.html">Time series models, trend and autocovariance</a></p></li>
-<li><p><a href="03/index.html">Stationarity, white noise, and some basic time series models</a></p></li>
-<li><p><a href="04/index.html">Linear time series models and the algebra of ARMA models</a></p></li>
-<li><p><a href="05/index.html">Parameter estimation and model identification for ARMA models</a></p></li>
-<li><p><a href="06/index.html">Extending the ARMA model: Seasonality, integration and trend</a></p></li>
-<li><p><a href="07/index.html">Introduction to time series analysis in the frequency domain</a></p></li>
-<li><p><a href="08/index.html">Smoothing in the time and frequency domains</a></p></li>
-<li><p><a href="09/index.html">Case study: An association between unemployment and mortality?</a></p></li>
-<li><p><a href="10/index.html">Introduction to partially observed Markov process models</a></p></li>
-<li><p><a href="11/index.html">Introduction to simulation-based inference for epidemiological dynamics via the pomp R package</a></p></li>
-</ol>
-<!--
-
-10. Statistical methodology for nonlinear partially observed Markov process models.
-[ pdf. ](10/notes10.pdf)
-[ R script. ](10/notes10.R)
-[ annotations. ](10/notes10-annotated.pdf)
-
-11. Dynamic models and their simulation by Euler’s method.
-[ pdf. ](11/notes11.pdf)
-[ R script. ](11/notes11.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=1_R5BNaqtX0comQ_0jHNDQwAF3f8CtmmP)
-[ part 2. ](https://drive.google.com/open?id=1GDce46Ucx4TKEwAhz4fClUKmpCQdZJ1k)
-
-12. Practical likelihood-based inference for POMP models.
-[ pdf. ](12/notes12.pdf)
-[ R script. ](12/notes12.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=1yQGF6WFZzuaydikoQ4iUimwPieyuCjVW)
-[ part 2. ](https://drive.google.com/open?id=1FXdDcLQFGXBj6y0gzSmZ2Cqez0OZ8PUT)
-[ part 3. ](https://drive.google.com/open?id=12aq_lxdtNWbaZAdBfVRawwEkTk32Cy_O)
-
-
-13. Time series models with covariates, and a case study of polio.
-[ pdf. ](13/notes13.pdf)
-[ R script. ](13/notes13.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=15lw9xbcl7jI_bA1-XnHK1jZEwS0cGEYR)
-[ part 2. ](https://drive.google.com/open?id=1Wphv9RITzQGl00dvYM_zNK6iicHeN2Rw)
-
-
-14. Case study: POMP modeling to investigate financial volatility.
-[ pdf. ](14/notes14.pdf)
-[ R script. ](notes14/notes14.R)
-[ recording. ](https://drive.google.com/open?id=1uy3GYiY9DnYjXrz2lEs8-5BtrL_8_oRh)
-
-There are further POMP case studies, in a similar style, on [Ebola modeling](https://kingaa.github.io/sbied/ebola/ebola.html), [measles transmission](https://kingaa.github.io/sbied/measles/measles.html), and [dynamic variation in the rate of human sexual contacts](https://kingaa.github.io/sbied/contacts/contacts.html).
-
--->
+<p><a href="../index.html">Back to course homepage</a><br />
+<a href="../acknowledge.html">Acknowledgements</a><br />
+<a href="http://github.com/kingaa/sbied/tree/master/intro">Source code for these notes</a></p>
 <hr />
-</div>
-<div id="homework-assignments" class="section level2">
-<h2>Homework assignments</h2>
-<p>Please read the <a href="syllabus.html">grading policy in the syllabus</a> before submitting homework.</p>
-<ul>
-<li><p><a href="hw00/hw00.html">Homework 0</a>. Setting up your computational environment. Nothing to submit.</p></li>
-<li><p><a href="hw01/hw01.html">Homework 1</a>, due Mon Feb 1, 11:59pm. <a href="hw01/sol01.html">Solution</a>.</p></li>
-<li><p><a href="hw02/hw02.html">Homework 2</a>, due Mon Feb 8, 11:59pm. <a href="hw02/sol02.html">Solution</a>.</p></li>
-<li><p><a href="hw03/hw03.html">Homework 3</a>, due Mon Feb 22, 11:59pm. <a href="hw03/sol03.html">Solution</a>.</p></li>
-<li><p><a href="hw04/hw04.html">Homework 4</a>, due Mon Mar 1, 11:59pm. <a href="hw04/sol04.html">Solution</a>.</p></li>
-</ul>
-<!--
-
-[Solution](hw04/sol04.html).
-
-* [Homework 5](hw05/hw05.html), due 5pm on Mon Mar 16. [Solution](hw05/sol05.html).
-
-* [Homework 6](hw06/hw06.html), due 5pm on Mon Mar 23. [Solution](hw06/sol06.html).
-
-
-* [Homework 7](hw07/hw07.html), due 5pm on Mon Mar 30.
-
-[Solution](hw07/sol07.html).
-
-
-* [Homework 8](hw08/hw08.html), due 5pm on Mon Apr 13.
-[Solution](hw08/sol08.html).
-[slurm script](hw08/sol-3.bat).
-
--->
-<hr />
-</div>
-<div id="midterm-project" class="section level2">
-<h2>Midterm project</h2>
-<ul>
-<li><p><a href="midterm_project/midterm_project_info.html">Information</a>.</p></li>
-<li><p><a href="midterm_project/index.html">2021 midterm projects</a></p></li>
-</ul>
-<!--
-* [2020 midterm projects](midterm_project/index.html)
-
--->
-<ul>
-<li>You are welcome to browse previous midterm projects from <a href="http://ionides.github.io/531w16/midterm_project/">2016</a>, <a href="http://ionides.github.io/531w18/midterm_project/">2018</a> and <a href="http://ionides.github.io/531w20/midterm_project/">2020</a></li>
-</ul>
-<hr />
-</div>
-<div id="final-project" class="section level2">
-<h2>Final project</h2>
-<!--
-* [Information](final_project/final_project_info.html)
-
-* [2020 final projects](final_project/index.html)
--->
-<ul>
-<li><p>Information to be posted.</p></li>
-<li><p>You’re welcome to browse previous final projects for <a href="http://ionides.github.io/531w16/final_project/">2016</a>, <a href="http://ionides.github.io/531w18/final_project/">2018</a> and <a href="http://ionides.github.io/531w20/final_project/">2020</a> . If building on previous source code, note that there are some differences between versions of the software package <strong>pomp</strong>. The <a href="https://kingaa.github.io/pomp/vignettes/upgrade_guide.html"><strong>pomp</strong> version 2 upgrade guide</a> can be helpful.</p></li>
-</ul>
-<hr />
-<!--
-
-## Using the Great Lakes cluster
-
-Below are materials to help you get started using Great Lakes.
-If you are already familiar with using R on Great Lakes, all you need to know is the class account: ```stats531w21_class```.
-You are expected to use this account only for computations related to STATS 531.
-Please share knowledge about cluster computing between group members, and/or on piazza, to help everyone who wants to learn these skills.
-
-Notes on using R and pomp on Great Lakes.
-[ pdf. ](cluster/STATS_531_Introduction_to_R_and_pomp_on_Great_Lakes.pdf)
-[ recording. ](https://drive.google.com/open?id=1uQPghu5clYFK2lDEMhaj49yAYB8tlpc-)
-<br>
-Thanks to
-[Charles Antonelli](http://www-personal.umich.edu/~cja/).
-<br>
-Charles is available by Zoom for office hours MWF 12-1 ET, for help getting started with Great Lakes.
-<br>
-Join Zoom Meeting https://umich.zoom.us/j/109966785.
-<br>
-Meeting ID: 109 966 785
-<br>
-Password: 066033
-<br>
-Cluster-related questions can also be emailed to hpc-support@umich.edu.
-
--->
-<hr />
-</div>
 
 
 

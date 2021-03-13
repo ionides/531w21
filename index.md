@@ -23,26 +23,27 @@ A course outline, course information and grading policies are described in the [
 
 ## Class notes and lectures
 
-1. [Introduction](01/index.html).
+1. [Introduction](01/index.html)
 
-2. [Time series models, trend and autocovariance](02/index.html).
+2. [Time series models, trend and autocovariance](02/index.html)
 
-3. [Stationarity, white noise, and some basic time series models](03/index.html).
+3. [Stationarity, white noise, and some basic time series models](03/index.html)
 
-4. [Linear time series models and the algebra of ARMA models](04/index.html).
+4. [Linear time series models and the algebra of ARMA models](04/index.html)
 
-5. [Parameter estimation and model identification for ARMA models](05/index.html).
+5. [Parameter estimation and model identification for ARMA models](05/index.html)
 
 6. [Extending the ARMA model: Seasonality, integration and trend](06/index.html)
 
-7. [Introduction to time series analysis in the frequency domain](07/index.html).
+7. [Introduction to time series analysis in the frequency domain](07/index.html)
 
-8. [Smoothing in the time and frequency domains](08/index.html).
+8. [Smoothing in the time and frequency domains](08/index.html)
 
 9. [Case study: An association between unemployment and mortality?](09/index.html)
 
-10. [Introduction to partially observed Markov process models](10/index.html).
+10. [Introduction to partially observed Markov process models](10/index.html)
 
+11. [Introduction to simulation-based inference for epidemiological dynamics via the pomp R package](11/index.html)
 
 <!--
 
