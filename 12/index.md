@@ -11,14 +11,14 @@ The Susceptible-Infected-Recovered (SIR) model used for this chapter is a centra
 
 | | ||
 |:---------------|:---------------|:------------------------:|
-| Lecture: Chapter 12, Part 1  | Compartment models | [Video (17 mins)](https://youtu.be/l5YCll5qcP0) | 
-| Lecture: Chapter 12, Part 2  | Euler's method for simulating Markov processes | [Video (24 mins)](https://youtu.be/69F4oEjXkug) |
-| Lecture: Chapter 12, Part 3  | Compartment models in the pomp package | [Video (47 mins)](https://youtu.be/XmUQR1Bp8C4) |
-| Lecture: Chapter 12, Part 4  | Discussion of exercises | [Video (10 mins)](https://youtu.be/sNcNhvNY2Ro) |
-| Lecture slides  | | [PDF](https://kingaa.github.io/sbied/stochsim/slides.pdf) |
-| Lecture notes   | | [PDF](https://kingaa.github.io/sbied/stochsim/notes.pdf) |
-| **R** script for Chapter 12      | | [**R**](https://kingaa.github.io/sbied/stochsim/main.R)                                                                   |
-| Worked solutions to the Exercises | | [HTML](https://kingaa.github.io/sbied/stochsim/exercises.html)                    
+| Chapter 12, Part 1  | Compartment models | [Lecture video (17 mins)](https://youtu.be/l5YCll5qcP0) | 
+| Chapter 12, Part 2  | Euler's method for simulating Markov processes | [Lecture video (24 mins)](https://youtu.be/69F4oEjXkug) |
+| Chapter 12, Part 3  | Compartment models in the pomp package | [Lecture video (47 mins)](https://youtu.be/XmUQR1Bp8C4) |
+| Chapter 12, Part 4  | Discussion of exercises | [Lecture video (10 mins)](https://youtu.be/sNcNhvNY2Ro) |
+| Slides  | | [pdf](https://kingaa.github.io/sbied/stochsim/slides.pdf) |
+| Notes   | | [pdf](https://kingaa.github.io/sbied/stochsim/notes.pdf) |
+| **R** script  | | [**R**](https://kingaa.github.io/sbied/stochsim/main.R)                                                                   |
+| Worked solutions to the Exercises | | [html](https://kingaa.github.io/sbied/stochsim/exercises.html)                    
 -----------
 
 
