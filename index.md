@@ -45,12 +45,9 @@ A course outline, course information and grading policies are described in the [
 
 11. [Introduction to simulation-based inference for epidemiological dynamics via the pomp R package](11/index.html)
 
-<!--
+12. [Simulation of stochastic dynamic models](12/index.html)
 
-10. Statistical methodology for nonlinear partially observed Markov process models.
-[ pdf. ](10/notes10.pdf)
-[ R script. ](10/notes10.R)
-[ annotations. ](10/notes10-annotated.pdf)
+<!--
 
 11. Dynamic models and their simulation by Euler’s method.
 [ pdf. ](11/notes11.pdf)
