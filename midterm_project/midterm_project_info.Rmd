@@ -39,6 +39,8 @@ output:
 
     + Reaching a conclusion. You should say what you have concluded about your question(s).
 
+    + Communication style. Material should be presented in a way that helps the reader to appreciate the contribution of the project. Code and computer output are included only if they are pertinent to the discussion. Usually, code remains in the source file, and numerical results are presented in tables or graphs or text, rather than raw computer output.
+
     + You will submit your source code, but you should not expect the reader to study it. If the reader has to study the source code, your report probably has not explained well enough what you were doing.
 
 * Statistical methodology. [10 points]
@@ -48,6 +50,8 @@ output:
     + The models and methods you use should be fully explained, either by references or within your report.
 
     + Focus on a few, carefully explained and justified, figures, tables, statistics and hypothesis tests. You may want to try many things, but only write up evidence supporting how the data help you to get from your question to your conclusions. Value the reader's time: you may lose points for including material that is of borderline relevance, or that is not adequately explained and motivated.
+
+    + Correctness. Obviously, we aim to avoid errors in the math we present, our code, or the reasoning used to draw conclusions from results. Being self-critical and paying attention to detail can help here. 
 
 * Scholarship. [10 points]
 
