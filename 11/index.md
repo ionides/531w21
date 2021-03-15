@@ -15,14 +15,14 @@ Chapter 11 Part 2 has overlap with Chapter 10. It may be no bad thing to see the
 
 | | | | 
 |:---|:---|:---|
-| Chapter 11, Part 1  | Time series analysis and mechanistic models in ecology and epidemiology | [Lecture video (20 mins)](https://youtu.be/1MY8NuJ5fr4) | 
+| Chapter 11, Part 1  | Time series analysis and mechanistic models in ecology and epidemiology | [Lecture video (20 mins)](https://youtu.be/4u796f3cBS0) | 
 | Chapter 11, Part 2  | Introduction to POMP models | [Lecture video (22 mins)](https://youtu.be/-P4lwVDHxjQ) |
 | Chapter 11, Part 3  | The pomp R package for POMP models | [Lecture video (7 mins)](https://youtu.be/1MY8NuJ5fr4) |
 | Slides  | |  [pdf](https://kingaa.github.io/sbied/intro/slides.pdf) |
 | Notes   | | [pdf](https://kingaa.github.io/sbied/intro/notes.pdf) |
 ----------------------
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/1MY8NuJ5fr4" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/4u796f3cBS0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/-P4lwVDHxjQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
