@@ -142,13 +142,11 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 ## Final project
 
-<!--
 * [Information](final_project/final_project_info.html)
 
+<!--
 * [2020 final projects](final_project/index.html)
 -->
-
-* Information to be posted.
 
 * You're welcome to browse previous final projects  for [2016](http://ionides.github.io/531w16/final_project/), [2018](http://ionides.github.io/531w18/final_project/) and [2020](http://ionides.github.io/531w20/final_project/) 
 . If building on previous source code, note that there are some differences between versions of the software package **pomp**. The [**pomp** version 2 upgrade guide](https://kingaa.github.io/pomp/vignettes/upgrade_guide.html) can be helpful.
