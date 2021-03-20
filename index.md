@@ -47,14 +47,9 @@ A course outline, course information and grading policies are described in the [
 
 12. [Simulation of stochastic dynamic models](12/index.html)
 
-<!--
+13. [Likelihood for POMP models: Theory and practice](13/index.html)
 
-11. Dynamic models and their simulation by Euler’s method.
-[ pdf. ](11/notes11.pdf)
-[ R script. ](11/notes11.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=1_R5BNaqtX0comQ_0jHNDQwAF3f8CtmmP)
-[ part 2. ](https://drive.google.com/open?id=1GDce46Ucx4TKEwAhz4fClUKmpCQdZJ1k)
+<!--
 
 12. Practical likelihood-based inference for POMP models.
 [ pdf. ](12/notes12.pdf)
