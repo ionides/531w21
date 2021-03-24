@@ -98,11 +98,7 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 [Solution](hw04/sol04.html).
 
 * [Homework 5](hw05/hw05.html), due Mon Mar 22, 11:59pm.
-
-<!--
-
 [Solution](hw05/sol05.html).
--->
 
 * [Homework 6](hw06/hw06.html), due Mon Mar 29, 11:59pm. 
 
