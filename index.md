@@ -157,32 +157,17 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 --------
 
 
-<!--
-
 ## Using the Great Lakes cluster
 
-Below are materials to help you get started using Great Lakes.
-If you are already familiar with using R on Great Lakes, all you need to know is the class account: ```stats531w21_class```.
-You are expected to use this account only for computations related to STATS 531.
-Please share knowledge about cluster computing between group members, and/or on piazza, to help everyone who wants to learn these skills.
+* [Introctory notes](greatlakes/index.html) for using our class account on the greatlakes cluster. This is optional but may be helpful for your final project.
 
-Notes on using R and pomp on Great Lakes.
-[ pdf. ](cluster/STATS_531_Introduction_to_R_and_pomp_on_Great_Lakes.pdf)
-[ recording. ](https://drive.google.com/open?id=1uQPghu5clYFK2lDEMhaj49yAYB8tlpc-)
-<br>
-Thanks to
-[Charles Antonelli](http://www-personal.umich.edu/~cja/).
-<br>
-Charles is available by Zoom for office hours MWF 12-1 ET, for help getting started with Great Lakes.
-<br>
-Join Zoom Meeting https://umich.zoom.us/j/109966785.
-<br>
-Meeting ID: 109 966 785
-<br>
-Password: 066033
-<br>
-Cluster-related questions can also be emailed to hpc-support@umich.edu.
+* If you are already familiar with using R on Great Lakes, all you need to know is the class account: ```stats531w21_class```.
 
--->
+* You are expected to use our class account only for computations related to STATS/DATASCI 531.
+
+* Please share knowledge about cluster computing between group members, and/or on piazza, to help everyone who wants to learn these skills.
+
+* Cluster-related questions can also be emailed to hpc-support@umich.edu.
+
 
 ---------
