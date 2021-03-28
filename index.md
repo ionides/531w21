@@ -108,7 +108,11 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 [Solution](hw06/sol06.html).
 
-* [Homework 7](hw07/hw07.html), due 5pm on Mon Mar 30.
+-->
+
+* [Homework 7](hw07/hw07.html), due Mon Apr 5, 11:50pm.
+
+<!--
 
 [Solution](hw07/sol07.html).
 
