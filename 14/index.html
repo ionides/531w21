@@ -9,10 +9,10 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
-<meta name="author" content="Instructor: Edward L. Ionides" />
+<meta name="author" content="Kidus Asfaw, Edward L. Ionides and Aaron A. King" />
 
 
-<title>STATS/DATASCI 531 (Winter 2021)  ‘Analysis of Time Series’</title>
+<title>Analysis of Time Series STATS/DATASCI 531, Winter 2021 Chapter 14: Likelihood maximization for POMP models</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -385,159 +385,78 @@ summary {
 
 
 
-<h1 class="title toc-ignore">STATS/DATASCI 531 (Winter 2021) <br>‘Analysis of Time Series’</h1>
-<h4 class="author">Instructor: Edward L. Ionides</h4>
+<h1 class="title toc-ignore">Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 14: Likelihood maximization for POMP models</h1>
+<h4 class="author">Kidus Asfaw, Edward L. Ionides and Aaron A. King</h4>
 
 </div>
 
-<div id="TOC">
-<ul>
-<li><a href="#course-description">Course description</a></li>
-<li><a href="#class-notes-and-lectures">Class notes and lectures</a></li>
-<li><a href="#homework-assignments">Homework assignments</a></li>
-<li><a href="#midterm-project">Midterm project</a></li>
-<li><a href="#final-project">Final project</a></li>
-</ul>
-</div>
 
+<p>We continue using material from the short course <a href="https://kingaa.github.io/sbied/">Simulation-Based Inference for Epidemiological Dynamics</a> (SBIED). Chapter 14 is Lesson 4 of SBIED. The main topic is likelihood maximization via an iterated particle filter. This enables a range of tools of likelihood-based inference to be applied—maximum likelihood estimation, likelihood ratio tests, profile likelihood confidence intervals, and AIC for model selection. Methods are demonstrated on a model for measles, but these techniques apply to the wide range of POMP models for which particle filtering is applicable.</p>
+<table>
+<colgroup>
+<col width="27%" />
+<col width="27%" />
+<col width="44%" />
+</colgroup>
+<tbody>
+<tr class="odd">
+<td align="left">Chapter 14, Sections I,II</td>
+<td align="left">Classification of inference methods for POMP models</td>
+<td align="center"><a href="https://youtu.be/OaKbivero6I">Lecture video (16 mins)</a></td>
+</tr>
+<tr class="even">
+<td align="left">Chapter 14, Section III</td>
+<td align="left">Introduction to iterated filtering</td>
+<td align="center"><a href="https://youtu.be/4icXW5pdc5E">Lecture video (15 mins)</a></td>
+</tr>
+<tr class="odd">
+<td align="left">Chapter 14, Section IV</td>
+<td align="left">Iterated filtering in practice</td>
+<td align="center"><a href="https://youtu.be/83gPuWGKmlo">Lecture video (43 mins)</a></td>
+</tr>
+<tr class="even">
+<td align="left">Chapter 14, Sections V</td>
+<td align="left">Global likelihood maximization and profile likelihood</td>
+<td align="center"><a href="https://youtu.be/DK9IZFGGYFw">Lecture video (34 mins)</a></td>
+</tr>
+<tr class="odd">
+<td align="left">Chapter 14, Section VI</td>
+<td align="left">Using likelihood and profile calculations to develop a data analysis</td>
+<td align="center"><a href="https://youtu.be/90YyPZiV344">Lecture video (25 mins)</a></td>
+</tr>
+<tr class="even">
+<td align="left">Slides</td>
+<td align="left"></td>
+<td align="center"><a href="https://kingaa.github.io/sbied/mif/slides.pdf">pdf</a></td>
+</tr>
+<tr class="odd">
+<td align="left">Notes</td>
+<td align="left"></td>
+<td align="center"><a href="https://kingaa.github.io/sbied/mif/notes.pdf">pdf</a></td>
+</tr>
+<tr class="even">
+<td align="left"><strong>R</strong> script</td>
+<td align="left"></td>
+<td align="center"><a href="https://kingaa.github.io/sbied/mif/main.R"><strong>R</strong></a></td>
+</tr>
+</tbody>
+</table>
 <hr />
-<div id="course-description" class="section level2">
-<h2>Course description</h2>
-<p>This course gives an introduction to time series analysis using time domain methods and frequency domain methods. The goal is to acquire the theoretical and computational skills required to investigate data collected as a time series. The first half of the course will develop classical time series methodology, including auto-regressive moving average (ARMA) models, regression with ARMA errors, and estimation of the spectral density. The second half of the course will focus on state space model techniques for fitting structured dynamic models to time series data. We will progress from fitting linear, Gaussian dynamic models to fitting nonlinear models for which Monte Carlo methods are required. Examples will be drawn from ecology, economics, epidemiology, finance and elsewhere.</p>
-<p>A course outline, course information and grading policies are described in the <a href="syllabus.html">syllabus</a>.</p>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/OaKbivero6I" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/4icXW5pdc5E" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/83gPuWGKmlo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/DK9IZFGGYFw" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/90YyPZiV344" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
+</iframe>
 <hr />
-</div>
-<div id="class-notes-and-lectures" class="section level2">
-<h2>Class notes and lectures</h2>
-<ol style="list-style-type: decimal">
-<li><p><a href="01/index.html">Introduction</a></p></li>
-<li><p><a href="02/index.html">Time series models, trend and autocovariance</a></p></li>
-<li><p><a href="03/index.html">Stationarity, white noise, and some basic time series models</a></p></li>
-<li><p><a href="04/index.html">Linear time series models and the algebra of ARMA models</a></p></li>
-<li><p><a href="05/index.html">Parameter estimation and model identification for ARMA models</a></p></li>
-<li><p><a href="06/index.html">Extending the ARMA model: Seasonality, integration and trend</a></p></li>
-<li><p><a href="07/index.html">Introduction to time series analysis in the frequency domain</a></p></li>
-<li><p><a href="08/index.html">Smoothing in the time and frequency domains</a></p></li>
-<li><p><a href="09/index.html">Case study: An association between unemployment and mortality?</a></p></li>
-<li><p><a href="10/index.html">Introduction to partially observed Markov process models</a></p></li>
-<li><p><a href="11/index.html">Introduction to simulation-based inference for epidemiological dynamics via the pomp R package</a></p></li>
-<li><p><a href="12/index.html">Simulation of stochastic dynamic models</a></p></li>
-<li><p><a href="13/index.html">Likelihood for POMP models: Theory and practice</a></p></li>
-<li><p><a href="14/index.html">Likelihood maximization for POMP models</a></p></li>
-</ol>
-<!--
-
-12. Practical likelihood-based inference for POMP models.
-[ pdf. ](12/notes12.pdf)
-[ R script. ](12/notes12.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=1yQGF6WFZzuaydikoQ4iUimwPieyuCjVW)
-[ part 2. ](https://drive.google.com/open?id=1FXdDcLQFGXBj6y0gzSmZ2Cqez0OZ8PUT)
-[ part 3. ](https://drive.google.com/open?id=12aq_lxdtNWbaZAdBfVRawwEkTk32Cy_O)
-
-
-13. Time series models with covariates, and a case study of polio.
-[ pdf. ](13/notes13.pdf)
-[ R script. ](13/notes13.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=15lw9xbcl7jI_bA1-XnHK1jZEwS0cGEYR)
-[ part 2. ](https://drive.google.com/open?id=1Wphv9RITzQGl00dvYM_zNK6iicHeN2Rw)
-
-
-14. Case study: POMP modeling to investigate financial volatility.
-[ pdf. ](14/notes14.pdf)
-[ R script. ](notes14/notes14.R)
-[ recording. ](https://drive.google.com/open?id=1uy3GYiY9DnYjXrz2lEs8-5BtrL_8_oRh)
-
-There are further POMP case studies, in a similar style, on [Ebola modeling](https://kingaa.github.io/sbied/ebola/ebola.html), [measles transmission](https://kingaa.github.io/sbied/measles/measles.html), and [dynamic variation in the rate of human sexual contacts](https://kingaa.github.io/sbied/contacts/contacts.html).
-
--->
+<p><a href="../index.html">Back to course homepage</a><br />
+<a href="../acknowledge.html">Acknowledgements</a><br />
+<a href="http://github.com/kingaa/sbied/tree/master/mif">Source code for these notes</a></p>
 <hr />
-</div>
-<div id="homework-assignments" class="section level2">
-<h2>Homework assignments</h2>
-<p>Please read the <a href="syllabus.html">grading policy in the syllabus</a> before submitting homework.</p>
-<ul>
-<li><p><a href="hw00/hw00.html">Homework 0</a>. Setting up your computational environment. Nothing to submit.</p></li>
-<li><p><a href="hw01/hw01.html">Homework 1</a>, due Mon Feb 1, 11:59pm. <a href="hw01/sol01.html">Solution</a>.</p></li>
-<li><p><a href="hw02/hw02.html">Homework 2</a>, due Mon Feb 8, 11:59pm. <a href="hw02/sol02.html">Solution</a>.</p></li>
-<li><p><a href="hw03/hw03.html">Homework 3</a>, due Mon Feb 22, 11:59pm. <a href="hw03/sol03.html">Solution</a>.</p></li>
-<li><p><a href="hw04/hw04.html">Homework 4</a>, due Mon Mar 1, 11:59pm. <a href="hw04/sol04.html">Solution</a>.</p></li>
-<li><p><a href="hw05/hw05.html">Homework 5</a>, due Mon Mar 22, 11:59pm. <a href="hw05/sol05.html">Solution</a>.</p></li>
-<li><p><a href="hw06/hw06.html">Homework 6</a>, due Mon Mar 29, 11:59pm.</p></li>
-</ul>
-<!--
-
-[Solution](hw06/sol06.html).
-
-* [Homework 7](hw07/hw07.html), due 5pm on Mon Mar 30.
-
-[Solution](hw07/sol07.html).
-
-
-* [Homework 8](hw08/hw08.html), due 5pm on Mon Apr 13.
-[Solution](hw08/sol08.html).
-[slurm script](hw08/sol-3.bat).
-
--->
-<hr />
-</div>
-<div id="midterm-project" class="section level2">
-<h2>Midterm project</h2>
-<ul>
-<li><p><a href="midterm_project/midterm_project_info.html">Information</a>.</p></li>
-<li><p><a href="midterm_project/index.html">2021 midterm projects</a></p></li>
-</ul>
-<!--
-* [2020 midterm projects](midterm_project/index.html)
-
--->
-<ul>
-<li>You are welcome to browse previous midterm projects from <a href="http://ionides.github.io/531w16/midterm_project/">2016</a>, <a href="http://ionides.github.io/531w18/midterm_project/">2018</a> and <a href="http://ionides.github.io/531w20/midterm_project/">2020</a></li>
-</ul>
-<hr />
-</div>
-<div id="final-project" class="section level2">
-<h2>Final project</h2>
-<ul>
-<li><a href="final_project/final_project_info.html">Information</a></li>
-</ul>
-<!--
-* [2020 final projects](final_project/index.html)
--->
-<ul>
-<li>You’re welcome to browse previous final projects for <a href="http://ionides.github.io/531w16/final_project/">2016</a>, <a href="http://ionides.github.io/531w18/final_project/">2018</a> and <a href="http://ionides.github.io/531w20/final_project/">2020</a> . If building on previous source code, note that there are some differences between versions of the software package <strong>pomp</strong>. The <a href="https://kingaa.github.io/pomp/vignettes/upgrade_guide.html"><strong>pomp</strong> version 2 upgrade guide</a> can be helpful. The changes from <strong>pomp2.0</strong> to the current <strong>pomp3.3</strong> are smaller.</li>
-</ul>
-<hr />
-<!--
-
-## Using the Great Lakes cluster
-
-Below are materials to help you get started using Great Lakes.
-If you are already familiar with using R on Great Lakes, all you need to know is the class account: ```stats531w21_class```.
-You are expected to use this account only for computations related to STATS 531.
-Please share knowledge about cluster computing between group members, and/or on piazza, to help everyone who wants to learn these skills.
-
-Notes on using R and pomp on Great Lakes.
-[ pdf. ](cluster/STATS_531_Introduction_to_R_and_pomp_on_Great_Lakes.pdf)
-[ recording. ](https://drive.google.com/open?id=1uQPghu5clYFK2lDEMhaj49yAYB8tlpc-)
-<br>
-Thanks to
-[Charles Antonelli](http://www-personal.umich.edu/~cja/).
-<br>
-Charles is available by Zoom for office hours MWF 12-1 ET, for help getting started with Great Lakes.
-<br>
-Join Zoom Meeting https://umich.zoom.us/j/109966785.
-<br>
-Meeting ID: 109 966 785
-<br>
-Password: 066033
-<br>
-Cluster-related questions can also be emailed to hpc-support@umich.edu.
-
--->
-<hr />
-</div>
 
 
 
