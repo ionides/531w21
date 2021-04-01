@@ -18,7 +18,7 @@ Section VII looks deeper at likelihood inference - there is overlap with Chapter
 | Chapter 13, Sections I,II | The likelihood function and the likelihood of a POMP model | [Lecture video (23 mins)](https://youtu.be/y0Wc6qt5qY0) | 
 | Chapter 13, Section III | Computing the likelihood | [Lecture video (27 mins)](https://youtu.be/uZZKglvJq0c) |
 | Chapter 13, Section IV | Review of likelihood-based inference | [Lecture video (12 mins)](https://youtu.be/68cX1ckgusY) |
-| Chapter 13, Sections V,VI | Geometry of the likelihood function | [Lecture video (33 mins)](https://youtu.be/RVc-4Ebx88k) |
+| Chapter 13, Sections V,VI | Geometry of the likelihood function | [Lecture video (31 mins)](https://youtu.be/oNpdp5WcdUQ) |
 | Chapter 13, Section VII | From likelihood evaluation toward inference | [Lecture video (17 mins)](https://youtu.be/ZJ7mmC0E3zs) |
 | Slides  | | [pdf](https://kingaa.github.io/sbied/pfilter/slides.pdf) |
 | Notes   | | [pdf](https://kingaa.github.io/sbied/pfilter/notes.pdf) |
@@ -32,8 +32,7 @@ Section VII looks deeper at likelihood inference - there is overlap with Chapter
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/68cX1ckgusY" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/RVc-4Ebx88k
-" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/oNpdp5WcdUQ" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/ZJ7mmC0E3zs" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 

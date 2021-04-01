@@ -10,7 +10,7 @@ We continue using material from the short course [Simulation-Based Inference for
 |:---------------|:---------------|:------------------------:|
 | Chapter 14, Sections I,II | Classification of inference methods for POMP models | [Lecture video (16 mins)](https://youtu.be/OaKbivero6I) | 
 | Chapter 14, Section III | Introduction to iterated filtering | [Lecture video (15 mins)](https://youtu.be/4icXW5pdc5E) |
-| Chapter 14, Section IV | Iterated filtering in practice | [Lecture video (43 mins)](https://youtu.be/83gPuWGKmlo) |
+| Chapter 14, Section IV | Iterated filtering in practice | [Lecture video (41 mins)](https://youtu.be/Kq_11Xg8n7E) |
 | Chapter 14, Sections V | Global likelihood maximization and profile likelihood | [Lecture video (34 mins)](https://youtu.be/DK9IZFGGYFw) |
 | Chapter 14, Section VI | Using likelihood and profile calculations to develop a data analysis | [Lecture video (25 mins)](https://youtu.be/90YyPZiV344) |
 | Slides  | | [pdf](https://kingaa.github.io/sbied/mif/slides.pdf) |
@@ -23,7 +23,7 @@ We continue using material from the short course [Simulation-Based Inference for
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/4icXW5pdc5E" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/83gPuWGKmlo" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Kq_11Xg8n7E" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/DK9IZFGGYFw" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
