@@ -51,24 +51,9 @@ A course outline, course information and grading policies are described in the [
 
 14. [Likelihood maximization for POMP models](14/index.html)
 
+15. [A case study of polio including covariates, seasonality & over-dispersion](15/index.html)
+
 <!--
-
-12. Practical likelihood-based inference for POMP models.
-[ pdf. ](12/notes12.pdf)
-[ R script. ](12/notes12.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=1yQGF6WFZzuaydikoQ4iUimwPieyuCjVW)
-[ part 2. ](https://drive.google.com/open?id=1FXdDcLQFGXBj6y0gzSmZ2Cqez0OZ8PUT)
-[ part 3. ](https://drive.google.com/open?id=12aq_lxdtNWbaZAdBfVRawwEkTk32Cy_O)
-
-
-13. Time series models with covariates, and a case study of polio.
-[ pdf. ](13/notes13.pdf)
-[ R script. ](13/notes13.R)
-recording:
-[ part 1. ](https://drive.google.com/open?id=15lw9xbcl7jI_bA1-XnHK1jZEwS0cGEYR)
-[ part 2. ](https://drive.google.com/open?id=1Wphv9RITzQGl00dvYM_zNK6iicHeN2Rw)
-
 
 14. Case study: POMP modeling to investigate financial volatility.
 [ pdf. ](14/notes14.pdf)
@@ -106,6 +91,9 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 [Solution](hw06/sol06.html).
 
 * [Homework 7](hw07/hw07.html), due Mon Apr 5, 11:50pm.
+
+* There is no assigned homework for the last two weeks of the semester. You should work on your final project. The lectures for these weeks contain material that will be useful for your final projects. Also, you can optionally look at the exercises in the [notes for Chapter 15](https://kingaa.github.io/sbied/polio/notes.pdf) which have [worked solutions online](15/index.html).
+
 
 <!--
 

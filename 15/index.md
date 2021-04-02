@@ -29,7 +29,12 @@ Sections VI and VII follow the same route we took for the Consett measles analys
 | Chapter 15, Section VII | A profile likelihood for polio | [Lecture video (7 mins)](https://youtu.be/O2OMIPukzVI) |
 | Slides  | | [pdf](https://kingaa.github.io/sbied/polio/slides.pdf) |
 | Notes   | | [pdf](https://kingaa.github.io/sbied/polio/notes.pdf) |
-| **R** script  | | [**R**](https://kingaa.github.io/sbied/polio/main.R)                                                                   |
+| **R** script  | | [**R**](https://kingaa.github.io/sbied/polio/main.R) |
+Worked solution to Exercise 6.1 | | [HTML](https://kingaa.github.io/sbied/polio/algorithmic-parameters-exercise.html)                                      |
+| Worked solution to Exercise 6.2 | | [HTML](https://kingaa.github.io/sbied/polio/initial-values-exercise.html)                                              |
+| Worked solution to Exercise 6.3 | | [HTML](https://kingaa.github.io/sbied/polio/starting-values-exercise.html)                                             |
+| Worked solution to Exercise 6.4 | | [HTML](https://kingaa.github.io/sbied/polio/demography-exercise.html)                                                  |
+| Worked solution to Exercise 6.5 | | [HTML](https://kingaa.github.io/sbied/polio/convergence-exercise.html)                                                                      |
 -----------
 
 
