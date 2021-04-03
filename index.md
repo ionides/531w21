@@ -138,7 +138,7 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 -->
 
 * You're welcome to browse previous final projects  for [2016](http://ionides.github.io/531w16/final_project/), [2018](http://ionides.github.io/531w18/final_project/) and [2020](http://ionides.github.io/531w20/final_project/) 
-. If building on previous source code, note that there are some differences between versions of the software package **pomp**. The [**pomp** version 2 upgrade guide](https://kingaa.github.io/pomp/vignettes/upgrade_guide.html) can be helpful. The changes from **pomp2.0** to the current **pomp3.3** are smaller.
+. If building on previous source code, note that there are some differences between versions of the software package **pomp**. The [**pomp** version 2 upgrade guide](https://kingaa.github.io/pomp/vignettes/upgrade_guide.html) can be helpful. The changes from **pomp 2.0** to the current **pomp 3.3** are smaller.
 
 
 --------
@@ -146,7 +146,7 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 ## Using the Great Lakes cluster
 
-* [Introctory notes](greatlakes/index.html) for using our class account on the greatlakes cluster. This is optional but may be helpful for your final project.
+* [Introductory notes](greatlakes/index.html) for using our class account on the greatlakes cluster. This is optional but may be helpful for your final project.
 
 * If you are already familiar with using R on Great Lakes, all you need to know is the class account: ```stats531w21_class```.
 
