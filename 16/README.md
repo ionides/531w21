@@ -4,7 +4,7 @@ author: "Edward L. Ionides"
 output: html_document
 ---
 
-This provides an example for the more general task of running pomp analysis on a Linux cluster using Slurm scheduling.
+This provides an example for the more general task of running pomp analysis on a Linux cluster using Slurm scheduling. This is an example of the even more general task of organizing reproducible and computationally intensive statistical data analysis.
 
 1. Copy the files to greatlakes. For moving the chapter 16 code to greatlakes, I cloned the 531w21 git repository. I could also have used scp.
 
