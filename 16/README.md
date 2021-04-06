@@ -30,14 +30,14 @@ This provides an example for the more general task of running pomp analysis on a
     R
     ```
 
-    (e) within R, we try knitting the source file. Here, it is Rnw, but Rmd would sork the same way.
+    (e) within R, we try knitting the source file. Here, it is Rnw, but Rmd would work the same way.
     ```
     knitr::knit("main.Rnw")
     ```
 
     (f) likely, you will be missing some packages and you will have to run install.packages in your R session.
 
-    (g) when step (e) is working for you, it will produce main.tex (or a .md file from .Rmd). It will also produce all the rda files saving the output of the computations.
+    (g) when step (e) is working for you, it will produce main.tex (or a md file from Rmd). It will also produce all the rda files saving the output of the computations.
 
     (h) copy the rda files back to your laptop. You can then edit the text of your document without having to re-run the code.
 
