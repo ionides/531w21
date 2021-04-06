@@ -12,7 +12,7 @@
 <meta name="author" content="Edward L. Ionides" />
 
 
-<title>Analysis of Time Series STATS/DATASCI 531, Winter 2021 Chapter 16: A case study of financial volatility and a POMP model with observations driving latent dynamics</title>
+<title>Analysis of Time Series STATS/DATASCI 531, Winter 2021 Running the Chapter 16 notes on greatlakes</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -385,69 +385,53 @@ summary {
 
 
 
-<h1 class="title toc-ignore">Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 16: A case study of financial volatility and a POMP model with observations driving latent dynamics</h1>
+<h1 class="title toc-ignore">Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Running the Chapter 16 notes on greatlakes</h1>
 <h4 class="author">Edward L. Ionides</h4>
 
 </div>
 
 
-<hr />
-<table>
-<thead>
-<tr class="header">
-<th align="left"> </th>
-<th align="center"> </th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td align="left">Lecture: Chapter 16, Part 1</td>
-<td align="center"><a href="https://youtu.be/">Video ( mins)</a></td>
-</tr>
-<tr class="even">
-<td align="left">Lecture: Chapter 16, Part 2</td>
-<td align="center"><a href="https://youtu.be/">Video ( mins)</a></td>
-</tr>
-<tr class="odd">
-<td align="left">Lecture: Chapter 16, Part 3</td>
-<td align="center"><a href="https://youtu.be/">Video ( mins)</a></td>
-</tr>
-<tr class="even">
-<td align="left">Lecture: Chapter 16, Part 4</td>
-<td align="center"><a href="https://youtu.be/">Video ( mins)</a></td>
-</tr>
-<tr class="odd">
-<td align="left">Lecture slides</td>
-<td align="center"><a href="slides.pdf">PDF</a></td>
-</tr>
-<tr class="even">
-<td align="left">Annotated slides</td>
-<td align="center"><a href="slides-annotated.pdf">PDF</a></td>
-</tr>
-<tr class="odd">
-<td align="left">Lecture notes</td>
-<td align="center"><a href="notes.pdf">PDF</a></td>
-</tr>
-<tr class="even">
-<td align="left">Running the notes on greatlakes</td>
-<td align="center"><a href="README.html">HTML</a></td>
-</tr>
-</tbody>
-</table>
-<hr />
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
-</iframe>
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
-</iframe>
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
-</iframe>
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen>
-</iframe>
-<hr />
-<p><a href="../index.html">Back to course homepage</a><br />
-<a href="../acknowledge.html">Acknowledgements</a><br />
-<a href="http://github.com/ionides/531w21/tree/master/16/">Source code for these notes</a></p>
-<hr />
+<p>This provides an example for the more general task of running pomp analysis on a Linux cluster using Slurm scheduling.</p>
+<ol style="list-style-type: decimal">
+<li><p>Copy the files to greatlakes. For moving the chapter 16 code to greatlakes, I cloned the 531w21 git repository. I could also have used scp.</p></li>
+<li><p>Check the code is running, via an interactive session at run level 1</p>
+<ol style="list-style-type: lower-alpha">
+<li>edit main.Rnw to make sure run level is set to 1, e.g., using</li>
+</ol>
+<pre><code>nano main.Rnw</code></pre>
+<ol start="2" style="list-style-type: lower-alpha">
+<li>start an interactive session on greatlakes, e.g., by</li>
+</ol>
+<pre><code>srun --nodes=1 --account=stats531w21_class --ntasks-per-node=2 --pty /bin/bash</code></pre>
+<ol start="3" style="list-style-type: lower-alpha">
+<li>load a current version of R</li>
+</ol>
+<pre><code>module load R/4.0.3</code></pre>
+<ol start="4" style="list-style-type: lower-alpha">
+<li>start R in the 531w21/16 directory</li>
+</ol>
+<pre><code>R</code></pre>
+<ol start="5" style="list-style-type: lower-alpha">
+<li>within R, we try knitting the source file. Here, it is Rnw, but Rmd would sork the same way.</li>
+</ol>
+<pre><code>knitr::knit(&quot;main.Rnw&quot;)</code></pre>
+<ol start="6" style="list-style-type: lower-alpha">
+<li><p>likely, you will be missing some packages and you will have to run install.packages in your R session.</p></li>
+<li><p>when step (e) is working for you, it will produce main.tex (or a .md file from .Rmd). It will also produce all the rda files saving the output of the computations.</p></li>
+<li><p>copy the rda files back to your laptop. You can then edit the text of your document without having to re-run the code.</p></li>
+</ol></li>
+<li><p>Try running the code as a batch file. 531w21/16 has three sbat files corresponding to the three run levels: r-1.sbat, r-2.sbat, r-3.sbat. Try the batch job at run level 1 first. Note that if your knitr/rmarkdown file is using cache, you will have to remove all the cache files. For Chapter 16, the cache is put in a subdirectory called tmp, so we can delete all the cache by</p></li>
+</ol>
+<pre><code>rm -rf tmp</code></pre>
+<p>Then, having set run_level to 1 in main.Rnw, run</p>
+<pre><code>sbatch r-1.sbat</code></pre>
+<p>Also, if you need to re-run all the code at run level 1, you can do</p>
+<pre><code>rm -rf *1.rda</code></pre>
+<p>to remove all the rda files for run level 1.</p>
+<ol start="3" style="list-style-type: decimal">
+<li><p>Once this is debugged, you can move on to run levels 2 and 3. The only differences between r-1.sbat, r-2.sbat and r-3.sbat is the number of cores requested and the wall time. Setting these no larger than needed may lead to shorter queue times, and perhaps fewer billing minutes. Again, you may have to remove cached files, both the knitr/rmarkdown cache and the .rda files if you want to reconstruct them.</p></li>
+<li><p>Once the rda files are computed, you can move them to wherever you are most comfortable for further editing of text and figures.</p></li>
+</ol>
 
 
 

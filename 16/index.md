@@ -15,6 +15,7 @@ output: html_document
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
+| Running the notes on greatlakes | [HTML](README.html) |
 ----------------------
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
