@@ -1,5 +1,5 @@
 ---
-title: "Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 16: A case study of financial volatility and a POMP model with observation-dependent dynamics"
+title: "Analysis of Time Series<br>STATS/DATASCI 531, Winter 2021<br>Chapter 16: A case study of financial volatility and a POMP model with observations driving latent dynamics"
 author: "Edward L. Ionides"
 output: html_document
 ---

@@ -17,7 +17,7 @@
 
 \mode<handout>{\pgfpagesuselayout{2 on 1}[letterpaper,border shrink=5mm]}
 
-\newcommand\CHAPTER{10}
+\newcommand\CHAPTER{16}
 % \newcommand\answer[2]{\textcolor{blue}{#2}} % to show answers
 % \newcommand\answer[2]{\textcolor{red}{#2}} % to show answers
  \newcommand\answer[2]{#1} % to show blank space
@@ -25,7 +25,7 @@
 
 
 \title{\vspace{2mm} \link{https://ionides.github.io/531w21/}{Analysis of Time Series}\\ \vspace{2mm}
-Chapter \CHAPTER: A case study of financial volatility and a POMP model with observation-dependent dynamics}
+Chapter \CHAPTER: A case study of financial volatility and a POMP model with observations driving latent dynamics}
 \author{Edward L. Ionides}
 \date{}
 
@@ -52,26 +52,8 @@ set.seed(2050320976)
 @
 
 
-\section{Introduction to time series models for financial volatility}
+\section{Time series models for financial volatility}
 
-
-\begin{frame}[fragile]{Objectives}
-
-\vspace{3mm}
-
-\begin{enumerate}
-
-\item Introduce financial volatility and some models used to study it: ARCH, GARCH, and stochastic volatility models. 
-
-\item Provide a case study in using \package{pomp} to study a stochastic volatility model.
-
-\item Discuss this case study as an example of a broader class of nonlinear POMP models, derived from adding stochastically time varying parameters to a linear or nonlinear time series model.
-
-\item Discuss this case study as an example of an extension of the POMP framework which allows feedback from the observation process to the state process.
-
-\end{enumerate}
-
-\end{frame}
 
 \begin{frame}[fragile]
 
@@ -207,9 +189,10 @@ and $\epsilon_{1:N}$ is white noise.
 
 \end{frame}
 
-\begin{frame}[fragile]
 
-\frametitle{Fitting a GARCH model}
+\begin{frame}[fragile]{Fitting a GARCH model}
+
+\vspace{-2mm}
 
 <<garch>>=
 require(tseries)
@@ -228,7 +211,7 @@ L.garch <- tseries:::logLik.garch(fit.garch)
 
 \ei
 
-\vspace{3mm}
+\vspace{1mm}
 
 \myquestion. It is usually inappropriate to present numerical results to five significant figures. Does that apply to the log likelihood reported here? Why?
 
@@ -272,7 +255,9 @@ where $\epsilon_n$ and $\eta_n$ are ${\mathrm{\iid}}\, {\normal}[0,1]$.
 \ei
 \end{frame}
 
-\begin{frame}[fragile]{Financial leverage}
+\section{Volatility leverage}
+
+\begin{frame}[fragile]{Volatility leverage}
 
 \bi
 
@@ -632,9 +617,10 @@ stew(file=sprintf("pf1-%d.rda",run_level),{
 
 \end{frame}
 
-\begin{frame}[fragile]
+\section{Fitting the POMP model to data}
 
-\frametitle{Fitting the stochastic leverage model to S\&P500 data}
+
+\begin{frame}[fragile]{Fitting the stochastic leverage model to S\&P500 data}
 
 \bi
 
@@ -675,7 +661,6 @@ stew(file=sprintf("mif1-%d.rda",run_level),{
         params=coef(if1[[i]]),Np=sp500_Np))), se=TRUE)
   })
 })
-
 r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
   t(sapply(if1,coef)))
 if (run_level>1) write.table(r.if1,file="sp500_params.csv",
@@ -707,9 +692,9 @@ pairs(~logLik+sigma_nu+mu_h+phi+sigma_eta,
 
 \end{frame}
 
-\begin{frame}[fragile]
+\subsection{Likelihood maximization}
 
-\frametitle{Likelihood maximization using randomized starting values}
+\begin{frame}[fragile]{Likelihood maximization using randomized starting values}
 
 \bi
 
@@ -784,7 +769,7 @@ pairs(~logLik+log(sigma_nu)+mu_h+phi+sigma_eta+H_0,
 
 \vspace{-4mm}
 
-<<pairs_global_plot,eval=T,echo=F,out.width="11cm">>=
+<<pairs_global_plot,eval=T,echo=F,out.width="12cm">>=
 <<pairs_global_code>>
 @
 \end{frame}
@@ -803,9 +788,9 @@ pairs(~logLik+log(sigma_nu)+mu_h+phi+sigma_eta+H_0,
 
 \end{frame}
 
-\begin{frame}[fragile]
+\subsection{Benchmark non-mechanistic models}
 
-\frametitle{Benchmark likelihoods for alternative models}
+\begin{frame}[fragile]{Benchmark likelihoods for alternative models}
 
 \bi
 
@@ -851,9 +836,9 @@ L.garch.benchmark <- tseries:::logLik.garch(fit.garch.benchmark)
 
 \end{frame}
 
-\begin{frame}[fragile]
+\section{Appendix: Deriving an SMC algorithm for zero measurement error}
 
-\frametitle{Appendix: Proper weighting for a partially plug-and-play algorithm with a perfectly observed state space component}
+\begin{frame}[fragile]{Appendix: Proper weighting for a partially plug-and-play algorithm with a perfectly observed state space component}
 
 \vspace{-2mm}
 
