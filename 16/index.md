@@ -8,23 +8,21 @@ output: html_document
 
 | &nbsp;          | &nbsp;                                                                            |
 |:----------------|:---------------------------------------------------------------------------------:|
-| Lecture: Chapter 16, Part 1  | [Video ( mins)](https://youtu.be/) |
-| Lecture: Chapter 16, Part 2  | [Video ( mins)](https://youtu.be/) |
-| Lecture: Chapter 16, Part 3  | [Video ( mins)](https://youtu.be/) |
-| Lecture: Chapter 16, Part 4  | [Video ( mins)](https://youtu.be/) |
+| Lecture: Chapter 16, Part 1  | [Video (16 mins)](https://youtu.be/cDcPny96Gcs) |
+| Lecture: Chapter 16, Part 2  | [Video (24 mins)](https://youtu.be/TAUDn2RkUWU) |
+| Lecture: Chapter 16, Part 3  | [Video (17 mins)](https://youtu.be/XvM991mISJs) |
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
 | Running the notes on greatlakes | [HTML](README.html) |
 ----------------------
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/cDcPny96Gcs" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/TAUDn2RkUWU" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/XvM991mISJs" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ----------------------
 

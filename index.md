@@ -53,16 +53,10 @@ A course outline, course information and grading policies are described in the [
 
 15. [A case study of polio including covariates, seasonality & over-dispersion](15/index.html)
 
-<!--
-
-14. Case study: POMP modeling to investigate financial volatility.
-[ pdf. ](14/notes14.pdf)
-[ R script. ](notes14/notes14.R)
-[ recording. ](https://drive.google.com/open?id=1uy3GYiY9DnYjXrz2lEs8-5BtrL_8_oRh)
+16. [A case study of financial volatility and a POMP model with observations driving latent dynamics](16/index.html)
 
 There are further POMP case studies, in a similar style, on [Ebola modeling](https://kingaa.github.io/sbied/ebola/ebola.html), [measles transmission](https://kingaa.github.io/sbied/measles/measles.html), and [dynamic variation in the rate of human sexual contacts](https://kingaa.github.io/sbied/contacts/contacts.html).
 
--->
 
 --------
 

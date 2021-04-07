@@ -108,10 +108,10 @@ par(mfrow=c(1,2),mai=c(0.8,0.8,0.1,0.3))
 
 \bi
 
-\item We write $\{\data{z}_n,n=1,\dots,N\}$ for the data.
+\item We write $\{{z}_n,n=1,\dots,N\}$ for the S\&P 500 index value.
 
-\item We write the return on the S\&P 500 index, i.e., the difference of the log of the index, as
-$$ \data{y_n}=\log(\data{z_n})-\log(\data{z_{n-1}}).$$
+\item We write the return, i.e., the difference of the log of the index, as
+$$ \data{y_n}=\log({z_n})-\log({z_{n-1}}).$$
 
 * We saw in Chapter 3 that $\data{y_{2:N}}$ has negligible sample autocorrelation.
 
@@ -251,6 +251,7 @@ X_n &=& \mu + \phi(X_{n-1}-\mu) + \sigma \eta_n \\
 X_0 &=& \mu + \frac{\sigma}{\sqrt{1-\phi^2}} \eta_0
 \end{eqnarray}
 where $\epsilon_n$ and $\eta_n$ are ${\mathrm{\iid}}\, {\normal}[0,1]$.
+Here, $X_n$ is the \myemph{log volatility}.
 \item We can use the flexibility of the POMP framework to see if we can do better.
 \ei
 \end{frame}
@@ -605,7 +606,9 @@ stew(file=sprintf("pf1-%d.rda",run_level),{
 
 \bi
 
-\item In  \Sexpr{round(t.pf1["elapsed"],1)} seconds, we obtain a log likelihood estimate of \Sexpr{round(L.pf1[1],2)} with a Monte standard error of \Sexpr{round(L.pf1[2],2)}. Notice that the replications are averaged using the \code{logmeanexp} function, since the likelihood estimate is unbiased on the natural scale but not the log scale.
+\item In  \Sexpr{round(t.pf1["elapsed"],1)} seconds, we obtain a log likelihood estimate of \Sexpr{round(L.pf1[1],2)} with a Monte~Carlo standard error of \Sexpr{round(L.pf1[2],2)}.
+
+\item Notice that the replications are averaged using the \code{logmeanexp} function, since the likelihood estimate is unbiased on the natural scale but not the log scale.
 
 \item We could test the numerical performance of an iterated filtering likelihood maximization algorithm on simulated data. 
 
