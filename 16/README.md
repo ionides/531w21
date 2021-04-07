@@ -39,7 +39,6 @@ This provides an example for the more general task of running pomp analysis on a
 
     (g) when step (e) is working for you, it will produce main.tex (or a md file from Rmd). It will also produce all the rda files saving the output of the computations.
 
-    (h) copy the rda files back to your laptop. You can then edit the text of your document without having to re-run the code.
 
 2. Try running the code as a batch file. 531w21/16 has three sbat files corresponding to the three run levels: r-1.sbat, r-2.sbat, r-3.sbat. Try the batch job at run level 1 first. Note that if your knitr/rmarkdown file is using cache, you will have to remove all the cache files. For Chapter 16, the cache is put in a subdirectory called tmp, so we can delete all the cache by
 ```
