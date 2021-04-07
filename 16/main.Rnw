@@ -303,14 +303,17 @@ where $\{G_n\}$ is the usual, Gaussian random walk.
 
 \item Following the notation and model representation in equation (4) of \citet{breto14}, we propose a model,
 \begin{align} 
-Y_n &= \exp\{H_n/2\} \epsilon_n, \\
+Y_n &= \exp\{H_n/2\} \, \epsilon_n, \\
 H_n &= \mu_h(1-\phi) + \phi H_{n-1} +
 \beta_{n-1}R_n\exp\{-H_{n-1}/2\} + \omega_n,\\
 G_n &= G_{n-1}+\nu_n,
 \end{align}
-where $\beta_n=Y_n\sigma_\eta\sqrt{1-\phi^2}$, $\{\epsilon_n\}$ is an iid $N(0,1)$ sequence, $\{\nu_n\}$ is an iid $N(0,\sigma_{\nu}^2)$ sequence, and $\{\omega_n\}$ is an iid $N(0,\sigma_\omega^2)$ sequence.
-
-\item Here, $H_n$ is the log volatility.
+where $\beta_n=Y_n\sigma_\eta\sqrt{1-\phi^2}$, $\{\epsilon_n\}$ is an iid $N(0,1)$ sequence, $\{\nu_n\}$ is an iid $N(0,\sigma_{\nu}^2)$ sequence, and $\omega_n$ is $N(0,\sigma_{\omega,n}^2)$ with
+\begin{equation}
+\nonumber
+\sigma^2_{\omega,n} = \sigma^2_{\eta}(1-\phi^2)(1-R_n^2).
+\end{equation}
+\item Here, $H_n$ is the log volatility. The latent state is $X_n=(G_n,H_n)$, noting that $R_n$ is a function of $G_n$.
 
 \ei
 
