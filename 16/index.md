@@ -14,6 +14,7 @@ output: html_document
 | Lecture slides  | [PDF](slides.pdf) |
 | Annotated slides | [PDF](slides-annotated.pdf) |
 | Lecture notes   | [PDF](notes.pdf) |
+| **R** script | [**R**](main.R) |
 | Running the notes on greatlakes | [HTML](README.html), [sbat](r-3.sbat) |
 ----------------------
 

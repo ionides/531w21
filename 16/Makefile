@@ -1,3 +1,3 @@
-default: slides.pdf notes.pdf
+default: slides.pdf notes.pdf main.R
 
 include ../rules.mk
