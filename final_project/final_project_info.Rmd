@@ -29,7 +29,15 @@ output:
 ---------
 
 **<big>Submission</big>**.
-To submit your project, write your report as an R markdown (Rmd) file.  Submit the report by 11:59pm on Tuesday April 20, as a zip file containing an Rmd file and anything else necessary to allow the grader to render the Rmd file as an html document. Please include an html version of the document, but be aware that the graded html will be rebuilt from the source files. Your submitted html will help out if difficulties arise in recompiling. 
+To submit your project, write your report as an R markdown (Rmd) file.  Submit the report by 11:59pm on Tuesday April 20, as a zip file containing the following:
+<ol type="i">
+<li> The main project file, called main.Rmd
+<li> A blinded version of this, called blinded.Rmd. This version should be anonymous. For the group contribution section, you can either remove names or just say something like "Description of individual contributions removed for anonymity". 
+<li> Any rda or rds files needed for the grader to re-run the Rmd files in less than about a minute of run time. There is a 500MB upload limit on Canvas, so you might have to edit your code so that you save only necessary results.
+<li> Compiled versions, main.html and blinded.html
+<li> Data files (unless your code downloads data from the internet) and any other files needed to make your Rmd files run. You can assume the grader has all necessary R packages installed.
+</ol>
+As for the midterm project, please could each member of a subgroup submit a copy of their final project.
 
 ------------
 
