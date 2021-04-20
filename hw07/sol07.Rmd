@@ -1,0 +1,395 @@
+---
+title: "Solution to Homework 7"
+author: "STATS/DATASCI 531, Winter 2021"
+output:
+  html_document:
+    theme: flatly
+    toc: yes
+csl: ecology.csl
+---
+
+\newcommand\prob{\mathbb{P}}
+\newcommand\E{\mathbb{E}}
+\newcommand\var{\mathrm{Var}}
+\newcommand\cov{\mathrm{Cov}}
+\newcommand\data[1]{#1^*}
+
+--------
+
+## Question 7.2 : Investigating the SEIR model
+
+a) First we do a local search start with the initial parameter values, $\beta=40, \mu_{IR}=1.3, \mu_{EI}=0.8, \rho=0.5, \eta=0.06$, and $N=38000$ where we fix the values of $\mu_{IR}$ and $N$ as truth.
+We do particle filters 30 times to get an unbiased likelihood estimate of -271 with a Monte Carlo standard error of 5.4.
+
+
+```{r, echo=FALSE, message=FALSE}
+library(foreach)
+library(doParallel)
+registerDoParallel()
+
+library(doRNG)
+registerDoParallel()
+registerDoRNG(2488820)
+library(tidyverse)
+library(pomp)
+
+read_csv(paste0("https://kingaa.github.io/sbied/stochsim/",
+                "Measles_Consett_1948.csv")) %>%
+    select(week,reports=cases) -> meas
+
+sir_step <- Csnippet("
+  double dN_SE = rbinom(S,1-exp(-Beta*I/N*dt));
+  double dN_EI = rbinom(E,1-exp(-mu_EI*dt));
+  double dN_IR = rbinom(I,1-exp(-mu_IR*dt));
+  S -= dN_SE;
+  E += dN_SE - dN_EI;
+  I += dN_EI - dN_IR;
+  H += dN_IR;
+  ")
+
+sir_rinit <- Csnippet("
+  S = nearbyint(eta*N);
+  E = 0;
+  I = 1;
+  H = 0;
+  ")
+
+sir_dmeas <- Csnippet("
+  lik = dbinom(reports,H,rho,give_log);
+  ")
+
+sir_rmeas <- Csnippet("
+  reports = rbinom(H,rho);
+  ")
+
+meas %>%
+  pomp(times="week",t0=0,
+       rprocess=euler(sir_step,delta.t=1/7),
+       rinit=sir_rinit,
+       rmeasure=sir_rmeas,
+       dmeasure=sir_dmeas,
+       accumvars="H",
+       partrans=parameter_trans(log=c('Beta', 'mu_EI'), logit=c('rho', 'eta')),
+       statenames=c("S","E", "I","H"),
+       paramnames=c("Beta","mu_IR","mu_EI","N","eta","rho")
+       ) -> measSIR
+
+params <- c(Beta=40, mu_IR=1.3, mu_EI=0.8, rho=0.5, eta=0.06, N=38000)
+
+fixed_params <- c(N=38000, mu_IR=2)
+```
+
+```{r}
+registerDoRNG(123294940)
+foreach(i=1:30,.combine=c) %dopar% {
+  library(pomp)
+  measSIR %>% pfilter(params=params,Np=50000)
+} -> pf
+
+pf %>% logLik() %>% logmeanexp(se=TRUE) -> L_pf
+L_pf
+```
+
+```{r, echo=FALSE}
+pf[[1]] %>% coef() %>% bind_rows() %>%
+  bind_cols(loglik=L_pf[1],loglik.se=L_pf[2]) %>%
+  write_csv("measles_params.csv")
+```
+
+```{r}
+registerDoRNG(482947940)
+bake(file="local_search.rds",{
+  foreach(i=1:20,.combine=c) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    measSIR %>%
+      mif2(
+        params=params,
+        Np=2000, Nmif=50,
+        cooling.fraction.50=0.5,
+        rw.sd=rw.sd(Beta=0.02, rho=0.02, mu_EI=0.02, eta=ivp(0.02))
+      )
+  } -> mifs_local
+  mifs_local
+}) -> mifs_local
+```
+
+We do a local search via iterative filters around the initial guess in the parameter space.
+We choose a common perturbation size of 0.02 across all the parameters and cooling.fraction.50=0.5 for mif2 to reduce perturbation size in half after 50 iterations.
+We see the likelihood increases as iteration goes, so the iterative filter is working.
+We find higher likelihood is usually associated with lower values of $\rho$ and higher values of $\mu_{EI}$.
+There is no clear trend for $\beta$ and $\eta$.
+
+```{r}
+mifs_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+
+```{r}
+registerDoRNG(900242057)
+bake(file="lik_local.rds",{
+  foreach(mf=mifs_local,.combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    evals <- replicate(10, logLik(pfilter(mf,Np=20000)))
+    ll <- logmeanexp(evals,se=TRUE)
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+  results
+}) -> results
+```
+
+Because of the perturbations applied to iterative filter, we use particle filter again to evaluate their likelihood for each point estimate.
+According to the pairwise scatter plot below, there might be a ridge in the likelihood surface of {$\beta$ and $\mu_{EI}$} and {$\beta$ and $\eta$}.
+
+```{r}
+pairs(~loglik+Beta+mu_EI+eta+rho,data=results,pch=16)
+```
+
+```{r, echo=FALSE, message=FALSE}
+read_csv("measles_params.csv") %>%
+  bind_rows(results) %>%
+  arrange(-loglik) %>%
+  write_csv("measles_params.csv")
+
+```
+
+```{r}
+set.seed(2062379496)
+
+runif_design(
+  lower=c(Beta=5,mu_EI=0, rho=0.2,eta=0),
+  upper=c(Beta=80,mu_EI=5, rho=0.9,eta=0.4),
+  nseq=100
+) -> guesses
+
+mf1 <- mifs_local[[1]]
+
+bake(file="global_search.rds",{
+  registerDoRNG(1270401374)
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    mf1 %>%
+      mif2(params=c(unlist(guess),fixed_params)) %>%
+      mif2(Nmif=100) -> mf
+    replicate(
+      10,
+      mf %>% pfilter(Np=10000) %>% logLik()
+    ) %>%
+      logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+  results
+}) %>%
+  filter(is.finite(loglik)) -> results
+```
+
+```{r, echo=FALSE, messgae=FALSE}
+read_csv("measles_params.csv") %>%
+  bind_rows(results) %>%
+  filter(is.finite(loglik)) %>%
+  arrange(-loglik) %>%
+  write_csv("measles_params.csv")
+
+read_csv("measles_params.csv") %>%
+  filter(loglik>max(loglik)-50) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> all
+```
+
+Then, we want to do a global search of the likelihood surface.
+We use a box that contains reasonable parameter values.
+$\beta \in (5, 80), \mu_{EI} \in (0, 5), \rho\in(0.2, 0.9), \eta\in(0, 0.4)$.
+We start with points uniformly selected from the possible box.
+We re-run iterative filter from the endpoints from before.
+After all the iterative filters for all the starting points, we use particle filter to evaluate the likelihood.
+We can see that the parameter values converges from uniformly distributed boxes to regions with higher likelihood.
+To get a closer look, we can look at each parameter's profile likelihood.
+
+```{r, echo=FALSE}
+pairs(~loglik+Beta+mu_EI+eta+rho, data=all,
+      col=ifelse(all$type=="guess",grey(0.5),"red"),pch=16)
+```
+
+```{r}
+read_csv("measles_params.csv") %>%
+  filter(loglik>max(loglik)-20,loglik.se<2) %>%
+  sapply(range) -> box
+
+set.seed(1196696958)
+profile_design(
+  eta=seq(0.01,0.85,length=30),
+  lower=box[1,c("Beta","mu_EI","rho")],
+  upper=box[2,c("Beta","mu_EI","rho")],
+  nprof=15, type="runif"
+) -> guesses
+
+mf1 <- mifs_local[[1]]
+```
+
+```{r}
+registerDoRNG(830007657)
+bake(file="eta_profile.rds",{
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    mf1 %>%
+      mif2(params=c(unlist(guess),fixed_params),
+           rw.sd=rw.sd(Beta=0.02,mu_EI=0.02, rho=0.02)) %>%
+      mif2(Nmif=100,cooling.fraction.50=0.3) -> mf
+    replicate(
+      10,
+      mf %>% pfilter(Np=1000) %>% logLik()) %>%
+      logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+  results
+}) -> results
+
+```
+
+
+```{r}
+read_csv("measles_params.csv") %>%
+  bind_rows(results) %>%
+  filter(is.finite(loglik)) %>%
+  arrange(-loglik) %>%
+  write_csv("measles_params.csv")
+
+read_csv("measles_params.csv") %>%
+  filter(loglik>max(loglik)-10) -> all
+```
+
+We start by checking the profile likelihood at different values of eta.
+Because of the limitations of our computational power, we get a few values of eta from its possible range, which causes the gaps in the likelihood plot.
+However, we can still find the parameter values converges to regions of high likelihood.
+
+```{r}
+pairs(~loglik+Beta+mu_EI+eta+rho,data=all,pch=16)
+```
+
+Here we constructed the profile likelihood of $\eta$ at different values and applied Wilk's theorem to find a 95% confidence interval.
+According to the plot below, the true value of $\eta$ should be within the range 0.1 and 0.3 with 95% probability.
+
+```{r}
+maxloglik <- max(results$loglik,na.rm=TRUE)
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+results %>%
+  filter(is.finite(loglik)) %>%
+  group_by(round(eta,5)) %>%
+  filter(rank(-loglik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=eta,y=loglik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+```{r}
+read_csv("measles_params.csv") %>%
+  group_by(cut=round(rho,2)) %>%
+  filter(rank(-loglik)<=10) %>%
+  ungroup() %>%
+  select(-cut,-loglik,-loglik.se) -> guesses
+
+mf1 <- mifs_local[[1]]
+registerDoRNG(2105684752)
+bake(file="rho_profile.rds",{
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    mf1 %>%
+      mif2(params=guess,
+           rw.sd=rw.sd(Beta=0.02,mu_EI=0.02, eta=ivp(0.02))) %>%
+      mif2(Nmif=100,cooling.fraction.50=0.3) %>%
+      mif2(Nmif=100,cooling.fraction.50=0.1) -> mf
+    replicate(
+      10,
+      mf %>% pfilter(Np=10000) %>% logLik()) %>%
+      logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+  results
+}) -> results
+
+read_csv("measles_params.csv") %>%
+  bind_rows(results) %>%
+  filter(is.finite(loglik)) %>%
+  arrange(-loglik) %>%
+  write_csv("measles_params.csv")
+
+results %>%
+  filter(is.finite(loglik)) -> results
+```
+
+Again, we can do the same for the reporting rate parameter $\rho$.
+We find the parameter values converges to regions with higher likelihood.
+
+```{r}
+pairs(~loglik+Beta+mu_EI+eta+rho,data=results,pch=16)
+```
+
+b) 
+The best result of SEIR we got from the global search has likelihood -120 with a standard error of 0.13.
+From the lecture notes, we find the best likelihood is also -120.
+These comparable likelihood values imply that there may not be enough evidence to use more complicated model than SIR.
+
+c)
+According to the results, we achieve the highest likelihood with the set of parameter values $\beta=18, \mu_{IR}=2, \mu_{EI}=20, \rho=0.2, \eta=0.14, N=38000$. 
+From the pairwise likelihood plot above, we find $\beta$  converges to a region between 0 and 50. 
+By the confidence interval from our profile likelihood of $\eta$ and $\rho$, we find
+the true value of $\eta$ should be within the range 0.1 and 0.3 with 95% probability
+and the true value for $\rho$ should be in range 0.1 and 0.4 with 95% probability.
+
+On the other hand, we know from the lecture notes that for SIR model,
+$\beta$ converges to a region around 20,
+the true value of $\eta$ should be within the range 0.1 and 0.5 with 95% probability,
+and the true value for $\rho$ should be in range 0.1 and 0.3 with 95% probability.
+Thus, we conclude the values of parameter estimates are not significantly different. 
+
+d)
+We plotted the profile likelihood of $\rho$ (the reporting rate) at different values.
+By Wilk's theorem, we construct 95% confidence interval again for rho.
+We find the true value for $\rho$ should be in range 0.1 and 0.4 with 95% probability.
+We remember from the lecture notes that the true value for $\rho$ should be in range 0.1 and 0.3 with 95% probability.
+Thus, we conclude that they are not significantly different.
+
+```{r}
+results %>%
+  filter(loglik>max(loglik)-10,loglik.se<1) %>%
+  group_by(round(rho,2)) %>%
+  filter(rank(-loglik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=rho,y=loglik))+
+  geom_point()+
+  geom_hline(
+    color="red",
+    yintercept=max(results$loglik)-0.5*qchisq(df=1,p=0.95)
+  )
+```
+
+---------------
+
+### Acknowledgements
+
+This solution are adapted from a homework submission by Xingwen Wei
+
+---------------
+
+
+
+
