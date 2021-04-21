@@ -85,14 +85,12 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 [Solution](hw06/sol06.html).
 
 * [Homework 7](hw07/hw07.html), due Mon Apr 5, 11:50pm.
+[Solution](hw07/sol07.html).
 
 * There is no assigned homework for the last two weeks of the semester. You should work on your final project. The lectures for these weeks contain material that will be useful for your final projects. Also, you can optionally look at the exercises in the [notes for Chapter 15](https://kingaa.github.io/sbied/polio/notes.pdf) which have [worked solutions online](15/index.html).
 
 
 <!--
-
-[Solution](hw07/sol07.html).
-
 
 * [Homework 8](hw08/hw08.html), due 5pm on Mon Apr 13.
 [Solution](hw08/sol08.html).
@@ -127,9 +125,7 @@ Please read the [grading policy in the syllabus](syllabus.html) before submittin
 
 * [Information](final_project/final_project_info.html)
 
-<!--
-* [2020 final projects](final_project/index.html)
--->
+* [2021 final projects](final_project/index.html)
 
 * You're welcome to browse previous final projects  for [2016](http://ionides.github.io/531w16/final_project/), [2018](http://ionides.github.io/531w18/final_project/) and [2020](http://ionides.github.io/531w20/final_project/) 
 . If building on previous source code, note that there are some differences between versions of the software package **pomp**. The [**pomp** version 2 upgrade guide](https://kingaa.github.io/pomp/vignettes/upgrade_guide.html) can be helpful. The changes from **pomp 2.0** to the current **pomp 3.3** are smaller.
