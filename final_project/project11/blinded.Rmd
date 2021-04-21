@@ -129,19 +129,18 @@ The SEIR model builds on the most basic susceptible-infected-recovered (SIR) mod
 
 ![_Flow diagram taken from Chp 12 notes_ [[19](https://kingaa.github.io/sbied/stochsim/slides.pdf)] ](https://raw.githubusercontent.com/jeremyny/G6_Final/main/SEIR_diagram.PNG)
 
-<br>
 
-For the SEIR model the compartments are [[20](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[21](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)]:
+For the SEIR model the compartments are [[20](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[21](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)]
 
 * $S$: susceptible (population vulnerable to infection)
 * $E$: exposed (asymptomatic infected population)
 * $I$: infected (symptomatic infected population)
 * $R$: removed (recovered or dead population)
-* and $C$ denotes the reported cases
+* $C$ denotes the reported cases
 
 Associated with each arrow is the rate at which individuals move through the compartments [[22](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[23](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)] [[24](https://kingaa.github.io/sbied/stochsim/slides.pdf)] :
 
-* $\mu_{{\bullet}S}$ represents the rate of births into $S$
+* $\mu_{\bullet S}$ represents the rate of births into $S$
 * $\mu_{SE}$, $\mu_{EI}$, and $\mu_{IR}$ are the transition rates between $S$, $E$, $I$, and $R$
 
   + $\mu_{SE}$ is the force of infection and can be described as $\mu_{SE}=\beta \frac{I}{N}$ where $\beta$ is the contact rate (in contacts per person per time)
@@ -150,10 +149,10 @@ Associated with each arrow is the rate at which individuals move through the com
  
   + $\frac{1}{\mu_{IR}}$ is the mean infectious period of the disease (in days)
  
-* $\mu_{S{\bullet}}$, $\mu_{E{\bullet}}$, $\mu_{I{\bullet}}$, and $\mu_{R{\bullet}}$ denote mortality rates at each compartment
+* $\mu_{S \bullet }$, $\mu_{E \bullet}$, $\mu_{I \bullet}$, and $\mu_{R \bullet}$ denote mortality rates at each compartment
 * and $\rho$ denotes the reporting rate
 
-To simplify the model we ignore demographic changes so that $\mu_{{\bullet}S} = \mu_{S{\bullet}} = \mu_{I{\bullet}} = \mu_{R{\bullet}} = 0$ and fix the population at $N=10,000,000$, which is about the population of the state of Michigan. The total population can be described as $S(t) + E(t)+I(t)+R(t)=N$ for any time $t$.
+To simplify the model we ignore demographic changes so that $\mu_{ \bullet S} = \mu_{S \bullet } = \mu_{I \bullet} = \mu_{R \bullet } = 0$ and fix the population at $N=10,000,000$, which is about the population of the state of Michigan. The total population can be described as $S(t) + E(t)+I(t)+R(t)=N$ for any time $t$.
 
 To track flows of individuals through the compartments we use the notation $N_{SE}(t)$ to count individuals who transition from $S$ to $E$ by time $t$, and use a similar counting process for $N_{EI}(t)$ and $N_{IR}(t)$.
 
