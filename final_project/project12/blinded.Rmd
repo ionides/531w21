@@ -1,0 +1,508 @@
+---
+title: "STATS 531 Final Project"
+subtitle: "Analysis on Nasdaq-100 Index for the Past 5 Years"
+date: "April 18, 2021"
+output:
+  html_document:
+    toc: true
+---
+
+```{r set_up, include=FALSE}
+library(tidyverse)
+library(pomp)
+library(foreach)
+library(kableExtra)
+library(knitr)
+library(doParallel)
+library(doRNG)
+load("pompresults.RData") # Result data file
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+# Project Background and Motivation
+
+The NASDAQ-100 is a stock market index made up of 102 equity securities issued by 100 of the largest non-financial companies listed on the Nasdaq stock market.$^{[1]}$ These non-financial sectors include retail, biotechnology, industrial, technology, health care, and others. It is a modified capitalization-weighted index. The stocks' weights in the index are based on their market capitalizations. Weighting allows constraints to limit the influence of the largest companies and balance the index with all members.
+
+In this project, we aim to conduct time series analysis on the Nasdaq-100 index from 2016 to 2021. Specifically, we want to explore more about the volatility of the index in order to get a better understanding of the risk of the stock market. 
+
+# Data Introduction and Cleaning
+
+The data comes from the official Nasdaq website$^{[1]}$, containing the open, close, highest and lowest prices for the Nasdaq 100 index from April 11, 2016 to April 9, 2021. There are 1259 observations on trading days in this time period.
+
+We calculate the demeaned daily returns for the closing prices of Nasdaq-100 index, with the hope of constructing time series models for it.
+
+```{r data_cleaning}
+# Load the data
+historical_data <- read.csv("HistoricalData_1618091005375.csv")
+date <- as.Date(historical_data$Date, format = "%m/%d/%Y")
+close_price <- historical_data$Close.Last
+# Subset data to get date and closing price
+data_c <- historical_data[,c(1,2)]
+# reverse order so earliest dates come first 
+data_c <- data_c[seq(nrow(data_c),1),]
+# Convert data to a time series object
+doy <- strftime("2016-11-04", format = "%j")
+data_ts <- ts(rev(data_c[,c(2)]), start = c(2016,as.numeric(doy) ), 
+              frequency = 365)
+returns <- diff(log(data_ts))
+dmrt <- returns - mean(returns)
+```
+
+
+# Exploratory Data Analysis
+
+The daily index data (closing price) and the data after log transformation are shown in the time series plot below. 
+
+```{r plot2, echo=F}
+# Time series plot
+plot(close_price~date, type="l", col='blue', ylab="Nasdaq-100 Index", xlab="Time")
+plot(close_price~date, log="y", type="l", col='blue', ylab="Log Nasdaq-100 Index", xlab="Time")
+```
+
+Based on the plots above, we can see that there is an obvious increasing trend for the index. The two sudden drops on the late 2018 and 2020 are due to the financial crisis and the COVID 19. 
+
+Usually, we are more interested in the daily returns on a stock market index rather than the exact values. Thus we calculated the return which is the difference of the log of the index and plot them in the figures below:
+
+```{r log_return, echo=F}
+par(mfrow=c(2,2))
+z <- diff(log(close_price))
+dmean_z <- z-mean(z)
+plot(z, type="l", col='blue', ylab="Nasdaq-100 Index return", xlab="Working days")
+acf(z, main="Nasdaq-100 Index return")
+plot(dmean_z, type="l", col='blue', ylab="demeaned Nasdaq-100 Index return", xlab="Working days")
+acf(dmean_z, main="demeaned Nasdaq-100 Index return")
+```
+
+We can see that the log return is almost randomly distributed around 0 and there is almost no difference between the original log return and the demeaned return. Based on the auto correlation plot, there are some evidence for the existence of auto correlation on small order lags up to 2 days. It is reasonable for us to try stationary model to this time series firstly.
+
+# Model Analysis
+
+## ARMA Model
+
+Based on the basic statistical summary and the time series plot, the stationary Gaussian $ARMA(p,q)$ model is used to construct the model under the null hypothesis that there is no trend with the form of:
+
+\begin{align*}
+\phi(B)(Y_n -\mu) = \psi(B)\varepsilon_n
+\end{align*}
+
+where
+
+\begin{align*}
+&\mu = \mathbb{E}[Y_n]\\
+&\phi(x) =1 - \phi_1 x - \phi_2 x^2 - \dots - \phi_p x^p\\
+&\psi(x) = 1 + \psi_1 x + \psi_2 x^2 + \dots + \psi_q x^q\\
+&\varepsilon_{n} \sim iid N(0, \sigma^2)
+\end{align*}
+
+
+```{r AIC_table_function, echo=FALSE, warning=FALSE, message = FALSE}
+
+AIC_table <- function(data,P,Q){
+  aic_table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      aic_table[p+1,q+1] <- arima(data,order=c(p,0,q))$aic
+    }
+  }
+dimnames(aic_table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+aic_table
+}
+```
+
+In order to choose a proper value for p and q, we first tabulate AIC values for a range of different choices of p and q from 0 to 5.
+
+```{r AIC_table_results, echo=FALSE, warning=FALSE, message = FALSE}
+
+return_aic = AIC_table(dmean_z, 5, 5)
+return_aic %>%
+  knitr::kable(
+    format = 'html', 
+    escape = FALSE, 
+    align = 'llccc',
+  ) %>%
+  kableExtra::kable_styling("striped", full_width = TRUE)
+```
+
+The candidate models are first selected based on the Akaike information criteria (AIC) values for different combination of the p (from 0 to 5) and q (from 0 to 5). Models with low AIC are somehow more trustworthy and have more reasonable predictive power. According to the AIC table, we noticed that the lowest AIC value -7270.120 appears when AR = 4 and MA = 5. However, this model seems to be too complicated for the data. Based on the KISS property, we also selected $ARMA(4,3)$ and $ARMA(3,1)$ models based on their relatively simple model structure and similar AIC values. 
+
+We then check the causality and invertibility of the model. Based on the results, $ARMA(4,3)$ and $ARMA(4,5)$ both suffer from the risk of non-invertibility, as they have MA roots of 1.000003 and 1.002638, respectively. In order to guarantee the invertibility of the model, we finally selected the $ARMA(3,1)$ model. The AR roots are 1.472222, 1.472222, and 4.033999 and the MA root is 1.115911.
+
+```{r arma selection, echo=FALSE, warning=FALSE, message = FALSE}
+return_arma31 <- arima(dmean_z,order=c(3,0,1))
+return_arma31
+return_AR_roots_31 <- polyroot(c(1,-coef(return_arma31)[c("ar1","ar2","ar3")]))
+return_MA_roots_31 <- polyroot(c(1, coef(return_arma31)[c("ma1")]))
+abs(return_AR_roots_31)
+abs(return_MA_roots_31)
+```
+
+We then conducted diagnostic plots on the residuals of the selected model:
+
+```{r diagnostic normal, echo=FALSE, warning=FALSE, message = FALSE}
+par(mfrow=c(1,2))
+plot(return_arma31$residuals, ylab="Residuals for ARMA(3,1)")
+qqnorm(return_arma31$residuals)
+qqline(return_arma31$residuals)
+```
+
+According to the diagnostic plots, the residuals are not similar to Gaussian white noise. QQ-plots shows the distribution of residuals for the model has heavier tails than the normal distribution.
+
+```{r arma acf, echo=FALSE, warning=FALSE, message = FALSE}
+return_arma31_acf=acf(return_arma31$residuals, lag.max=60, na.action=na.pass, xlab="Lag(Days)", main="Nasdaq-100 Index return")
+```
+
+The autocorrelation plot of residuals for the model does not show any significant autocorrelation for any lag greater than 1. However, due to the heavy-tailed residuals, the model still has room for improvement and we can consider other model structures.  
+
+## GARCH Model
+
+In order to better fit our data, we then try to construct a $GARCH(p,q)$ model with the following form:
+
+\begin{align*}
+Y_{n}=\epsilon_{n} \sqrt{V_{n}}
+\end{align*}
+
+where
+
+\begin{align*}
+V_{n}=\alpha_{0}+\sum_{j=1}^p \alpha_j Y_{n-j}^2+\sum_{k=1}^q \beta_k V_{n-k}
+\end{align*}
+
+and $\epsilon_{n}$ is white noise.
+
+Similarly, in order to choose a proper value for p and q, we first tabulate AIC values for a range of different choices of p and q from 0 to 5.
+
+```{r garch aic table, echo=FALSE, warning=FALSE, message = FALSE}
+require(tseries)
+
+GARCH_AIC_table = function(data,P,Q){
+  aic_table = matrix(NA,(P),(Q))
+  for(p in 1:P) {
+    for(q in 1:Q) {
+      fit.garch = garch(x = data, order = c(p,q), grad = "numerical", trace = FALSE)
+      aic_table[p,q] = - 2 * tseries:::logLik.garch(fit.garch) + 2 * length(fit.garch$coef) 
+    }
+  }
+  dimnames(aic_table) = list(paste("P = ", 1:P, sep=""), paste("Q = ", 1:Q, sep=""))
+  aic_table
+}
+return_aic = GARCH_AIC_table(dmean_z, 5, 5)
+return_aic %>%
+  knitr::kable(
+    format = 'html', 
+    escape = FALSE, 
+    align = 'llccc',
+  ) %>%
+  kableExtra::kable_styling("striped", full_width = TRUE)
+```
+
+According to the AIC table, we noticed that the lowest AIC value -7839.581 is reached when P = 1 and Q = 2. Also, the dimension of this model is also reasonable and has much lower AIC value compared with the simpler $GARCH(1,1)$ model. The parameter estimations given by the $GARCH(1,2)$ model is shown as below:
+
+```{r garch model construction, echo=FALSE, warning=FALSE, message = FALSE}
+return_garch12 <- garch(dmean_z, order = c(1,2), grad = "numerical", trace = FALSE)
+L.garch <- tseries:::logLik.garch(return_garch12)
+summary(return_garch12)
+L.garch
+```
+
+The formula of our $GARCH(1,2)$ model is:
+\begin{align*}
+Y_{n}=\epsilon_{n} \sqrt{V_{n}}
+\end{align*}
+
+where
+
+\begin{align*}
+V_{n}=6.865*10^{-6}+0.1306Y_{n-1}^2+0.1463Y_{n-2}^2+0.7025V_{n-1}
+\end{align*}
+
+We can find that the log likelihood of the model is 3923.79 with 4 degrees of freedom for $GARCH(1,2)$. This log likelihood is much higher than that we get from $ARMA(3,1)$ model. All the parameters are significant on 0.01 level.
+
+```{r diagnostic normal garch, echo=FALSE, warning=FALSE, message = FALSE}
+par(mfrow=c(1,2))
+plot(return_garch12$residuals, type="l", ylab="Residuals for GARCH(1,2)")
+qqnorm(return_garch12$residuals)
+qqline(return_garch12$residuals)
+```
+
+Based on the diagnostics plots, the residuals seem to look like white noise. The QQ-plot shows residuals for the model are still slightly heavier-tailed than the normal distribution, but they are significantly closer to Gaussian than residuals for $ARMA(3,1)$ model. The Jarque-Bera Test on residuals also shows that the assumption of normal distribution error is violated. 
+
+```{r garch acf, echo=FALSE, warning=FALSE, message = FALSE}
+return_garch12_acf=acf(return_garch12$residuals, lag.max=60, na.action=na.pass, xlab="Lag(Days)", main="Nasdaq-100 Index return")
+```
+
+The autocorrelation plot of residuals for the model does not show any significant autocorrelation for any lag greater than 2. Although the constructed $GARCH(1,2)$ model may be useful for forecasting, but it won't help us understand more about how financial markets work. We can consider other model structures to explore more details about the Nasdaq-100 Index return.
+
+## POMP Model
+
+### Model Structure
+
+We can also try to build a POMP model to analyze volatility based on the financial phenomenon called volatility leverage. We use the implementation of Breto (2014)\(^{[2]}\). We model the leverage \(R_n\), which is defined as the correlation between index return on day n−1 and the increase in the log volatility from day n−1 to day n, as the following transformed random walk:
+$$R_n=\frac{exp(2G_n)-1}{exp(2G_n)+1}$$
+where \(G_n\) is a Gaussian random walk.
+
+We include time-varying variables using the model framework of Breto (2014), which is a modified version of the basic stochastic volatility model:
+$$Y_n=exp(H_n/2)\epsilon_n$$
+The latent states are
+$$H_n = \mu_h(1-\phi)+\phi H_{n-1}+\beta_{n-1}R_nexp(-H_{n-1}/2)+\omega_n \\
+G_n = G_{n-1}+v_n$$
+where \(Y_n\) is the observed time series, \(\beta_n=Y_n\sigma_\eta \sqrt{1-\phi^2}\), \(\{\epsilon_n\}\) is an i.i.d. \(N(0,1)\) sequence, \(\{\nu_n\}\) is an i.i.d. \(N(0,\sigma_{\nu}^2)\) sequence and \(\{\omega_n\}\) is an i.i.d. \(N(0,\sigma_{\omega,n}^2)\) sequence where \(\sigma_{\omega,n}^2=\sigma_\eta^2(1-\phi^2)(1-R_n^2)\). \(H_n\) in the model is the log volatility, and \(G_n\) is the transformed leverage.
+
+### Initial Simulation
+
+We set initial parameter values as follows: \(\sigma_\nu=0.01, \mu_h=0, \phi=0.95, \sigma_\eta=7\) and the initial values of the latent states \(G_0=H_0=0\). There are 6 parameters in total. Firstly we can test the performance of the model using this set of parameters by simulating \(\{Y_n\}^{[2]}\).
+
+```{r initial, eval=F}
+# Basic information
+ndx_statenames <- c("H","G","Y_state")
+ndx_rp_names <- c("sigma_nu","mu_h","phi","sigma_eta")
+ndx_ivp_names <- c("G_0","H_0")
+ndx_paramnames <- c(ndx_rp_names,ndx_ivp_names)
+# Model structure
+rproc1 <- "
+double beta,omega,nu;
+omega = rnorm(0,sigma_eta * sqrt( 1- phi*phi ) *
+sqrt(1-tanh(G)*tanh(G)));
+nu = rnorm(0, sigma_nu);
+G += nu;
+beta = Y_state * sigma_eta * sqrt( 1- phi*phi );
+H = mu_h*(1 - phi) + phi*H + beta * tanh( G )
+* exp(-H/2) + omega;
+"
+rproc2.sim <- "
+Y_state = rnorm( 0,exp(H/2) );
+"
+rproc2.filt <- "
+Y_state = covaryt;
+"
+ndx_rproc.sim <- paste(rproc1,rproc2.sim)
+ndx_rproc.filt <- paste(rproc1,rproc2.filt)
+
+ndx_rinit <- "
+G = G_0;
+H = H_0;
+Y_state = rnorm( 0,exp(H/2) );
+"
+ndx_rmeasure <- "
+y=Y_state;
+"
+ndx_dmeasure <- "
+lik=dnorm(y,0,exp(H/2),give_log);
+"
+ndx_partrans <- parameter_trans(
+log=c("sigma_eta","sigma_nu"),
+logit="phi"
+)
+# Filtering object
+ndx.filt <- pomp(data=data.frame(
+            y=dmrt,time=1:length(dmrt)),
+            statenames=ndx_statenames,
+            paramnames=ndx_paramnames,
+            times="time",
+            t0=0,
+            covar=covariate_table(
+            time=0:length(dmrt),
+            covaryt=c(0,dmrt),
+            times="time"),
+            rmeasure=Csnippet(ndx_rmeasure),
+            dmeasure=Csnippet(ndx_dmeasure),
+            rprocess=discrete_time(step.fun=Csnippet(ndx_rproc.filt),
+            delta.t=1),
+            rinit=Csnippet(ndx_rinit),
+            partrans=ndx_partrans
+)
+# initial values
+params_test <- c(
+sigma_nu = 0.01,
+mu_h = 0,
+phi = 0.995,
+sigma_eta = 7,
+G_0 = 0,
+H_0=0
+)
+# Simulated data
+sim1.sim <- pomp(ndx.filt,
+statenames=ndx_statenames,
+paramnames=ndx_paramnames,
+rprocess=discrete_time(
+step.fun=Csnippet(ndx_rproc.sim),delta.t=1)
+)
+sim1.sim <- simulate(sim1.sim,seed=6, params=params_test)
+```
+```{r plot1}
+plot(Y_state~time(dmrt),data=sim1.sim,type='l',col="red",ylab="returns")
+lines(dmrt,type='l')
+legend("topleft",legend=c("Original","Simulated"),col=c("black","red"),
+       cex=0.8,lty=1,bty="n")
+```
+
+### Filtering for simulated data
+
+Notice the simulated data is much more volatile than the actual demeaned return for Nasdaq-100 index. Therefore, we need to check whether we can successfully filter and re-estimate parameters for this simulated data. 
+
+```{r filtering, eval=F}
+# Filtering object for simulated data
+sim1.filt <- pomp(sim1.sim,
+covar=covariate_table(
+time=c(timezero(sim1.sim),time(sim1.sim)),
+covaryt=c(obs(sim1.sim),NA),
+times="time"),
+statenames=ndx_statenames,
+paramnames=ndx_paramnames,
+rprocess=discrete_time(
+step.fun=Csnippet(ndx_rproc.filt),delta.t=1)
+)
+# Setting up computational coefficients
+run_level <- 3
+ndx_Np <- switch(run_level, 100, 1e3, 2e3)
+ndx_Nmif <- switch(run_level, 10, 100, 200)
+ndx_Nreps_eval <- switch(run_level, 4, 10, 20)
+ndx_Nreps_local <- switch(run_level, 10, 20, 20)
+ndx_Nreps_global <- switch(run_level, 10, 20, 100)
+cores <- as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset=NA))
+if(is.na(cores)) cores <- detectCores()
+registerDoParallel(cores)
+registerDoRNG(12345678)
+# Filtering on simulated data
+stew(file=sprintf("pf1-%d.rda",run_level),{
+t.pf1 <- system.time(
+pf1 <- foreach(i=1:ndx_Nreps_eval,
+.packages='pomp') %dopar% pfilter(sim1.filt,Np=ndx_Np))
+})
+(L.pf1 <- logmeanexp(sapply(pf1,logLik),se=TRUE))
+```
+
+### Fitting the model
+
+The log likelihood seems to be very low. Now we can try to fit the aforementioned stochastic volatility model to the data with pre-chosen parameter values and see how the model performs.
+
+```{r svm, eval=F}
+ndx_rw.sd_rp <- 0.02
+ndx_rw.sd_ivp <- 0.1
+ndx_cooling.fraction.50 <- 0.5
+ndx_rw.sd <- rw.sd(
+sigma_nu = ndx_rw.sd_rp,
+mu_h = ndx_rw.sd_rp,
+phi = ndx_rw.sd_rp,
+sigma_eta = ndx_rw.sd_rp,
+G_0 = ivp(ndx_rw.sd_ivp),
+H_0 = ivp(ndx_rw.sd_ivp)
+)
+
+stew(file=sprintf("mif1-%d.rda",run_level),{
+t.if1 <- system.time({
+if1 <- foreach(i=1:ndx_Nreps_local,
+.packages='pomp', .combine=c) %dopar% mif2(ndx.filt,
+params=params_test,
+Np=ndx_Np,
+Nmif=ndx_Nmif,
+cooling.fraction.50=ndx_cooling.fraction.50,
+rw.sd = ndx_rw.sd)
+L.if1 <- foreach(i=1:ndx_Nreps_local,
+.packages='pomp', .combine=rbind) %dopar% logmeanexp(
+replicate(ndx_Nreps_eval, logLik(pfilter(ndx.filt,
+params=coef(if1[[i]]),Np=ndx_Np))), se=TRUE)
+})
+},seed=233,kind="L'Ecuyer")
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+t(sapply(if1,coef)))
+if (run_level>1) write.table(r.if1,file="ndx_params.csv",
+append=TRUE,col.names=FALSE,row.names=FALSE)
+```
+```{r summary1, echo=F}
+cat("Resulting log likelihood values:")
+summary(r.if1$logLik,digits=5)
+r.if1c <- r.if1 %>% arrange(desc(logLik))
+cat("Point estimates of log likelihood and parameters:")
+r.if1c <- t(r.if1c[1,])
+colnames(r.if1c) <- ""
+r.if1c
+cat("Best AIC: ", 2*6-2*max(r.if1$logLik)) # There are 6 parameters
+```
+
+The best AIC is around -7935.7, which is better than the GARCH model. We can also see the plausible range for each parameter by plotting the pairs plot for log likelihood and parameters:
+
+```{r pairs, echo=F}
+pairs(~logLik+sigma_nu+mu_h+phi+sigma_eta+G_0+H_0,
+data=subset(r.if1,logLik>max(logLik)-30))
+```
+
+### Likelihood Maximization
+
+We can improve the result using global maximization within a large box of parameter values. From the pairs plot above, we can construct a plausible box for the parameters as follows:
+
+$$\sigma_\nu \in (0.005,0.05) \\
+\mu_h \in (-1,0)\\
+\phi \in (0.95,0.99)\\
+\sigma_{\eta} \in (0.5,3)\\
+G_0 \in (-1,0.5)\\
+H_0 \in (-3.5,-1)$$
+
+```{r box}
+ndx_box <- rbind(
+sigma_nu=c(0.005,0.05),
+mu_h =c(-1,0),
+phi = c(0.95,0.99),
+sigma_eta = c(0.5,3),
+G_0 = c(-1,0.5),
+H_0 = c(-3.5,-1)
+)
+```
+
+We carry out searches starting randomly throughout this box. The results are shown below:
+
+```{r global_search, eval=F}
+stew(file=sprintf("ndx_box_eval-%d.rda",run_level),{
+t.box <- system.time({
+
+if.box <- foreach(i=1:ndx_Nreps_global,
+  .packages='pomp',.combine=c,.options.multicore=list(set.seed=TRUE)) %dopar% mif2(if1[[1]],
+  start=apply(ndx_box,1,function(x)runif(1,x)))
+
+L.box <- foreach(i=1:ndx_Nreps_global,
+  .packages='pomp',.combine=rbind,.options.multicore=list(set.seed=TRUE)) %dopar% {
+  logmeanexp(replicate(ndx_Nreps_eval, logLik(pfilter(
+  ndx.filt,params=coef(if.box[[i]]),Np=ndx_Np))),
+  se=TRUE)
+}
+})
+},seed=745,kind="L'Ecuyer")
+
+r.box <- data.frame(logLik=L.box[,1],logLik_se=L.box[,2],
+t(sapply(if.box,coef)))
+if(run_level>1) write.table(r.box,file="ndx_params.csv",
+append=TRUE,col.names=FALSE,row.names=FALSE)
+```
+```{r summary2, echo=F}
+cat("Resulting log likelihood values:")
+summary(r.box$logLik,digits=5)
+r.boxc <- r.box %>% arrange(desc(logLik))
+cat("Point estimates of log likelihood and parameters:")
+r.boxc <- t(r.boxc[1,])
+colnames(r.boxc) <- ""
+r.boxc
+cat("Best AIC: ", 2*6-2*max(r.box$logLik)) # There are 6 parameters
+```
+
+The best AIC is around -7948.5, which is the lowest among all models considered. Therefore, the POMP stochastic volatility model performs well for the Nasdaq 500 data.
+
+# Conclusion
+
+In order to investigate the volatility of Nasdaq-500 Index, we constructed several time series models for the historical data in the past 5 years. The GARCH model has a much lower AIC than simple ARMA models, and is therefore a better model for the volatility.
+
+We also constructed a POMP model for the volatility of the Nasdaq-500 Index. The resulting model improves in terms of both log likelihood and AIC. Therefore, a POMP stochastic volatility model is appropriate for the Nasdaq 500 index data. Moreover, the estimated parameters for the POMP stochastic leverage model are easier to interpret in financial studies.
+
+However, the stock market is difficult to forecast, even the volatility is not that easy to predict. The models constructed for volatility of Nasdaq-500 Index are not perfect, and still have a lot of room for improvement.
+
+# Group Roles
+
+Description of individual contributions removed for anonymity
+
+# Reference
+
+[1] Nasdaq.com. [Nasdaq-500 historical data](https://www.nasdaq.com/market-activity/index/ndx/historical).
+
+[2] Ionides, Edward. [Analysis of Time Series lecture notes](https://ionides.github.io/531w21/).
+
+[3] STATS 531 Final Project 2020. [Financial Volatility of Facebook Stock](https://ionides.github.io/531w20/final_project/Project23/final.html).
+
+[4] Aaron A. King. [POMP package for R](https://kingaa.github.io/pomp/)

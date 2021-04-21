@@ -1,0 +1,8 @@
+"*Beginning for the 2015-16 season, reports from public health and clinical laboratories are presented separately in the weekly influenza update, FluView.  Data presented from public health laboratories include the weekly total number of specimens tested, the number of positive influenza tests, and the number by influenza virus type, subtype, and influenza B lineage."
+REGION TYPE,REGION,SEASON_DESCRIPTION,TOTAL SPECIMENS,A (2009 H1N1),A (H3),A (Subtyping not Performed),B,BVic,BYam,H3N2v
+States,Michigan,Season 2015-16,714,271,68,0,6,21,31,12
+States,Michigan,Season 2016-17,962,20,541,0,29,57,145,1
+States,Michigan,Season 2017-18,1067,95,588,3,58,7,174,0
+States,Michigan,Season 2018-19,1100,453,359,7,13,39,24,0
+States,Michigan,Season 2019-20,1132,490,31,6,95,301,0,0
+States,Michigan,Season 2020-21,98,0,1,0,3,0,0,0

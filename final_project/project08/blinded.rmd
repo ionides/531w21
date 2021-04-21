@@ -1,0 +1,1773 @@
+---
+title: "Statistical Models for Solar Flare X-ray Flux Time Series"
+author: ""
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+geometry: "left=2.5cm,right=2.5cm,top=1.5cm,bottom=1.5cm"
+output:
+  html_document:
+    highlight: tango
+    code_folding: hide
+    number_sections: yes
+    fig_caption: TRUE
+    theme: paper
+    toc: yes
+    toc_depth: 5
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+```{r, out.width="1000px", echo=FALSE}
+knitr::include_graphics("solarflarelogo.jpg")
+```
+
+# Introduction
+
+This final project follows up from our midterm one, [Solar Flare X-ray flux time series](https://ionides.github.io/531w21/midterm_project/project15/project.html). Solar flares are sudden explosion of energy caused by tangling, crossing or reorganizing of magnetic field lines near sunspots. They have massive destructive power when reaches certain magnitude, i.e, Class M and X flares . We call class M and X flares as strong flares, and others below their intensities weak flares.
+
+Class    Intensity              Solar Flares' Effect on Earth 
+-------  ---------              -----------------------------
+B        $< 10^{-6}$            Too small to harm Earth.    
+C        $[10^{-6}, 10^{-5})$   Small with few noticeable consequences on Earth.
+M        $[10^{-5}, 10^{-4})$   Can cause brief radio blackouts that affect Earth's polar regions and minor radiation storms.	
+X        $\ge 10^{-4}$            Can trigger planet-wide radio blackouts and long-lasting radiation storms
+
+The energy release mechanism of solar flares have yet to be fully characterized. As such, many models in this problem domain have been of black box machine learning nature. Early works of non-linear Machine Learning application in forecasting solar flares include Li 2007, Colak & Qahwaji 2007, Song 2009, Yu 2009,Yuan 2010, Ahmed 2013 and Bobra 2015. Recently, deep learning models such as LTSM, RNN and CNN have been adapted for solar flare prediction: Chen 2019, Jiao 2020, Wang 2020 and Landa & Reuveni, 2021. While these black box models have enjoyed predictive performance gains, it remains a big challenge to interpret them so as to learn new insights about the flare energy mechanism.
+
+We are taking a different approach from the prevalent black box methods in the literature. Our project aims to build interpretable statistical models that capture some  of the important dynamic of the solar flare X-ray time series.
+
+
+# Data Processing & Visualisation
+
+## Preprocessing Note
+
+Similar to the midterm project, the project utilized the X-ray flux time series observed by the United States' National Oceanic and Atmospheric Administration (NOAA)'s GOES satellite during 2019. To prepare the data, we downloaded the raw satellite 2019 data available in this [source](https://satdat.ngdc.noaa.gov/sem/goes/data/avg/2019). Then, we utilized a python script from [Vlad Landa's github](https://github.com/vladlanda/Low-Dimensional-Convolutional-Neural-Network-For-Solar-Flares-GOES-Time-Series-Classification/blob/master/source/goes_avg_preprocess.py) to convert the raw data into a csv file. The csv file contains X-ray flux intensities recorded by GOES every 1 minute from 2019-01-01 00:00 to 2019-12-24 23:59. Since there are too many data points, the data is aggregated by taking the 97.5 percentile every 12 hours of 1-minute data. While we can take the max(), the 97.5 percentile method is robust against outlier noises.
+
+
+## Exploratory Analysis
+
+After preprocessing, the data is a time series $\{ y_1, y_2, \ldots, y_{718} \}$ where $y_i$ is the top 97.5 percentile of X-ray readings every-12 hour in log scale. Observe from the plot, the time series have multiple peaks coincidental to solar flare events. The colored horizontal lines specify the threshold for C, M and X solar category that may have impacts to the Earth.
+
+There are significant correlations among $\{ y_n \}_{n=1}^{718}$. If we define "volatility" as the sequence $\{ \sigma_n = | y_n - \bar{y}| \}_{n=1}^{718}$ where $\bar{y} = \cfrac{1}{718} \sum_{i=1}^{718} y_i$. This time series $\{ \sigma_n \}_{n=1}^{718}$ are also correlated and seems to exhibit a different correlation pattern.
+
+
+```{r echo=F, message=F}
+require(lubridate)
+require(dplyr)
+
+data_ts = read.csv('xrayts.csv') # data y already in log10 scale
+t = seq(length(data_ts$y))
+ts = data_ts$y
+xray_df = data.frame(t = t, x = data_ts$y)
+vol_df = data.frame(t = t, s = abs(data_ts$y - mean(data_ts$y)))
+trend_df = data.frame(t = t, m = data_ts$y - abs(data_ts$y - mean(data_ts$y)))
+```
+
+```{r class.source = 'fold-hide', fig.align='center', message=F}
+require(ggplot2)
+require(gridExtra)
+
+ggplot(data=xray_df) + geom_line(aes(x = t, y = x)) + ggtitle("X-ray Flux Activities in 2019 - Training Set") + xlab("Time") + ylab("Log Intensity") + geom_hline(aes(yintercept=-5, color = "orange")) + 
+geom_hline(aes(yintercept=-4, color = "red")) + 
+geom_hline(aes(yintercept=-6, color = "blue")) + 
+geom_hline(aes(yintercept=-7, color = "green")) + 
+scale_color_discrete(name = "Legend", labels = c("B","C", "M", "X")) +    
+theme_bw()
+```
+
+
+```{r echo=F, fig.align='center', message=F, fig.cap="Train Set X-ray fluxtime series in log scale"}
+require(ggplot2)
+require(gridExtra)
+require(forecast)
+
+p1 <- ggplot(data=xray_df) + geom_line(aes(x = t, y = x)) + ggtitle("X-ray Flux Activities in 2019") + xlab("Time") + ylab("Log Intensity Y") + geom_hline(aes(yintercept=-5.91),  color = "red") + theme_bw()
+
+p2<- ggplot(data=vol_df) + geom_line(aes(x = t, y = s)) + ggtitle("X-ray Flux Volatility in 2019") + xlab("Time") + ylab("Volatility of Log Intensities") + theme_bw()
+p3 <- ggAcf(ts) + ggtitle("Log Intensity Autocorr") + xlab("Lag") + ylab("ACF") + theme_bw()
+p4 <- ggAcf(abs(ts - mean(ts))) + ggtitle("Volatility of Log Intensity Autocorr") + xlab("Lag") + ylab("ACF") + theme_bw()
+
+
+
+grid.arrange(p1, p3, p2, p4, nrow = 2, ncol = 2)
+```
+
+
+# Research Objectives
+
+As demonstrated in the next Motivation section, basic time series linear models badly undershoot the data's peaks. This is problematic because each peak corresponds to a strong flare event and a common end goal in this problem domain is to forecast solar flares. Thus, underestimating the severity of a flare peak has serious consequences. On the other hand, the notable correlation in the volatility sequence $\{ \sigma_n \}_{n=1:718}$ may have predictive power in addition to the original time series $\{ y_n \}_{n=1:718}$.
+
+Our research objectives are:
+
+* Firstly, we'd like to address the shortcoming of linear models by investigating a few discrete time hidden markov models. Our hypothesis is that binary hidden state markov models help with fitting the peaks in data correctly.
+
+* Secondly, given the volatility correlation, our hypothesis is that by incorporating the volatility into the generative model as a random process, it will improve the model fitting. We investigate this possibility by exploring the Heston model, borrowing stochastic volatility ideas from the Finance field.
+
+# Motivation: Basic Analysis
+
+As a first step analysis, we apply basic linear models on the data and address their shortcoming as the motivations for more advanced models discussed in the next section. 
+
+Carried over from the midterm analysis, the ARMA(1, 3) model fits the data best in term of AIC. However, in the fitted time series $\{ \hat{y}_n \}_{1:718}$ below, the fitted peaks are much smaller than the actual peaks and the fitted valleys higher. This is problematic because each peak corresponds to a strong flare event and ARMA(1, 3) couldn't reflect the flare's actual power. Since solar flare prediction is a common goal in the related literature, working with models heavily underestimating strong flare intensities has dire consequences.
+
+```{r message=F,warning=F, fig.align='center'}
+require(forecast)
+
+arima.fit <- arima(data_ts$y, order  = c(1,0,3))
+y_fitted_arma <- fitted(arima.fit)
+
+p1 <- ggplot(data=xray_df) + geom_line(aes(x = t, y = x), color='black') + ggtitle("Original Data") + xlab("Time") + ylab("Intensties")  + theme_bw() + ylim(c(-6.5,-3.5))
+
+p2 <- ggplot(data=data.frame(x = seq(1, length(y_fitted_arma)), y = y_fitted_arma)) + geom_line(aes(x = t, y = y), color='gray') + ggtitle("ARMA(1,3) Fitted Value") + xlab("Time") + ylab("Intensties")  + theme_bw() + ylim(c(-6.5,-3.5))
+
+grid.arrange(p1, p2, nrow = 1, ncol = 2)
+
+print(paste0(c("ARMA(1,3) log likelihood is ", arima.fit$loglik)))
+```
+
+As mentioned in the objective section, given the hypothesis that modeling volatility as a random process might improve the model fitting. We try out with the GARCH model, a popular stochastic volatility models in finance. GARCH(p, q) is defined as:
+
+\begin{aligned}
+&Y_n = \epsilon_n \sqrt{V_n} \\
+&V_n = \alpha_0 + \sum_{j=1}^p \alpha_j Y_{n-j}^2 + \sum_{k=1}^q \beta_k V_{n-k}
+\end{aligned}
+
+We first demean the data $\{ \tilde{y}_n = y_n - \bar{y} \}_{n=1}^{718}$ where $\bar{y} = \cfrac{1}{718} \sum_{n=1}^{718} y_n$ and fit the series with GARCH(1,1). The likelihood is worse than ARMA(1, 3) and indicates that the correlation of $\{ y_n \}_{n=1:718}$ is not captured by the model. Moreover, the fitted time series doesn't resemble the original data.
+
+```{r message=F, warning=F}
+require(tseries)
+
+fit.garch <- garch(ts  - mean(ts),grad = "numerical", trace = FALSE)
+L.garch <- tseries:::logLik.garch(fit.garch); 
+print(paste0(c("GARCH(1,1) log likelihood is ", L.garch)))
+```
+
+
+```{r class.source = 'fold-hide',message=F, warning=F, fig.align='center'}
+y_fitted <- fit.garch$fitted.values[,2]
+y_fitted[1] <- ts[1] - mean(ts)
+
+p1 <- ggplot(data=data.frame(x = ts - mean(ts), t = 1:length(ts))) + geom_line(aes(x = t, y = x), color='black') + ggtitle("Original Data") + xlab("Time") + ylab("Intensties") + theme_bw() + ylim(c(-1.5,2.0))
+
+p2 <- ggplot(data=data.frame(t = seq(1, length(y_fitted)), x = y_fitted)) + geom_line(aes(x = t, y = x), color='gray') + xlab("Time") + ylab("Intensties") + theme_bw() +  ggtitle("GARCH(1,1) fitted value") + ylim(c(-1.5,2.0))
+
+grid.arrange(p1, p2, nrow = 1, ncol = 2)
+```
+
+To remediate the problem, we fit ARMA(1,3) + GARCH(1,1) model over the original time series $\{ y_n \}$_{1:718}. Under this setting, the fitted model gives better likelihood than both ARMA(1,3) and GARCH(1,1) individually. Neverthless, the fitted time series don't look much different from ARMA(1,3). They still badly undershoot the strong flares peaks and overshoot the data valleys.
+
+```{r message=F, warning=F, results='hide', fig.align='center'}
+require(fGarch)
+bench_fit = garchFit(~ arma(1,3) + garch(1,1), data = ts, cond.dist = c("norm"))
+
+y_fitted <-  bench_fit@fitted
+
+p1 <- ggplot(data=xray_df) + geom_line(aes(x = t, y = x), color='black') + ggtitle("Original Data") + xlab("Time") + ylab("Intensties")  + theme_bw() + ylim(c(-6.5,-3.5))
+
+p2 <- ggplot(data=data.frame(x = seq(1, length(y_fitted)), y = y_fitted)) + geom_line(aes(x = t, y = y), color='gray') + ggtitle("ARMA(1,3) + GARCH(1,1) Fitted Value") + xlab("Time") + ylab("Intensties")  + theme_bw() + ylim(c(-6.5,-3.5))
+
+grid.arrange(p1, p2, nrow = 1, ncol = 2)
+```
+
+```{r}
+print(paste0(c("ARMA(1,3)+GARCH(1,1) log likelihood is ", -bench_fit@fit$value)))
+```
+
+
+The log likelihoods and AIC(s) of these fitted models are summarized in the below table:
+
+```{r echo=F, message=FALSE, fig.align='center'}
+table <- matrix(NA,3,2)
+table[1, 1] = arima.fit$loglik
+table[1, 2] = -2 * arima.fit$loglik + 2 * 4
+table[2, 1] = L.garch
+table[2, 2] = -2 * L.garch + 2 * 2
+table[3, 1] = -bench_fit@fit$value
+table[3, 2] = 2 * bench_fit@fit$value + 2 * 6
+
+dimnames(table) <- list(
+                       c("<b>ARMA(1,3)<b>", "<b>GARCH(1,1)<b>", "<b>ARMA(1,3)+GARCH(1,1)<b>"),
+                       c("<b>Log Likelihood<b>", "<b>AIC<b>"))
+
+require(knitr)
+kable(table, digits = 2)
+```
+
+
+# Gaussian HMM
+
+In the last section, the ARIMA(3,1)+GARCH(1,1) yields the highest likelihood and best AIC. However, the fitted value y doesn't accurately reflect the data's peaks and valleys. An idea to fix this is modeling the data with a discrete time Hidden Markov Model (HMM) of which hidden states are binary, i.e. $X_n \in \{0,1\}$ and under each state value the log intensities $Y_n$ follows different distributions .
+
+Intuitively, the peak of the time series associates with a strong flare. Because strong flares are much more violent and powerful than weak ones, we suspect they follow a different physical dynamics. If this is indeed true then a binary hidden state Markov model might be sufficient enough to capture them.
+
+Formally, the HMM model is defined as follows,
+
+\begin{aligned}
+&X_n | X_{n-1} = k \sim \text{Bern}(\cdot | p_k), k = 0,1 \\
+&Y_n | X_n = k \sim \text{N}(\cdot | \mu_k, \sigma_k^2)
+\end{aligned}
+
+We implemented this HMM in pomp as follows:
+
+```{r class.source = 'fold-show', message=F}
+require(pomp)
+
+hmm_step <- Csnippet("
+  if (X == 0) {
+    X = rbinom(1, p0);
+  } else {
+    X = rbinom(1, p1);
+  }
+")
+
+hmm_rinit <- Csnippet("
+  X = rbinom(1, eta); 
+")
+
+hmm_dmeas <- Csnippet("
+  if (X == 0) {
+    lik = dnorm(y, mu0, sigma0, give_log);
+  } else {
+    lik = dnorm(y, mu1, sigma1, give_log);
+  }
+")
+
+hmm_rmeas <- Csnippet("
+  if (X == 0) {
+    y = rnorm(mu0, sigma0);
+  } else {
+    y= rnorm(mu1, sigma1);
+  }
+")
+
+hmm <- pomp(data = data_ts,
+            times="t",t0=0,
+            rprocess=discrete_time(hmm_step),
+            rinit=hmm_rinit,
+            rmeasure=hmm_rmeas,
+            dmeasure=hmm_dmeas,
+            statenames=c("X"),
+            paramnames=c("p0","p1","mu0","mu1", "sigma0", "sigma1", "eta"),
+            partrans=parameter_trans(
+              log=c("sigma0", "sigma1"),
+              logit=c("p0","p1")
+            ))
+```
+
+The starting point is chosen so that the simulated data from the pomp object cover both the peaks and valleys of the data.
+
+
+```{r echo = F, message=FALSE}
+require(xts)
+require(gridExtra)
+
+nsims = 11
+params=c(mu0=-6,mu1=-4.5,p0=0.2,p1=0.7, sigma0 = 0.2, sigma1 = 0.2, eta = 0.5)
+
+hmm %>% simulate(
+  params=params,
+  nsim=nsims,format="data.frame",include.data=TRUE
+) -> sims
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+ theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, nrow=2)
+```
+
+
+
+## Optimization Search Result {.tabset}
+
+```{r echo=F, message=FALSE, results='hide'}
+library(foreach)
+library(doParallel)
+cores <- detectCores()  
+registerDoParallel(cores)
+library(doRNG)
+registerDoRNG(625904618)
+require(tidyverse)
+
+
+tic <- Sys.time()
+stew(file="results/ghmm2_pf1.rda", {
+  foreach(i=1:10,.combine=c) %dopar% {
+    library(pomp)
+    hmm %>% pfilter(params=params,Np=5000)
+  } -> pf
+})
+
+pf %>% logLik() %>% logmeanexp(se=TRUE) -> L_pf
+L_pf
+toc <- Sys.time()
+
+pf[[1]] %>% coef() %>% bind_rows() %>%
+  bind_cols(loglik=L_pf[1],loglik.se=L_pf[2]) %>%
+  write_csv("hmm_params.csv")
+```
+
+Both local and global Search are able to find the parameter values that increase the log likelihood as the iterations go by.
+
+### Local Optimization Search
+
+Local search converged quickly and increased the likelihood as the iterations progress. There are no clear trend of relationships among paramters.
+
+```{r message=FALSE}
+tic <- Sys.time()
+registerDoRNG(482947940)
+bake(file="results/ghmm2_local_search.rds",{
+  foreach(i=1:20,.combine=c) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    hmm %>%
+      mif2(
+        params=params,
+        Np=200, Nmif=50,
+        cooling.fraction.50=0.5,
+        rw.sd=rw.sd(mu0 = 0.01, mu1 = 0.005, p0 = 0.01, p1 = 0.01, 
+                    sigma0 = 0.01, sigma1 = 0.01, eta = ivp(0.01))
+      )
+  } -> mifs_local
+  attr(mifs_local,"ncpu") <- getDoParWorkers()
+  mifs_local
+}) -> mifs_local
+toc <- Sys.time()
+
+t_loc <- attr(mifs_local,"system.time")
+ncpu_loc <- attr(mifs_local,"ncpu")
+
+tic <- Sys.time()
+registerDoRNG(900242057)
+bake(file="results/ghmm2_lik_local.rds",{
+  foreach(mf=mifs_local,.combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    evals <- replicate(10, logLik(pfilter(mf,Np=2000)))
+    ll <- logmeanexp(evals,se=TRUE)
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+  attr(results,"ncpu") <- getDoParWorkers()
+  results
+}) -> results
+toc <- Sys.time()
+
+t_local <- attr(results,"system.time")
+ncpu_local <- attr(results,"ncpu")
+
+read_csv("hmm_params.csv") %>%
+  bind_rows(results) %>%
+  arrange(-loglik) %>%
+  write_csv("hmm_params.csv")
+```
+
+```{r echo='F'}
+mifs_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+
+```{r}
+pairs(~loglik+mu0+mu1+sigma0+sigma1+p0+01,data=results,pch=16)
+```
+
+### Global Optimization Search
+
+The likelihood seems to be maximized around $\mu_0=-6.2 , \mu_1=-5.6, p_0=0.1, p_1=0.9, \sigma_0 = 0.15, \sigma_1 = 0.4, \eta = 0.7$.
+
+```{r message=FALSE}
+runif_design(
+  lower=c(p0=0.1,p1=0.5,mu0=-7, mu1=-6, sigma0 = 0.01, sigma1 = 0.01, eta=0.01),
+  upper=c(p0=0.5,p1=1.0,mu0=-5, mu1=-4, sigma0 = 0.7, sigma1 = 0.7, eta=1.0),
+  nseq=50
+) -> guesses
+
+mf1 <- mifs_local[[1]]
+
+bake(file="results/ghmm2_global_search.rds",{
+  registerDoRNG(1270401678)
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    mf1 %>%
+      mif2(params=c(unlist(guess))) %>%
+      mif2(Nmif=100) -> mf
+    replicate(
+      10,
+      mf %>% pfilter(Np=200) %>% logLik()
+    ) %>%
+      logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>%
+      bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results
+  attr(results,"ncpu") <- getDoParWorkers()
+  results
+}) %>% dplyr::filter(is.finite(loglik)) -> results
+
+t_global <- attr(results,"system.time")
+ncpu_global <- attr(results,"ncpu")
+
+read_csv("hmm_params.csv") %>%
+  bind_rows(results) %>%
+  dplyr::filter(is.finite(loglik)) %>%
+  arrange(-loglik) %>%
+  write_csv("hmm_params.csv")
+```
+
+```{r echo=F, message=F}
+require(dplyr)
+require(tidyverse)
+
+read_csv("hmm_params.csv") %>%
+  dplyr::filter(loglik>max(loglik)-50) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> all
+
+
+pairs(~loglik+p0+p1+mu0+mu1+sigma0+sigma1, 
+      data= all,
+      col=ifelse(all$type=="guess",grey(0.5),"red"),pch=16)
+```
+
+## MLE
+
+```{r message=F}
+ghmm2.loglik <- max(all$loglik[!is.na(all$loglik)])
+print(paste0("Gaussian HMM2 log likelihood is ", ghmm2.loglik))
+```
+
+The global search uncovers that the likelihood is maximized -106.76 at the MLE 
+\[ \mu_0=-6.18 , \mu_1=-5.63, p_0=0.0968,p_1=0.910, \sigma_0 = 0.141, \sigma_1 = 0.417, \eta = 0.713 \]
+
+Using the MLE to simulate the data,
+
+```{r message=FALSE}
+params_mle=c(mu0=-6.18 ,mu1=-5.63,p0=0.0968,p1=0.910, sigma0 = 0.141, sigma1 = 0.417, eta = 0.713)
+
+nsims = 3
+hmm %>% simulate(
+  params=params_mle,
+  nsim=nsims,format="data.frame",include.data=TRUE
+) -> sims
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+
+  theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, nrow=2)
+```
+
+Compared to the ARMA(1,3) + GARCH(1,1), the Gaussian binary HMM's simulated data peaks are more reasonable, crossing the $y=-5$ threshold during flare events though it still slightly undershoot the highest peaks.
+
+
+## (Poor man) Profile CI {.tabset}
+
+Due to the intense computation requirement for this project, we can only construct the poor man profile confidence intervals by the time of submission, i.e., creating the CI by the archived data from local and global search. The CI precision is not high due to limited number of points above the threshold related to the Wilks' theorem. 
+
+Nevertheless, the 95% CI of $\mu_0$ and $\mu_1$ should still concentrate around the MLE $\hat{\mu}_0 =-6.18$ and $\hat{\mu}_{1} = -5.63$. The formal classification of a strong flare in the literature is $y \ge -5$. As such, it seems that the HMM indeed sees two different dynamics for strong and weak flares.  Moreover, we  want to draw the readers' attention to the CI of p0 and p1 which are  (0.08, 0.12) and (0.91, 0.93) respectively. These transition probabilities imply that 9/10 times flares will retain its current strong/weak property.
+
+```{r warning=F, message=FALSE}
+read_csv("hmm_params.csv") %>%
+  dplyr::filter(loglik>max(loglik)-50) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> all
+```
+
+
+### Poor man's profile for mu0
+
+```{r warning=F, message=F}
+maxloglik <- max(all$loglik,na.rm=TRUE)
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>%
+  dplyr::filter(is.finite(loglik)) %>%
+  group_by(round(mu0,5)) %>%
+  dplyr::filter(rank(-loglik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=mu0,y=loglik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+### Poor man's profile for mu1
+
+```{r warning=F, message=F}
+maxloglik <- max(all$loglik,na.rm=TRUE)
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>%
+  dplyr::filter(is.finite(loglik)) %>%
+  group_by(round(mu1,5)) %>%
+  dplyr::filter(rank(-loglik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=mu1,y=loglik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+### Poor man's profile for p0
+
+```{r warning=F, message=F}
+maxloglik <- max(all$loglik,na.rm=TRUE)
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>%
+  dplyr::filter(is.finite(loglik)) %>%
+  group_by(round(p0,5)) %>%
+  dplyr::filter(rank(-loglik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=p0,y=loglik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+
+### Poor man's profile for p1
+
+```{r warning=F,message=F}
+maxloglik <- max(all$loglik,na.rm=TRUE)
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>%
+  dplyr::filter(is.finite(loglik)) %>%
+  group_by(round(p1,5)) %>%
+  dplyr::filter(rank(-loglik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=p1,y=loglik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+# t-distribution HMM
+
+While the Gaussian binary HMM enhances the likelihood and the data fitness, the model still undershoot some of the highest peaks. By plotting out the histogram of the log intensities series, wee see that their empirical distribution has thicker tail than the overlayed fitted Normal one. It suggests a heavy tail distribution such as Student-t may be a better modeling choice.
+
+
+```{r echo=F, message=F, fig.align='center'}
+ggplot(data_ts, aes(x = y)) + 
+    geom_histogram(aes(y =..density..),
+                   colour = "black", 
+                   fill = "white") + ggtitle('X-ray Log Intensities in 2019 + Gaussian Fitted') +
+stat_function(fun = dnorm, args = list(mean = mean(data_ts$y), sd = sd(data_ts$y))) +
+theme_bw()
+```
+
+We modify our model using a location and scale Student-t distribution,
+
+\begin{aligned}
+&X_n | X_{n-1} = k \sim \text{Bern}(\cdot | p_k), k = 0,1 \\
+&Y_n | X_n = k \sim \text{Student-t}(\cdot | \nu_k, \mu_k, s_k)
+\end{aligned}
+
+Pomp implementation is as follows:
+
+```{r class.source = 'fold-show', message=F}
+thmm2_step <- Csnippet("
+  if (X == 0) {
+    X = rbinom(1, p0);
+  } else {
+    X = rbinom(1, p1);
+  }
+")
+
+thmm2_rinit <- Csnippet("
+  X = rbinom(1, eta); 
+")
+
+thmm2_dmeas <- Csnippet("
+  if (X == 0) {
+    if(give_log) {
+      lik = -log(s0) + dt((y - mu0) / s0, nu0, give_log);
+    } else {
+      lik = (1.0 / s0) * dt((y - mu0) / s0, nu0, give_log);
+    }
+  } else {
+    if(give_log) {
+      lik = -log(s1) + dt((y - mu1) / s1, nu1, give_log);
+    } else {
+      lik = ( 1.0 / s1) * dt((y - mu1) / s1, nu1, give_log);
+    }
+  }
+")
+
+thmm2_rmeas <- Csnippet("
+  if (X == 0) {
+    y = mu0 + s0 * rt(nu0);
+  } else {
+    y= mu1 + s1 * rt(nu1);
+  }
+")
+
+thmm2 <- pomp(data = data_ts,
+              times="t",t0=0,
+              rprocess=euler(thmm2_step,delta.t=1/12),
+              rinit=thmm2_rinit,
+              rmeasure=thmm2_rmeas,
+              dmeasure=thmm2_dmeas,
+              statenames=c("X"),
+              paramnames=c("p0","p1","mu0","mu1", "s0", "s1", "nu0", "nu1","eta"),
+              partrans=parameter_trans(
+                log=c("s0", "s1","nu0", "nu1"),
+                logit=c("p0","p1")))
+```
+
+Starting value is chosen so that the starting simulated data covers the entire range of the log intensities data.
+
+```{r}
+nsims = 11
+
+params =c(mu0=-6,mu1=-4.5,p0=0.2,p1=0.7, s0 = 0.2, s1 =0.2, nu0 = 4, nu1 = 4, eta = 0.5)
+
+thmm2 %>% simulate(
+  params=params,
+  nsim=nsims,format="data.frame",include.data=TRUE
+) -> sims
+
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+ theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, nrow=2)
+```
+
+## Optimization Search Result {.tabset}
+
+```{r echo=F}
+library(foreach)
+library(doParallel)
+cores <- detectCores()  
+registerDoParallel(cores)
+library(doRNG)
+registerDoRNG(34118892)
+require(tidyverse)
+```
+
+```{r echo=F, results='hide'}
+run_level <- 2
+Np <-           switch(run_level, 1e3, 1e4, 2e4)
+Nmif <-         switch(run_level,  10, 100, 200)
+Nreps_eval <-   switch(run_level,   4,  10,  20)
+Nreps_local <-  switch(run_level,  10,  20,  20)
+Nreps_global <- switch(run_level,  10,  20, 100)
+
+# compute log likelihood
+tic <- Sys.time()
+stew(file=sprintf("results/t2hmm-%d.rda",run_level),{
+  t.pf1 <- system.time(
+    pf1 <- foreach(i=1:Nreps_eval,
+                   .packages='pomp') %dopar% pfilter(thmm2,Np=Np, params = params))
+})
+(L.pf1 <- logmeanexp(sapply(pf1,logLik),se=TRUE))
+toc <- Sys.time()
+# write result to csv file
+```
+
+An interesting point to note about the optimization search is that there seems to be two local optima near the starting value. Because of the the stochastic nature of Iterated Filtering, particles in the "low-valued" local optimum can sometimes jump to the other "high-valued" one.
+
+### Local Optimization Search
+
+```{r message=F, warning=F, results='hide'}
+# perform local search
+thmm2.rw <- rw.sd(mu0 = 0.01, 
+                  mu1 = 0.005, 
+                  p0 = 0.01, 
+                  p1 = 0.01, 
+                  s0 = 0.01, 
+                  s1 = 0.01, 
+                  nu0 = 0.01,
+                  nu1 = 0.01,
+                  eta = ivp(0.01))
+
+tic <- Sys.time()
+stew(file=sprintf("results/thmm2_local_search-%d.rda",run_level),{
+  t.if1 <- system.time({
+    if1 <- foreach(i=1:Nreps_local,
+                   .packages='pomp', .combine=c) %dopar% mif2(thmm2,
+                                                              params=params,
+                                                              Np=Np,
+                                                              Nmif=Nmif,
+                                                              cooling.fraction.50=0.5,
+                                                              rw.sd = thmm2.rw)
+    L.if1 <- foreach(i=1:Nreps_local,
+                     .packages='pomp', .combine=rbind) %dopar% logmeanexp(
+                       replicate(Nreps_eval, logLik(pfilter(thmm2, params=coef(if1[[i]]),Np=Np))), se=TRUE)
+  })
+})
+toc <- Sys.time()
+
+# visualize local search results
+if1 %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+                    t(sapply(if1,coef)))
+
+
+pairs(~logLik+mu0+mu1+s0+s1+nu0+nu1+p0+p1+eta,
+      data=subset(r.if1,logLik>max(logLik)-50), pch = 16)
+
+r.if1.sort <- r.if1 %>% select(logLik, logLik_se, mu0, mu1, s0, s1, nu0, nu1, p0, p1, eta)
+
+if (run_level>1) write.table(r.if1.sort,file="thmm2_params.csv",
+                             append=FALSE,col.names=TRUE,row.names=FALSE,sep=',')
+```
+
+### Global Optimization Search
+
+```{r message=F, results='hide'}
+# perform global search
+thmm2.box <- rbind(
+  mu0=c(-7.0,-5.5),
+  mu1=c(-6, -4.5),
+  s0 = c(0.01,0.3),
+  s1 = c(0.1,0.65),
+  p0 = c(0.01,0.25),
+  p1 = c(0.3,1.0),
+  nu0 = c(0, 20),
+  nu1 = c(0, 20),
+  eta = c(0.3, 0.8)
+)
+
+# perform global search
+
+tic <- Sys.time()
+stew(file=sprintf("results/thmm2_global_%d.rda",run_level),{
+  t.if1 <- system.time({
+    if.box <- foreach(i=1:Nreps_global,.packages='pomp',.combine=c) %dopar% 
+      mif2(if1[[1]],params=c(apply(thmm2.box,1,function(x)runif(1,x[1],x[2]))))
+  
+    L.box <- foreach(i=1:Nreps_global,.packages='pomp',.combine=rbind) %dopar% logmeanexp(
+      replicate(Nreps_eval,
+              logLik(pfilter(thmm2,params=coef(if.box[[i]]),Np=Np))), 
+    se=TRUE)
+  })
+})  
+toc <- Sys.time()
+
+if.box %>%
+  traces() %>%
+  melt()  %>%
+  droplevels() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=L1))+
+  geom_line()+
+  facet_wrap(~variable,scales="free_y")+
+  guides(color=FALSE)
+
+
+r.box <- data.frame(logLik=L.box[,1],logLik_se=L.box[,2],
+                    t(sapply(if.box,coef)))
+
+r.box.sort <- r.box %>% select(logLik, logLik_se, mu0, mu1, s0, s1, nu0, nu1, p0, p1, eta)
+if(run_level>1) write.table(r.box.sort,file="thmm2_params.csv",
+                            append=TRUE,col.names=FALSE,row.names=FALSE, sep = ',')
+summary(r.box$logLik,digits=5)
+
+
+pairs(~logLik+mu0+mu1+s0+s1+nu0+nu1+p0+p1+eta,
+      data=subset(r.box,logLik>max(logLik)-20), pch=16)
+```
+
+## Filter Diagnostic & MLE
+
+```{r}
+if.box %>% 
+  as("data.frame") %>% 
+  tidyr::gather(variable,value,-t,-.id) %>%
+  dplyr::filter(variable == c("cond.logLik","ess")) %>%
+  ggplot(aes(x=t,y=value,group=.id,color=.id))+
+  geom_line(color='steelblue4')+
+  facet_wrap(~variable,scales="free_y",ncol=1)+
+  guides(color=FALSE)
+```
+
+The effective sample size looks fine and the maximum likelihood is -63.44 at 
+
+\[ \mu_0=-6.22 ,\mu_1=-5.78, p0=0.0920 , p1=0.241, s0 = 0.09200489, s1 = 0.2409483, 
+\nu0 = 10.5, \nu1 = 2.58, \eta = 0.431 \]
+
+```{r echo=F, message=F}
+require(dplyr)
+require(tidyverse)
+
+read_csv("thmm2_params.csv") %>%
+  dplyr::filter(logLik>max(logLik)-50) %>%
+  bind_rows() %>%
+  mutate(type=if_else(is.na(logLik),"guess","result")) %>%
+  arrange(type) -> all
+
+thmm2.loglik <- max(all$logLik[!is.na(all$logLik)])
+print(paste0(c("Student t HMM log likelihood is ", thmm2.loglik)))
+```
+
+The maximized likelihood (-63.44) is a step up from the Gaussian HMM (-106.76). Using this MLE to simulate data, it now seems to overshoot the peaks. While it's not ideal, overshooting is better than undershooting because being pessimistic about flare forecasting has milder consequences than otherwise.
+
+```{r message=FALSE}
+params_mle=c(mu0=-6.217232 ,mu1=-5.784825,p0= 0.007659585 ,p1=0.9944452, s0 = 0.09200489, s1 = 0.2409483, nu0 = 10.51105, nu1 = 2.579323, eta = 0.4314698)
+
+nsims = 1
+thmm2 %>% simulate(
+  params=params_mle,
+  nsim=nsims,format="data.frame",include.data=TRUE
+) -> sims
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+
+  theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, nrow=2)
+```
+
+## (Poor man) Profile CI {.tabset}
+
+Similar to above, we construct the poor man profile's CI due to limited computation resource and time. In the next iteration of the project, we'll put more computing effort into building the Profile CIs. The transistion probabilities $p_0$ and $p_1$ seem to concentrate around 0.00766 and 0.994. This is different from Gaussian ones. Under this setting, flares only changes their strong/weak property roughly 1/100 times.
+
+```{r echo=F}
+maxloglik <- max(all$logLik,na.rm=TRUE)
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+```
+
+### Poor man's profile for mu0
+
+```{r warning=F, message=F}
+all %>%
+  dplyr::filter(is.finite(logLik)) %>%
+  group_by(round(mu0,5)) %>%
+  dplyr::filter(rank(-logLik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=mu0,y=logLik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+### Poor man's profile for mu1
+
+```{r warning=F, message=F}
+all %>%
+  dplyr::filter(is.finite(logLik)) %>%
+  group_by(round(mu1,5)) %>%
+  dplyr::filter(rank(-logLik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=mu1,y=logLik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+### Poor man's profile for p0
+
+```{r warning=F, message=F}
+all %>%
+  dplyr::filter(is.finite(logLik)) %>%
+  group_by(round(p0,5)) %>%
+  dplyr::filter(rank(-logLik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=p0,y=logLik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+### Poor man's profile for p1
+
+```{r warning=F, message=F}
+all %>%
+  dplyr::filter(is.finite(logLik)) %>%
+  group_by(round(p1,5)) %>%
+  dplyr::filter(rank(-logLik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=p1,y=logLik))+
+  geom_point()+
+  geom_smooth(method="loess",span=0.25)+
+  geom_hline(color="red",yintercept=ci.cutoff)+
+  lims(y=maxloglik-c(5,0))
+```
+
+
+# Gaussian HMM with AR(1)
+
+The last two HMM models fit the data well and yield higher likelihood than ARMA(1,3) + GARCH(1,1) even without taking into account that $\{ y_n \}_{1:718}$ are highly correlated. To make the HMM more powerful, we can include an autoregressive component into the model, i.e.,
+
+\begin{aligned}
+&X_n | X_{n-1} = k \sim \text{Bern}(\cdot | p_k), k = 0,1 \\
+&Y_n | Y_{n-1}, X_n = k \sim \text{N}(\cdot | a_k + b_k Y_{n-1}, \sigma_k^2)
+\end{aligned}
+
+By the definition, this is not a POMP model but we can convert into one by reparameterization.
+
+* Hidden States: $(X_n, \tilde{Y}_n)$ s.t $\tilde{Y}_n | \tilde{Y}_{n-1}, X_n = k \sim \text{N}(\cdot | a_k + b_k \tilde{Y}_{n-1}, \sigma_k^2)$.
+* Measurement: $Y_n = \tilde{Y}_n$.
+
+
+The implementation is in the below.
+
+```{r class.source='fold-show', warning=F}
+ghmmar_filt <- Csnippet("
+  if (X == 0) {
+    X = rbinom(1, p0);
+  } else {
+    X = rbinom(1, p1);
+  }
+  
+  mu0 = a0 + b0 * Y_state;
+  mu1 = a1 + b1 * Y_state;
+  
+  Y_state = covaryt;
+")
+
+ghmmar_sim <- Csnippet("
+  if (X == 0) {
+    X = rbinom(1, p0);
+  } else {
+    X = rbinom(1, p1);
+  }
+  
+  mu0 = a0 + b0 * Y_state;
+  mu1 = a1 + b1 * Y_state;
+  
+  if (X == 0) {
+    Y_state = rnorm(mu0, s0);
+  } else {
+    Y_state = rnorm(mu1, s1);
+  }
+")
+
+ghmmar_rinit <- Csnippet("
+  X = x0;
+  mu0 = mu0_init; 
+  mu1 = mu1_init;
+  
+  if (X == 0) {
+    Y_state = mu0;
+  } else {
+    Y_state = mu1;
+  }
+")
+
+ghmmar_dmeas <- Csnippet("
+  if (X == 0) {
+    lik = dnorm(y, mu0, s0, give_log);
+  } else {
+    lik = dnorm(y, mu1, s1, give_log);
+  }
+")
+
+ghmmar_rmeas <- Csnippet("
+  y = Y_state;
+")
+
+hmm.filt <- pomp(data=data_ts,
+                 statenames=c("X","Y_state", "mu0", "mu1"),
+                 paramnames=c("a0","b0","a1","b1","s0","s1","p0","p1",
+                              "x0","mu0_init","mu1_init"),
+                 times="t",
+                 t0=0,
+                 covar=covariate_table(
+                   time=0:length(data_ts$y),
+                   covaryt=c(0,data_ts$y),
+                   times="time"),
+                 rmeasure=ghmmar_rmeas,
+                 dmeasure=ghmmar_dmeas,
+                 rprocess=discrete_time(ghmmar_filt,
+                                        delta.t=1),
+                 rinit=ghmmar_rinit,
+                 partrans=parameter_trans(
+                   log=c("s0", "s1"),
+                   logit=c("p0","p1"))
+)
+
+hmm.sim <- pomp(hmm.filt, 
+                statenames=c("X","Y_state", "mu0", "mu1"),
+                paramnames=c("a0","b0","a1","b1","s0","s1","p0","p1", 
+                             "x0", "mu0_init", "mu1_init"),
+                rprocess=discrete_time(
+                  step.fun=ghmmar_sim,delta.t=1))
+```
+
+Starting value is selected to cover the range of the data as before.    
+
+```{r echo=F}
+# starting values
+params=c(p0=0.2,p1=0.7, a0 = -6, b0 = 0.1, a1 = -4.5, b1 = 0.1, s0 = 0.4, 
+         s1 = 0.4)
+fixed_params = c(x0 = 0, mu0_init = -6, mu1_init = -4.5)
+
+
+sim1.sim <- simulate(hmm.sim,seed=1,params=c(params, fixed_params))
+
+sim1.filt <- pomp(sim1.sim, 
+                  covar=covariate_table(
+                    time=c(timezero(sim1.sim),time(sim1.sim)),
+                    covaryt=c(obs(sim1.sim),NA),
+                    times="time"),
+                  statenames=c("X","Y_state", "mu0", "mu1"),
+                  paramnames=c("a0","b0","a1","b1","s0","s1","p0","p1", 
+                               "x0", "mu0_init", "mu1_init"),
+                  rprocess=discrete_time(
+                    step.fun=Csnippet(ghmmar_filt),delta.t=1)
+)
+
+nsims = 11
+hmm.sim %>% simulate(
+  params=c(params, fixed_params),
+  nsim=nsims,format="data.frame",include.data=TRUE
+) -> sims
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+
+  theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, nrow=2)
+```
+
+## Optimization Search Result {.tabset}
+
+Interestingly, the log likelihood goes up then down as the iterations progress and the iterated filtering perturbation dies down. This seems to be a sign of model misspecification. This is puzzling since the proposed model in this section is a more general case of the Gaussian HMM with only mean parameters. A more thorough analysis will be carried out in a future work to understand this behavior.
+
+```{r echo=F, results='hide'}
+# perform main computation
+library(doParallel)
+cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset=NA))
+if(is.na(cores)) cores <- detectCores()  
+registerDoParallel(cores)
+library(doRNG)
+registerDoRNG(34118892)
+
+run_level <- 3
+Np <-           switch(run_level, 1e3, 1e4, 2e4)
+Nmif <-         switch(run_level,  10, 100, 200)
+Nreps_eval <-   switch(run_level,   4,  10,  20)
+Nreps_local <-  switch(run_level,  10,  20,  20)
+Nreps_global <- switch(run_level,  10,  20, 100)
+
+# compute log likelihood
+tic <- Sys.time()
+stew(file=sprintf("results/arghmm2-%d.rda",run_level),{
+  t.pf1 <- system.time(
+    pf1 <- foreach(i=1:Nreps_eval,
+                   .packages='pomp') %dopar% pfilter(sim1.filt,Np=Np, params = c(params, fixed_params)))
+})
+(L.pf1 <- logmeanexp(sapply(pf1,logLik),se=TRUE))
+toc <- Sys.time()
+```
+
+### Local Optimization Search
+
+During local search, the likelihood goes up then down and all particles seem to fluctuate in a band as iterations go by.
+
+
+```{r message=F}
+arghmm.rw <- rw.sd(a0 = 0.1, 
+                   a1 = 0.1,
+                   b0 = 0.01,
+                   b1 = 0.01,
+                   p0 = 0.01, 
+                   p1 = 0.01, 
+                   s0 = 0.01, 
+                   s1 = 0.01)
+
+# perform local search
+stew(file=sprintf("results/arghmm2_local_search-%d.rda",run_level),{
+  t.if1 <- system.time({
+    if1 <- foreach(i=1:Nreps_local,
+                   .packages='pomp', .combine=c) %dopar% mif2(hmm.filt,
+                                                              params=c(params,
+                                                                  fixed_params),
+                                                              Np=Np,
+                                                              Nmif=Nmif,
+                                                              cooling.fraction.50=0.5,
+                                                              rw.sd = arghmm.rw)
+    L.if1 <- foreach(i=1:Nreps_local,
+                     .packages='pomp', .combine=rbind) %dopar% logmeanexp(
+                       replicate(Nreps_eval, logLik(pfilter(hmm.filt, params=coef(if1[[i]]),Np=Np))), se=TRUE)
+  })
+})
+toc <- Sys.time()
+
+# visualize local search results
+if1 %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+                    t(sapply(if1,coef)))
+
+r.if1.sort <- r.if1 %>% select(logLik,logLik_se, a0, a1, b0, b1, s0, s1, p0, p1)
+
+pairs(~logLik+a0+b0+a1+b1+s0+s1+p0+p1,
+      data=subset(r.if1.sort,logLik>max(logLik)-50), pch=16)
+
+if (run_level>1) write.table(r.if1,file="arghmm2_params.csv",
+                             append=FALSE,col.names=TRUE,row.names=FALSE,
+                             sep=",")
+
+```
+
+
+### Global Optimization Search
+
+Similar to local search, global likelihood goes up and down. This may be due to a model misspecification. Moreover, $a_0$ and $b_0$ seems to have a positive linear relationship and same for $a_1$ and $b_1$.
+
+```{r message=F, results='hide'}
+arghmm2_box <- rbind(
+  a0 = c(-6.5, -4.0),
+  a1 = c(-7, -3.0),
+  b0 = c(-0.3, 0.3),
+  b1 = c(-0.5, 0.3),
+  p0 = c(0.01,0.25),
+  p1 = c(0.5,0.8),
+  s0 = c(0.01, 0.2),
+  s1 = c(0.3, 0.6)
+)
+
+tic <- Sys.time()
+stew(file=sprintf("results/arghmm2box_eval-%d.rda",run_level),{
+  t.box <- system.time({
+    if.box <- foreach(i=1:Nreps_global,
+                      .packages='pomp',.combine=c) %dopar% mif2(if1[[1]],
+    params=c(unlist(apply(arghmm2_box,1,function(x)runif(1,x[1], x[2]))),fixed_params))
+    L.box <- foreach(i=1:Nreps_global,
+                     .packages='pomp',.combine=rbind) %dopar% {
+                       logmeanexp(replicate(Nreps_eval, logLik(pfilter(
+                         hmm.filt,params=coef(if.box[[i]]),Np=Np))), 
+                         se=TRUE)}
+  })
+})
+toc <- Sys.time()
+
+r.box <- data.frame(logLik=L.box[,1],logLik_se=L.box[,2],
+                    t(sapply(if.box,coef)))
+
+r.box.sort <- r.box %>% select(logLik,logLik_se, a0, a1, b0, b1, s0, s1, p0, p1)
+
+if(run_level>1) write.table(r.box.sort,file="arghmm2_params.csv",
+                            append=TRUE,col.names=FALSE,row.names=FALSE,
+                            sep = ",")
+summary(r.box$logLik,digits=5)
+
+if.box %>%
+  traces() %>%
+  melt()  %>%
+  droplevels() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=L1))+
+  geom_line()+
+  facet_wrap(~variable,scales="free_y")+
+  guides(color=FALSE)
+
+pairs(~logLik+a0+b0+a1+b1+s0+s1+p0+p1,
+      data=subset(r.box,logLik>max(logLik)-30), pch=16)
+```
+
+
+## "Last Iteration" Estimator
+
+Due to the strange behavior of the log likelihood, we can not trust the last iteration particle values to be the MLE. However, we can still select the best one among them and use it as an estimator.
+
+```{r}
+if.box %>% 
+  as("data.frame") %>% 
+  tidyr::gather(variable,value,-t,-.id) %>%
+  dplyr::filter(variable == c("cond.logLik","ess")) %>%
+  ggplot(aes(x=t,y=value,group=.id,color=.id))+
+  geom_line(color='steelblue4')+
+  facet_wrap(~variable,scales="free_y",ncol=1)+
+  guides(color=FALSE)
+```
+
+At the last iteration, the best one has maximum likelihood -78.359 at 
+
+\[ p_0 = 0.109, p_1 = 0.828, a_0 = -4.19, b_0 =  0.318,  a_1 = -4.99, b_1 = 0.0958, s_0 = 0.121, s_1 = 0.399 \].
+
+GMM AR(1) with the "last iteration" estimator has better likelihood than the Gaussian mean HMM (-106.76) in section 5 but worse than the Student-t mean HMM (-63.44) in section 6.
+
+```{r echo=F, message=F,  warning=F}
+require(dplyr)
+require(tidyverse)
+
+read_csv("arghmm2_params.csv") %>%
+  dplyr::filter(logLik>max(logLik)-50) %>%
+  bind_rows() %>%
+  mutate(type=if_else(is.na(logLik),"guess","result")) %>%
+  arrange(type) -> all
+
+argmm2.loglik <- max(all$logLik[!is.na(all$logLik)])
+print(paste0(c("Gaussian HMM AR(1)'s best log likelihood is ",argmm2.loglik)))
+```
+
+Taking advantage of this estimator, we can generate simulated data which is very similar to the Gaussian mean HMM in the section 5.
+
+```{r message=FALSE}
+params_mle=c(p0 = 0.109425, p1 = 0.8282197, a0 = -4.186603, b0 =  0.3178851,  
+a1 = -4.99246, b1 = 0.09582447, s0 = 0.1212535, s1 = 0.3987903)
+
+nsims = 3
+hmm.sim %>% simulate(
+  params=c(params_mle,fixed_params),
+  nsim=nsims,format="data.frame",include.data=TRUE
+) -> sims
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+
+  theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, nrow=2)
+```
+
+# SV: Heston Model
+
+As motivated in Section 4, adding the volatility component to ARMA(1,3)+GARCH(1,1) increases the maximized likelihood over ARMA(1,3). This raises the question about the importance of the statistical structure of volatility for the X-ray flux time series. To answer this question, we adopt the Heston (1993) model. This model explicitly define the volatility in the generative model. If Heston model yields higher maximized likelihood than the HMM(s) developed in the previous sections and ARMA(1,3) + GARCH(1,1), there are benefits of developing future models from the perspective of volatility.
+
+We note that Heston model was originally developed for option and security pricing and there are model nuances and intricacies not applicable to the solar flare X-ray data. Nevertheless, its stochastic differential equation is fairly relevant to our problem. Moreover, we're not aware of any work in the literature approaching solar flare from stochastic volatility viewpoint. If this method turned out to be fruitful, ours would be among the first pioneer work in this problem domain.
+
+Let $Y_n$ be a time series, $S_n = \exp(Y_n)$, $\mu_n$ a mean process and $V_n$ a volatility process, Heston described their relationships through the following stochastic differential equations:
+
+
+\begin{aligned}
+&dS_n = \mu_n \cdot S_n dn + \sqrt{V_n} S_n \cdot dW_n^S \\
+&dV_n = \kappa (\bar{\sigma} - V_n) dn + \sigma \sqrt{V_n} \cdot d W_n^V \\
+&d\mu_n = \lambda (\bar{\mu} - \mu_n) dn + \eta  \cdot d W_n^{\mu}
+\end{aligned}
+
+where 
+
+* $W^S$ and $W^V$ are Wiener processes correlated with value $\rho$.
+* Parameters $\bar{\mu}, \bar{\sigma}$ as long term mean and variance.
+* Parameters $\kappa, \lambda$ as the rate of long term reversion.
+* $\sigma, \eta$ are  hyper parameters.
+
+Regarding the solar flare problem, it's not unreasonable to assume that there are a long term mean and variance of intensities from the X-ray emitting by the Sun. Any flare event is a deviation and should eventually revert back to the long term baseline as time goes by.
+
+Under Euler discretization scheme where $\Delta t = 1$, it can be shown that the solution for these equations is:
+
+\begin{aligned}
+&Y_n = \left(\mu_{n-1} - \cfrac{1}{2}V_{n-1}\right) + \sqrt{V}_{n-1} \epsilon_1 \\
+&V_n = V_{n-1} + \kappa \left(\bar{\sigma}\exp(-V_{n-1}) -1 \right) -\cfrac{1}{2}\sigma^2 + \sigma \left(\rho \epsilon_1 + \sqrt{1 - \rho^2} \epsilon_2 \right) \\
+&\mu_n = \mu_{n-1} + \lambda(\bar{\mu} - M_n) + \eta \epsilon_3
+\end{aligned}
+
+where $\epsilon_1, \epsilon_2, \epsilon_3$ are iid N$(0,1)$.
+
+The following implementation was done with referring and adapting from the [Winter 2020 final project 4](https://ionides.github.io/531w20/final_project/Project4/final.html).
+
+```{r class.source='fold-show'}
+heston_statenames <- c("Z", "M","Y_state")
+heston_rp_names <- c("k","s_bar","s", # volatility parameters
+                   "l", "m_bar", "e", # growth parameters
+                   "rho") # corr between brownian motions
+heston_ivp_names <- c("M0", "Z0")
+heston_paramnames <- c(heston_rp_names, heston_ivp_names)
+heston_covarnames <- "covaryt"
+
+rproc1 <- "
+  double dW, dW_v, dW_m, delta_t;
+  delta_t = 1;
+  dW = rnorm(0,sqrt(delta_t));
+  dW_v = rnorm(0,sqrt(delta_t));
+  dW_m = rnorm(0,sqrt(delta_t));
+  Z = Z + (k*(exp(-Z) * s_bar - 1) - 0.5*pow(s,2))*delta_t + s*(rho*dW + sqrt(1-pow(rho,2))*dW_v);
+  M = M + l*(m_bar - M)*delta_t + e*dW_m;
+"
+rproc2.sim <- "
+  Y_state = (M - 0.5*exp(Z))*delta_t + exp(Z/2)*dW;
+ "
+rproc2.filt <- "
+  Y_state = covaryt;
+ "
+heston_rproc.sim <- paste(rproc1,rproc2.sim)
+heston_rproc.filt <- paste(rproc1,rproc2.filt)
+# Define the initializer and assume that the measurement process is a perfect 
+# observation of Yt component of the state space.
+heston_rinit <- "
+  M = M0;
+  Z = Z0;
+  Y_state = rnorm( M - 0.5*exp(Z), exp(Z/2) );
+"
+heston_rmeasure = "
+  y = Y_state;
+"
+heston_dmeasure = "
+  lik = dnorm(y, M - 0.5*exp(Z), exp(Z/2), give_log);
+"
+# Perform log and logit transformations on parameters.
+heston_partrans <- parameter_trans(
+  log = c("s_bar","k", "s", "l", "e"), 
+  logit = "rho"
+)
+
+heston.filt <- pomp(data=data_ts,
+                  statenames=heston_statenames, 
+                  paramnames=heston_paramnames, 
+                  times="t",
+                  t0=0,
+                  covar=covariate_table(time=0:length(data_ts$y), 
+                                        covaryt=c(0,data_ts$y), 
+                                        times="time"),
+                  rmeasure=Csnippet(heston_rmeasure), 
+                  dmeasure=Csnippet(heston_dmeasure), 
+                  rprocess= discrete_time(step.fun = Csnippet(heston_rproc.filt),
+                                          delta.t=1), 
+                  rinit=Csnippet(heston_rinit), 
+                  partrans=heston_partrans)
+
+sim1.sim <- pomp(heston.filt, 
+                 statenames=heston_statenames, 
+                 paramnames=heston_paramnames, 
+                 rprocess=discrete_time(step.fun = Csnippet(heston_rproc.sim),
+                                        delta.t=1))
+```
+
+Similar to the last section, we take the starting value to cover all the peaks and valleys of the data.
+
+```{r}
+params_test <- c( 
+  k = 0.2, 
+  s_bar = var(data_ts$y),
+  s = 0.1, 
+  l = 1.0, 
+  m_bar = mean(data_ts$y),
+  e = 0.05,
+  rho = 0.5,
+  M0 = -5.5,
+  Z0 = 0.5
+)
+
+
+nsims = 11
+set.seed(1)
+sims = sim1.sim %>%
+  simulate(nsim=nsims,format="data.frame",params=params_test, 
+           include.data=TRUE) 
+
+require(xts)
+require(gridExtra)
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+
+  theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, ncol=2)
+```
+
+## Optimization Search Results {.tabset}
+
+Interestingly, we observe a similar likelihood behavior to Section 6. From the starting point, there seems to be two local optima nearby. One group of particles goes with "the high-valued" local optimum and the other "low-valued" one. Since two different models exhibit the same convergence pattern, this seems to be a feature of this dataset. A future work will be conducted to understand the underlying root cause.
+
+
+```{r echo=F, results='hide'}
+library(doParallel)
+cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset=NA))
+if(is.na(cores)) cores <- detectCores()  
+registerDoParallel(cores)
+library(doRNG)
+registerDoRNG(34118892)
+
+
+run_level <- 3
+Np <-           switch(run_level, 100, 1e3, 2e3)
+Nmif <-         switch(run_level,  10, 100, 200)
+Nreps_eval <-   switch(run_level,   4,  10,  20)
+Nreps_local <-  switch(run_level,  10,  20,  20)
+Nreps_global <- switch(run_level,  10,  20, 100)
+
+# evaluate likelihood
+set.seed(1)
+sims = sim1.sim %>%
+  simulate(nsim=nsims,params=params_test)
+
+stew(file=sprintf("results/heston_pf1-%d.rda",run_level),{
+  ppf1 = foreach(i=1:nsims,.packages='pomp') %dopar% {
+    sim1.filt = pomp(sims[[i]], 
+                     covar=covariate_table(
+                       time=c(timezero(sims[[i]]), time(sims[[i]])),
+                       covaryt=c(obs(sims[[i]]),NA),
+                       times="time"),
+                     statenames=heston_statenames,
+                     paramnames=heston_paramnames,
+                     rprocess=discrete_time(step.fun=Csnippet(heston_rproc.filt), delta.t=1))
+    pf1 = foreach(i=1:Nreps_eval, .packages='pomp') %dopar% {
+      pfilter(sim1.filt,Np=Np)
+    }
+    pf1
+  }
+},kind="L'Ecuyer")
+L.pf1 = foreach(i=1:nsims, .packages='pomp', .combine=rbind) %dopar%
+  logmeanexp(sapply(ppf1[[i]],logLik),se=TRUE)
+r.pf1 <- data.frame(logLik=L.pf1[,1],logLik_se=L.pf1[,2])
+summary(r.pf1$logLik,digits=5)
+toc <- Sys.time()
+```
+
+### Local Optimization Search
+
+```{r message=F, results='hide'}
+# Perform Local Search
+heston.rw <- rw.sd(k     = 0.01, 
+                   s_bar = 0.01,
+                   s     = 0.01,
+                   l     = 0.01,
+                   m_bar = 0.1, 
+                   e     = 0.01, 
+                   rho   = 0.1, 
+                   M0    = ivp(0.1),
+                   Z0    = ivp(0.1))
+
+tic <- Sys.time()
+stew(file=sprintf("results/heston_mif1-%d.rda",run_level),{
+  t.if1 <- system.time({
+    if1 <- foreach(i=1:Nreps_local, .packages='pomp', .combine=c) %dopar% 
+      mif2(heston.filt, 
+           params=params_test,
+           Np=Np,
+           Nmif=Nmif,
+           cooling.fraction.50 = 0.5,
+           rw.sd = heston.rw)
+    L.if1 <- foreach(i=1:Nreps_local,
+                     .packages='pomp', .combine=rbind) %dopar% 
+      tryCatch(logmeanexp(replicate(Nreps_eval,
+                                    logLik(pfilter(heston.filt, 
+                                                   params=coef(if1[[i]]),
+                                                   Np=Np))), se=TRUE), 
+               error = function(e){c(0,0)})
+  })
+},kind="L'Ecuyer")
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+                    t(sapply(if1,coef)))
+summary(r.if1$logLik,digits=5)
+toc <- Sys.time()
+
+if1 %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+                    t(sapply(if1,coef)))
+
+pairs(~logLik+k+s_bar+s+l+m_bar+e+rho+M0+Z0,
+     data=subset(r.if1,logLik>max(logLik)-100), pch=16)
+if (run_level>1) write.table(r.if1,file="heston_params.csv",
+                             append=FALSE,col.names=TRUE,row.names=FALSE)
+```
+
+### Global Optimization Search
+
+```{r message=F, results='hide'}
+# Perform Global Search
+heston_box <- rbind(
+  sigma_nu=c(0.005,0.05),
+  k    =c(0.01, 0.6),
+  s_bar = c(0.01,0.5),
+  s = c(0.5,1.7),
+  l = c(0,2.0),
+  m_bar = c(-6.5,-5.0),
+  e = c(0.01,0.2),
+  rho = c(0, 1.0),
+  M0 = c(-6.5,-4.5),
+  Z0 = c(-1, 1)
+)
+
+tic <- Sys.time()
+stew(file=sprintf("results/heston_box_eval-%d.rda",run_level),{
+  t.box <- system.time({
+    if.box <- foreach(i=1:Nreps_global, .packages='pomp',.combine=c) %dopar% 
+      mif2(if1[[1]],
+           params=apply(heston_box,1,function(x) runif(1,x[1], x[2])))
+    
+    L.box <- foreach(i=1:Nreps_global, .packages='pomp',.combine=rbind) %dopar% 
+      logmeanexp(replicate(Nreps_eval,
+                           logLik(pfilter(heston.filt, 
+                                          params=coef(if.box[[i]]),
+                                          Np=Np))),se=TRUE)
+  })
+},kind="L'Ecuyer")
+toc <- Sys.time()
+
+r.box <- data.frame(logLik=L.box[,1],logLik_se=L.box[,2],
+                    t(sapply(if.box,coef)))
+
+if (run_level>1) write.table(r.box,file="heston_params.csv",
+                             append=FALSE,col.names=TRUE,row.names=FALSE, sep = ',')
+
+summary(r.box$logLik,digits=5)
+
+if.box %>%
+  traces() %>%
+  melt()  %>%
+  droplevels() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=L1))+
+  geom_line()+
+  facet_wrap(~variable,scales="free_y")+
+  guides(color=FALSE)
+
+pairs(~logLik+k+s_bar+s+l+m_bar+e+rho+M0+Z0,
+     data=subset(r.box,logLik>max(logLik)-10), pch=16)
+```
+
+## Filter Diagnostic & MLE
+
+The filtering diagnostic looks reasonable. The maximum likelihood is -21.66 at 
+
+\[ k = 0.01721862, \text{s_bar} = 0.09973692,s = 0.6, l = 0.06150793, 
+  \text{m_bar} = -6.039037, e = 0.09678389, rho = 0.9993431, M0 = -5.984454,
+  Z0 = 0.9124306
+\]
+
+```{r}
+if.box %>% 
+  as("data.frame") %>% 
+  tidyr::gather(variable,value,-t,-.id) %>%
+  dplyr::filter(variable == c("cond.logLik","ess")) %>%
+  ggplot(aes(x=t,y=value,group=.id,color=.id))+
+  geom_line(color='steelblue4')+
+  facet_wrap(~variable,scales="free_y",ncol=1)+
+  guides(color=FALSE)
+```
+
+The obtained maximum likelihood is better than all other previous models. Using the MLE to simulate data, we see that except for the initial variation, the simulated data resembles the original one quite well with reasonable level of peaks and valleys. Though the simulated peaks seem to occasionally overshoot though much less than Student-t HMM in section 6.
+
+```{r echo=F, message=F}
+require(dplyr)
+require(tidyverse)
+
+read_csv("heston_params.csv") %>%
+  dplyr::filter(logLik>max(logLik)-50) %>%
+  bind_rows() %>%
+  mutate(type=if_else(is.na(logLik),"guess","result")) %>%
+  arrange(type) -> all
+
+heston.loglik <- max(all$logLik)
+print(paste0(c("Heston model likelihood is ", max(all$logLik))))
+```
+
+```{r}
+params_mle <- c( 
+  k = 0.01721862, 
+  s_bar = 0.09973692,
+  s = 0.6, 
+  l = 0.06150793, 
+  m_bar = -6.039037,
+  e = 0.09678389,
+  rho = 0.9993431,
+  M0 = -5.984454,
+  Z0 = 0.9124306
+)
+
+nsims = 1
+set.seed(1)
+sims = sim1.sim %>%
+  simulate(nsim=nsims,format="data.frame",params=params_mle, 
+           include.data=TRUE) 
+
+require(xts)
+require(gridExtra)
+
+p1 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,alpha=(.id=="data")))+
+  scale_alpha_manual(values=c(`TRUE`= 1,`FALSE`=0.2),
+                     labels=c(`FALSE`="simulations",`TRUE`="data"))+
+  labs(alpha="", y = "Log Intensity", title = "Simulations vs true data") +
+  geom_line(color = "steelblue4")+
+  theme_bw()
+p2 = sims %>%
+  mutate(time = rep(index(data_ts$y), nsims+1)) %>%
+  ggplot(mapping=aes(x=time,y=y,group=.id,color=(.id=="data")))+
+  scale_color_manual(values=c(`TRUE`="steelblue4",`FALSE`="plum"),
+                     labels=c(`FALSE`="simulation",`TRUE`="data"))+
+  labs(color="", y = "Log Intensity")+
+  geom_line()+
+  facet_wrap(~.id)
+grid.arrange(p1, p2, ncol=2)
+```
+
+
+# Conclusion & Future Work
+
+To sum up our project, we started out by modeling the solar flare X-ray time series with the linear model ARMA(1, 3) where it showed its limitation of severely undershooting the data peaks and overshooting data valley. We explore Gaussian HMM, t-distribution HMM, Gaussian HMM with AR(1) and Heston model in section 5,6, 7 and 8. Their performance is summarised in the below table.
+
+```{r echo=F, message=FALSE, fig.align='center'}
+table <- matrix(NA,7,2)
+table[1, 1] = arima.fit$loglik
+table[1, 2] = -2 * arima.fit$loglik + 2 * 4
+table[2, 1] = L.garch
+table[2, 2] = -2 * L.garch + 2 * 2
+table[3, 1] = -bench_fit@fit$value
+table[3, 2] = 2 * bench_fit@fit$value + 2 * 6
+table[4, 1] = ghmm2.loglik
+table[4, 2] = -2 * ghmm2.loglik + 2 * 6
+table[5, 1] = thmm2.loglik
+table[5, 2] = -2 * thmm2.loglik + 2 * 8
+table[6, 1] = argmm2.loglik
+table[6, 2] = NA
+table[7, 1] = heston.loglik
+table[7, 2] = -2 * heston.loglik + 2 * 7
+
+dimnames(table) <- list(
+                       c("<b>ARMA(1,3)<b>", "<b>GARCH(1,1)<b>", "<b>ARMA(1,3)+GARCH(1,1)<b>","<b>Gaussian HMM<b>", "<b>Student-t HMM<b>", 
+"<b>Gaussian HMM AR(1)<b>", "<b>Heston<b>"),
+                       c("<b>Log Likelihood<b>", "<b>AIC<b>"))
+
+require(knitr)
+kable(table, digits = 2)
+```
+
+Our study finds that
+
+* Binary Hidden Markov Model indeed helps with fitting the data. The result analysis seems to support our hypothesis that strong and weak flares follow two distinct dynamics and is captured by the HMM(s).
+* Under Gaussian HMM, its simulated peaks with the MLE cross the scientific threshold $y=-5$ during strong flare events. Nevertheless, the model still undershoots the highest peaks.
+* Student-t does better than Gaussian HMM in term of likelihoos due to having heavy tails but tends to overshoot the highest peaks. However, being pessimistic in solar flare forecasting has less negative drawbacks.
+* Under Gaussian HMM AR(1), the log likelihood exhbited a strange behavior during Iterated Filtering iterations. This may be connected to model misspecification. Nevertheless, it still found parameter values that provide better likelihood than a standard Gaussian HMM.
+* Heston model yields the best performance in term of likelihood and AIC confirming the hypothesis about utilizing volatility in modeling the X-ray intensities. Moreover, the X-ray data shows evidence of solar flares reverting to a long term baseline described in the Heston's equations.
+
+Combining our results, we know that X-ray intensities has at least two dynamics and any deviation will revert back to a long term baseline eventually. While Heston model is a promising start, for future work, we'd like to devise our own stochastic differential equations which reflects solar flares' volatility properties and unique dynamics. 
+
+# Acknowledgement
+
+We'd like to thank the authors of [the Winter 2020 project 4](https://ionides.github.io/531w20/final_project/Project4/final.html) for a nice and succinct section on the Heston model. Their pomp implementation was referred and adapted into our project.
+
+**Reference:**
+
+[1] Edward Ionides.Stats 531 lecture notes and class material.https://ionides.github.io/531w21/
+
+[2] Robert H., David S. Stoffer.Time Series Analysis and Its Applications: With R Examples. Springer, 3rd ed, 2011.
+
+[3] Chen et al, Identifying Solar Flare Precursors Using Time Series of SDO/HMI Images and SHARP Parameters, AGU, 2019
+
+[4] Vlad Landa et al, Low Dimensional Convolutional Neural Network For Solar Flares GOES Time Series Classification, arXiv, 2021.
+
+[4] Sunspots and Solar Flares, https://spaceplace.nasa.gov/solar-activity/en/
+
+[5] What are the different types, or classes, of flares?, http://solar-center.stanford.edu/SID/activities/flare.html
+
+[6] 2019 GOES X-ray flux data, https://satdat.ngdc.noaa.gov/sem/goes/data/avg/2019/
+
+[7] Li et al, Support Vector Machine combined with K-Nearest Neighbors for Solar Flare Forecasting, 2007.
+
+[8] Qahwaji & Colak, Automatic Short-Term Solar Flare Prediction Using Machine Learning and Sunspot Associations, 2007
+
+[9] Song et al, Statistical Assessment of Photospheric Magnetic Features in Imminent Solar Flare Predictions, 2009.
+
+[10] Yu et al, Short-Term Solar Flare Prediction Using a Sequential Supervised Learning Method, 2009.
+
+[11] Yuan et al, Automated flare forecasting using a statistical learning technique, 2010.
+
+[12] Amed et al, Solar Flare Prediction Using Advanced Feature Extraction, Machine Learning, and Feature Selection, 2019.
+
+[13] Jiao et al, Solar Flare Intensity Prediction With Machine Learning Models, 2020.
+
+[14] Wang et al, Predicting solar flares with machine learning: investigating solar cycle dependence, 2020.
+
+

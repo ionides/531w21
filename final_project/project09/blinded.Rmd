@@ -1,0 +1,466 @@
+---
+title: "Utah Covid Model"
+author: "STATS 531"
+date: "4/20/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(foreach)
+library(iterators)
+library(doParallel)
+library(forecast)
+library(pomp)
+library(zoo)
+library(doRNG)
+registerDoParallel()
+```
+
+# Introduction
+
+Covid-19 has completely changed the world since early 2020. The way we do school, interact with each other and almost every other aspect of our lives. It is no question then that many researchers in various fields have set asside their projects and dedicated their time to tracking, curing and modeling the spread of sars-v coronavirus. The goal of all of this was to "flatten the curve" and keep more people from getting sick and then dying from the new pandemic.
+
+My [midterm project](https://ionides.github.io/531w21/midterm_project/project16/project.html) centered around the lag between spikes and valleys in new cases, and deaths in the state of Utah. This project is a continuation of that one in the sense that the same Utah Covid-19 data is being used. However, this one focuses strictly on modeling the disease. The data has been downloaded from the [state's coronavirus website](https://coronavirus.utah.gov/case-counts/), which gets updated daily. The last download used on this project was April 19th, 2021. I am not sure how this data was gathered or how new cases, and recoveries are classified in the state of Utah, or how they take into account non reports. Though, as the data comes from an official government website, I am trusting that the data is acurate, clean and good.
+
+
+# Exploratory Data Analysis
+
+The graph below shows the number of new cases reported each day from mid-March 2020 until mid-April 2021, with no missing values. The black line represents the raw number of cases, and it seems to have a cyclic pattern, as less cases would be reported on the weekends. This is a result of the schedules of testing facilites, doctor offices and other places which are in the reporting process. The red line, represents the seven day average, which smooths these weekly trends and is probably a more acurate representation of the true data.
+
+The minimun number of averaged new cases is 0.1, and the maximum number of new cases is 3392,6, with an mean of 958.4. 
+```{r read data, include=FALSE}
+#read in data
+dat <- read_csv("Overview_Seven-Day Rolling Average COVID-19 Cases by Test Report Date_2021-04-19.csv")
+
+#make names r friendly
+names(dat) <-  make.names(names(dat), unique=TRUE)
+
+dat <- dat %>% mutate(day = (Report.Date - Report.Date[1])) %>%
+  mutate(day = as.integer(day))
+
+```
+
+```{r prelim graph, echo=FALSE}
+ggplot(data = dat, aes(x  = Report.Date)) +
+  geom_line(mapping = aes(y = Confirmed.Case.Count) ) +
+  geom_line(mapping = aes(y = Seven.day.Average), color = "red")+ 
+  scale_x_date(name = "Date") +
+  scale_y_continuous(name = "New Cases per Day", 
+    sec.axis = sec_axis(~./1,name = "7 day average"))+
+  theme(axis.title.y.right = element_text(color = "red"))
+```
+```{r summary, include=FALSE}
+summary(dat$Seven.day.Average)
+```
+
+This graph shows how there is no clear lag pattern, as there is not a better acf than the unadjusted or lagged data. Thus no further data adjustments were done to this data.
+
+```{r, echo=FALSE}
+acf(dat$Seven.day.Average, main="Covid Cases")
+#no lag pattern
+```
+
+# ARIMA Model
+
+To begin modeling this data, I started with an Auto Regressive Integrated moving Average (ARIMA) model, which I didn't do on just the new case data before. This model has the form: $$
+Y_{t}=\alpha+\beta_{1} Y_{t-1}+\beta_{2} Y_{t-2}+\ldots+\beta_{p} Y_{t-p} \epsilon_{t}+\phi_{1} \epsilon_{t-1}+\phi_{2} \epsilon_{t-2}+. .+\phi_{q} \epsilon_{t-q}
+$$  
+
+The model with the lowest AIC, or the on with the best fit is the AriMa(5,2,4) model.
+
+```{r arima AIC table, echo=FALSE}
+
+aic_table <- function(data1,P,Q) {  
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data1, order = c(p,2,q),optim.control = list(maxit = 100))$aic
+    } 
+  }
+  dimnames(table) <- list(paste('AR', 0:P, sep = ''), 
+                          paste('MA', 0:Q, sep = ''))
+
+  table
+}
+
+
+(aic <- aic_table(dat$Seven.day.Average, 5, 5))
+```
+The summary of this model is below, the coefficents for each piece are below. From the diognostics, it seems like it is an okay fit, but where the December-January spices in data are the fit becomes less predictable. There are also a few more lags outside of the ACF boundaries than we would like to see. All of the roots for this model are outside of the unit circle, so it a stationary model.
+
+```{r calling arima, echo=FALSE}
+(a0 <- arima(dat$Seven.day.Average, order = c(5,2,4)))
+
+```
+
+```{r, include= FALSE}
+(ar_roots<-polyroot(c(1,-coef(a0)[c("ar1","ar2")])))
+(ma_roots<-polyroot(c(1,-coef(a0)[c("ma1","ma2")])))
+#all roots outside unit circle so this is a stationary model.
+```
+```{r, echo=FALSE}
+checkresiduals(a0)
+```
+
+
+# SIR Model
+
+
+A SIR model uses different parameters to track a dieseas's path from those that are Succeptable, to those who are Infected, and finaly to those who have Recovered, taking into account the people who die at any step along the way.
+
+There are multiple ways to run an SIR model, but they all take into account different parameters representing the infection rate, the recovery rate and the death rate.  
+
+# Pomp
+
+The first method I tried uses the pomp package as was discussed in class, STATS 531. However I struggled with it and will explain my struggles.
+
+To begin I wanted to discover the average recovery rate. So I took the data for new cases and newly recovered patients in Utah, and compared them to find which lag had the highest correlation between them. In the plots below it appears that 15 days, has the highest correlation. Thus the mu_IR value, or the rate from infection to recovery is 1/15 days.
+
+```{r, include = FALSE}
+recovered <- read_csv("Overview_Cumulative COVID-19 Cases with Estimated Recoveries_2021-04-19.csv")
+
+names(recovered) <-  make.names(names(recovered), unique=TRUE)
+
+recovered$recovered = c(recovered$Estimated.Recovered..[1], diff(recovered$Estimated.Recovered..))
+
+recovered <-  recovered %>% mutate(seven.Day.rec = rollmean(recovered, k =7, fill = NA))
+
+```
+```{r, echo=FALSE}
+ggplot(data = recovered, aes(x  = Date)) +
+  geom_line(mapping = aes(y = recovered) ) +
+  geom_line(mapping = aes(y = seven.Day.rec), color = "red", na.rm = TRUE)+ 
+  scale_x_date(name = "Date") +
+  scale_y_continuous(name = "Recovered per Day", 
+    sec.axis = sec_axis(~./1,name = "7 day average"))+
+  theme(axis.title.y.right = element_text(color = "red"))
+```
+```{r, echo= FALSE}
+astsa::lag2.plot( dat$Seven.day.Average, na.omit(recovered$seven.Day.rec), 18)
+```
+```{r, include =FALSE}
+1/15
+```
+
+Below you can see my intial guessesfor the parameters, the red lines are the predicted models, and blue are the observed covid counts in Utah. The second graph shows the numerics that the pomp model came up with for the parameters. It doesn't appear to be all that better. Like i said though I had a few issues with pomp. After a certain number of numerics, r struggled caluclating the log-liklihood statistic which tells how well of a fit the model is to the observed data. This is the best model that it calculated. This also made comparing different models with given parameters tricky. I am not saying that pomp would not be able to model this data better, but given my computer errors, this was the best I could do. 
+
+
+```{r, echo = FALSE}
+sir_step <- function (S, I, R, H, N, Beta, mu_IR, delta.t, ...)
+{
+  dN_SI <- rbinom(n=1,size=S,prob=1-exp(-Beta*I/N*delta.t))
+  dN_IR <- rbinom(n=1,size=I,prob=1-exp(-mu_IR*delta.t))
+  S <- S - dN_SI
+  I <- I + dN_SI - dN_IR
+  R <- R + dN_IR
+  H <- H + dN_IR;
+  c(S = S, I = I, R = R, H = H)
+}
+
+sir_rinit <- function (eta=.05, N = 3250000, ...) {
+  c(S = round(N*eta), I = 1, R = round(N*(1-eta)), H = 0)
+}
+
+
+dat %>% select(day, Seven.day.Average) %>%
+  pomp(times="day",t0=0,
+       rprocess=euler(sir_step,delta.t=1/7),
+       rinit=sir_rinit
+       ) -> covidSIR
+
+covidSIR %>% 
+  pomp(
+    rprocess=euler(sir_step,delta.t=1/7),
+    rinit=sir_rinit,accumvars="H"
+  ) -> covidSIR
+
+sir_dcovid <- function (count, s, theta, ..., log) {
+  dnbinom(x=count,mu=s,size=theta,log=log)
+}
+
+sir_rcovid <- function (H, rho = .05, ...) {
+  c(Seven.day.Average=rbinom(n=1, size=H, prob=rho))
+}
+
+covidSIR %>%
+  pomp(
+    rmeasure=sir_rcovid,
+    dmeasure=sir_dcovid
+  ) -> covidSIR
+
+covidSIR %>%
+  pomp(rprocess=euler(sir_step,delta.t=1/7),
+       rinit=sir_rinit,
+       rmeasure=sir_rcovid,
+       dmeasure=sir_dcovid,
+       accumvars="H",
+       statenames=c("S","I","R","H"),
+       paramnames=c("Beta","mu_IR","N","eta","rho")
+       ) -> covidSIR
+```
+
+```{r, echo = FALSE}
+covidSIR %>% simulate(params = c(Beta=17,mu_IR=.5,rho=.5,eta=.06,N=3250000), nsim = 10, format = "data.frame",include.data=TRUE) %>% ggplot(aes(x=day,y=Seven.day.Average,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE)
+```
+
+ ```{r, include=FALSE}
+# registerDoRNG(625904618)
+# tic <- Sys.time()
+# foreach(i=1:10,.combine=c) %dopar% {
+#   library(pomp)
+#   covidSIR %>% pfilter(params=params,Np=20)
+# } -> pf
+# 
+# pf %>% logLik() %>% logmeanexp(se=TRUE) -> L_pf
+# L_pf
+# toc <- Sys.time()
+# 
+# pf[[1]] %>% coef() %>% bind_rows() %>%
+#   bind_cols(loglik=L_pf[1],loglik.se=L_pf[2]) %>%
+#   write_csv("covids_params.csv")
+# 
+# registerDoRNG(482947940)
+# bake(file="local_search.rds",{
+#   foreach(i=1:20,.combine=c) %dopar% {
+#     library(pomp)
+#     library(tidyverse)
+#     covidSIR %>%
+#       mif2(
+#         params=params,
+#         Np=20, Nmif=50,
+#         cooling.fraction.50=0.5,
+#         rw.sd=rw.sd(Beta=500, mu_IR = .03, rho=0.6, eta=ivp(0.07))
+#       )
+#   } -> mifs_local
+#   attr(mifs_local,"ncpu") <- getDoParWorkers()
+#   mifs_local
+# }) -> mifs_local
+# t_loc <- attr(mifs_local,"system.time")
+# ncpu_loc <- attr(mifs_local,"ncpu")
+# 
+# mifs_local %>%
+#   traces() %>%
+#   melt() %>%
+#   ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+#   geom_line()+
+#   guides(color=FALSE)+
+#   facet_wrap(~variable,scales="free_y")
+# 
+# ```
+# ```{r, include=FALSE}
+# registerDoRNG(900242057)
+# 
+# bake(file="lik_local.rds",{
+#   foreach(mf=mifs_local,.combine=rbind) %dopar% {
+#     library(pomp)
+#     library(tidyverse)
+#     evals <- replicate(10, logLik(pfilter(mf,Np=20)))
+#     ll <- logmeanexp(evals,se=TRUE)
+#     mf %>% coef() %>% bind_rows() %>%
+#       bind_cols(loglik=ll[1],loglik.se=ll[2])
+#   } -> results
+#   attr(results,"ncpu") <- getDoParWorkers()
+#   results
+# }) -> results
+# t_local <- attr(results,"system.time")
+# ncpu_local <- attr(results,"ncpu")
+# 
+# pairs(~Beta+eta+rho+mu_IR,data=results,pch=16)
+```
+
+
+```{r, echo = FALSE}
+covidSIR %>% simulate(params = c(Beta=50,mu_IR=.04,rho=0.6,eta=.07,N=3250000, s = 960), nsim = 10, format = "data.frame",include.data=TRUE) %>% ggplot(aes(x=day,y=Seven.day.Average,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE)
+```
+
+```{r, include = FALSE}
+
+covidSIR %>% simulate(params = c(Beta=200,mu_IR=.03,rho=0.85,eta=.07,N=3250000, s = 960), nsim = 10, format = "data.frame",include.data=TRUE) %>% ggplot(aes(x=day,y=Seven.day.Average,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE)
+```
+```{r, include=FALSE}
+##covidSIR %>%  pfilter(params = params, Np = 10)
+
+##covidSIR %>%  pfilter(params = c(Beta=50,mu_IR=.04,rho=0.6,eta=.07,N=3250000, s = 960), Np = 10)
+```
+
+```{r, include=FALSE}
+#set.seed(1239786)
+
+#foreach(i = 1:10, .combine = c) %dopar% {
+#  library(pomp)
+#  covidSIR %>%  pfilter(params = params, Np = 100)
+#} -> pf
+
+#(pf %>% logLik() %>% logmeanexp(se = TRUE) -> L_pf)
+
+```
+Obviously this fit is not great, and I wanted to do better, so I looked into other packages which create SIR models. The one that worked best for me, wasn't necessarily a package, but a [step-by step process](https://statsandr.com/blog/covid-19-in-belgium/) which generates curves for each of the S-I-R pieces of the model to show how they interact.
+
+# SIR Process
+
+I began by creating a function which calculates each piece of the SIR model with respect to the other, and started with the whole population in the "S" or suceptable state. The [Univeristy of Utah](https://gardner.utah.edu/blog-new-2020-census-bureau-estimates/#:~:text=On%20December%2022%2C%20the%20Census,of%20any%20state%20at%2017.6%25.) stated that a fair 2020 census estimation (as the actual counts are not out yet) is that Utah has a population of roughly 3,250,000 people. I am using that as a constant population count in my model. I then used my data to find the best parameters for beta and gamma which in this case are the rates of people contracting COVID-19 and recovering from it respectively. In this case, the best beta was 0.0088, and the best gamma was 0.0458.
+
+```{r,include=FALSE}
+
+library(deSolve)
+SIR <- function(time, state, parameters) {
+  par <- as.list(c(state, parameters))
+  with(par, {
+    dS <- -beta * I * S / N
+    dI <- beta * I * S / N - gamma * I
+    dR <- gamma * I
+    list(c(dS, dI, dR))
+  })
+}
+
+N <- 3250000
+init <- c(
+  S = N - dat$Cumulative.Cases[1],
+  I = dat$Cumulative.Cases[1],
+  R = 0
+)
+
+# define a function to calculate the residual sum of squares
+# (RSS), passing in parameters beta and gamma that are to be
+# optimised for the best fit to the incidence data
+RSS <- function(parameters) {
+  names(parameters) <- c("beta", "gamma")
+  out <- ode(y = init, times = dat$day, func = SIR, parms = parameters)
+  fit <- out[, 3]
+  sum((dat$Cumulative.Cases - fit)^2)
+}
+
+# now find the values of beta and gamma that give the
+# smallest RSS, which represents the best fit to the data.
+# Start with values of 0.5 for each, and constrain them to
+# the interval 0 to 1.0
+
+# install.packages("deSolve")
+
+Opt <- optim(c(0.5, 0.5),
+  RSS,
+  method = "L-BFGS-B",
+  lower = c(0, 0),
+  upper = c(1, 1)
+)
+
+# check for convergence
+Opt$message
+
+Opt_par <- setNames(Opt$par, c("beta", "gamma"))
+Opt_par
+
+```
+
+
+Below, the blue dots (which are so close they form a line) represent the total cumulative number of new covid cases, and the red line is the infected piece of the SIR modelfor the data. The second graph is the same data, just ploted on a log scale. The model still isn't a perfect fit, but the SIR model seems to show the cycle of the virus better than the pomp model i was able to achieve.
+```{r, echo=FALSE}
+
+
+# get the fitted values from our SIR model
+fitted_cumulative_incidence <- data.frame(ode(
+  y = init, times = dat$day,
+  func = SIR, parms = Opt_par
+))
+
+fitted_cumulative_incidence <- fitted_cumulative_incidence %>%
+  mutate(
+    Date = dat$Report.Date,
+    cumulative_incident_cases = dat$Cumulative.Cases
+  )
+
+# plot the data
+library(ggplot2)
+fitted_cumulative_incidence %>%
+  ggplot(aes(x = Date)) +
+  geom_line(aes(y = I, colour = "red")) +
+  geom_point(aes(y = cumulative_incident_cases), colour = "blue") +
+  labs(
+    y = "Cumulative incidence",
+    title = "COVID-19 fitted vs observed cumulative incidence, Utah",
+    subtitle = "(Red = fitted from SIR model, blue = observed)"
+  ) +
+  theme_minimal()
+```
+
+
+```{r, echo=FALSE}
+fitted_cumulative_incidence %>%
+  ggplot(aes(x = Date)) +
+  geom_line(aes(y = I), colour = "red") +
+  geom_point(aes(y = cumulative_incident_cases), colour = "blue") +
+  labs(
+    y = "Cumulative incidence",
+    title = "COVID-19 fitted vs observed cumulative incidence, Utah: Log Scale",
+    subtitle = "(Red = fitted from SIR model, blue = observed)"
+  ) +
+  theme_minimal() +
+  scale_y_log10(labels = scales::comma)
+```
+This graph shows the each piece of the SIR data. The black line is those who are suceptable, the green line represents those who have recovered, and the red represents those currently infected. The blue is the actual cumulative cases. According to the model, the virus reached it's peak in February and we are now on our way towards community recovery in Utah.
+```{r, echo=FALSE}
+
+
+# get the fitted values from our SIR model
+fitted_cumulative_incidence <- data.frame(ode(
+  y = init, times = dat$day,
+  func = SIR, parms = Opt_par
+))
+
+# add a Date column and join the observed incidence data
+fitted_cumulative_incidence <- fitted_cumulative_incidence %>%
+  mutate(
+    Date = dat$Report.Date,
+    cumulative_incident_cases = dat$Cumulative.Cases)
+
+# plot the data
+fitted_cumulative_incidence %>%
+  ggplot(aes(x = Date)) +
+  geom_line(aes(y = I), colour = "red") +
+  geom_line(aes(y = S), colour = "black") +
+  geom_line(aes(y = R), colour = "green") +
+  geom_point(aes(y = cumulative_incident_cases),
+    colour = "blue"
+  ) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(y = "Persons", title = "COVID-19 fitted vs observed cumulative incidence, Utah") +
+  scale_colour_manual(name = "", values = c(
+    red = "red", black = "black",
+    green = "green", blue = "blue"
+  ), labels = c(
+    "Susceptible",
+    "Recovered", "Observed", "Infectious"
+  )) 
+```
+```{r, include=FALSE}
+fit <- fitted_cumulative_incidence
+
+# peak of pandemic
+fit[fit$I == max(fit$I), c("Date", "I")]
+```
+# Conclusions
+
+Things which are not measured are not adressed. Modeling the coronavirus spread helps us understand where in the span of the virus we are. Even at midterms we were about the peak of the virus in Utah, and now according to all of these models, we can see that the virus is begining to be in decline. Had I used different resouces, like being able to make the greatlakes computer work in my timeframe, i trust that the pomp model would have been more acurate, and better be able to better explain the rates of the data. However there are more than one solutions to most problems, and this SIR model also fits and predicts the data.
+
+Further studies could dive into wheather other parts of the country fit this same trend and if the same parameters could be adapted to model the virus's spread with different populations. With pomp models using different parameters would help refine the data, and explorations into more acurate ways to find the parameters would also help improve this data set.
+
+# Resources 
+
+There were many students in 2020 that chose to do their final projects on Covid-19 data as well. However, the spike in my data is December 2020-January 2021, which was after this class was done with their course. Thus though  my data covers the same disease, and though I looked through their reports, mine had different challenges, and my data had a different shape, and thus I feel confident in concluding that my work is my own.
+
+Data was taken from the stat of Utah's Coronavirus website: https://coronavirus.utah.gov/case-counts/
+
+Population estimates for Utah were gathered from the University of Utah's website: https://gardner.utah.edu/blog-new-2020-census-bureau-estimates/#:~:text=On%20December%2022%2C%20the%20Census,of%20any%20state%20at%2017.6%25.
+
+The SIR process was followed from a tutorial on statsandr.com: https://statsandr.com/blog/covid-19-in-belgium/
+
+The paper and statistics for this project were all written by me.

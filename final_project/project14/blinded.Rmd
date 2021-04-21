@@ -1,0 +1,723 @@
+---
+title: "Stats 531, W21, Final Project"
+date: April 20, 2021
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    code_folding: hide
+    theme: journal
+    highlight: pygments
+---
+
+```{css, include = TRUE, echo = FALSE}
+body{ /* Normal */
+  font-size: 14.5px;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, echo = TRUE)
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(pomp)
+  library(doParallel)
+  library(doRNG)
+})
+```
+
+## Introduction 
+
+[Mumps](#ref)$^{[1]}$ is a virus that was once a common cause of childhood hearing loss and one of the leading causes of military hospitalizations in the United States. Following the licensing of the measles, mumps, and rubella (MMR) vaccine in 1971 and a successful national 2 dose vaccination program, the U.S. saw a 99% reduction in cases, according to [CDC](#ref)$^{[2]}$.
+
+```{r mumps_logo, fig.align = 'center', fig.cap = cap_fig1, out.width="80%"}
+# directories: ----------------------------------------------------------------
+path = './'
+## Figure 1
+cap_fig1 = paste(
+  "**Figure 1.** *Symptoms of Mumps.*",
+  "Image by *FirstCry Parenting* channel on Youtube."
+)
+mumps_LOGO = sprintf('%s/mumps.jpg', path)
+knitr::include_graphics(mumps_LOGO)
+```
+
+So in this report, we are trying to find the transmission pattern of mumps in the *1970s*, and specifically, we want to examine the following question:
+
+>  Can mumps cases of Michigan in the 1970s be well modeled by an SEIR pomp model?
+
+### Data Description
+
+Our data is from [Project Tycho](#ref)$^{[3]}$, which collects infections disease data to be used for research purposes. In this project, we focused on weekly mumps reporting data from Michigan from *September 1971* to *September 1973*.
+  
+Three useful variables are listed below:
+
+- `week` is the index variable measuring the number of weeks from the start date.
+- `cases` record the overall reporting cases.
+- `state_name` is the state where cases are reported.
+
+## Analysis
+
+### Exploratory Data Analysis
+
+We plot the time series first to have an overview of the data. There are two waves in the data, as we can see. There are a few things to take into consideration when choosing a model. The relatively simple SIR model used in class may be insufficient to describe a larger system with several waves of infection. Over a long enough period, without considering demographic data, the population of individuals susceptible to the disease would eventually be depleted. In addition, it may be appropriate to apply a seasonality to the contact rate to help explain the annual rise and fall of cases.
+
+In addition, the mumps virus has an incubation period of approximately 17 days, after which an individual could potentially spread the virus (sometimes asymptomatically) for over a week, according to the [CDC](#ref)$^{[2]}$. 
+
+```{r import, warning=FALSE, message=FALSE}
+# data: -----------------------------------------------------------------------
+## Project Tycho: Contagious Diseases
+## mumps data
+mumps_file = sprintf('%s/mumps.csv', path)
+mumps = read_delim(mumps_file, delim = ',' ) %>%
+  select(week, state, state_name, cases)
+
+mumps_data = mumps %>%
+  filter(state_name == "MICHIGAN") %>%
+  filter(week >= 197137 & week <= 197334) %>%
+  select(cases) %>%
+  mutate(week = 1:100) %>%
+  relocate(week, cases)
+```
+
+```{r mumps_plot, fig.cap=cap_fig2}
+cap_fig2 = paste(
+  "**Figure 2.** *Mumps reporting data from Michigan by weeks.*",
+   "The data is from September 1971 to September 1973."
+)
+
+mumps_data %>%
+  ggplot(aes(x = week, y = cases))+
+  geom_line(col = "tomato3")
+```
+
+### SEIR model with seasonal contact rate
+
+In order to capture such seasonality and the prolonged incubation period, we may consider an SEIR model with a seasonal contact rate $\beta$. We will ignore the question of depletion of the susceptible population, as our data set spans only 2 years.
+
+```{r SEIR_logo, fig.align = 'center', fig.cap = cap_fig3}
+cap_fig3 = paste(
+  "**Figure 3.** *SEIR model with four compartments.*"
+)
+SEIR_LOGO = sprintf('%s/SEIR.jpg', path)
+knitr::include_graphics(SEIR_LOGO)
+```
+
+
+Our model consists of 4 compartments, representing the Susceptible (**S**), Exposed(**E**) individuals (*those who have been infected but are not yet infectious*), the Infected (**I**), and those that have Recovered (**R**) from the disease.
+
+According to Michigan [government](#ref)$^{[6]}$, the population of Michigan only increased by about 2% from the year 1970 to the year 1974. We would argue that that's a change small enough that we can approximate the demographics as constant.
+
+So taking the simplest case by ignoring demography, we can compute the number of people in each compartment with the following formulas:
+
+\begin{equation}
+\begin{split}
+S(t) &= S(0) - N_{SE}(t) \\
+E(t) &= E(0) + N_{SE}(t) - N_{EI}(t) \\
+I(t) &= I(0) + N_{EI}(t) - N_{IR}(t) \\
+R(t) &= R(0) + N_{IR}(t)
+\end{split}
+\end{equation}
+
+And as we pointed out, the contact rate must vary with time, so we define 
+$$\beta = \exp\left\{b_{2}cos\left(\frac{2\pi t}{52}-\phi\right)+b_{1}\right\}$$
+Here number **52** represents the 52 weeks in a year (our proposed period of seasonality), and $\phi$ is the original phase, $b_{2}$ is usually called the amplitude, while $b_{1}$ is a constant indicating the mean level of contact rate.
+
+Note that, we still use **binomial** process to be our measurement model.
+
+## Implementation
+
+### Building the model
+
+So based on the above assumptions, now we can do the actual fitting. For the detailed implementation of our model, please click the button below.
+
+<details>
+ <summary> `Model Details` </summary>
+```
+## SEIR mode: -----------------------------------------------------------------
+seir_step <- Csnippet("
+double Beta;
+Beta = exp(b1 + b2 * cos(M_2PI/52*t - Phi));
+double dN_SE = rbinom(S, 1-exp(-Beta*I/N*dt));
+double dN_EI = rbinom(E, 1-exp(-mu_EI*dt));
+double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
+S -= dN_SE;
+E += dN_SE - dN_EI;
+I += dN_EI - dN_IR;
+H += dN_IR;
+")
+
+seir_init <- Csnippet("
+S = nearbyint(eta*N);
+E = 20;
+I = 10;
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dnbinom(cases, H, rho, give_log);
+")
+
+rmeas <- Csnippet("
+cases = rnbinom(H, rho);
+")
+
+mumpSEIR = mumps_data %>%
+  pomp(
+    times = "week",
+    t0 = 0,
+    rprocess = euler(seir_step, delta.t=1/7),
+    rinit = seir_init,
+    rmeasure = rmeas,
+    dmeasure = dmeas,
+    accumvars = "H",
+    partrans = parameter_trans(
+      logit = c("rho", "eta")
+    ),
+    statenames = c("S", "E", "I", "H"),
+    paramnames = c("b1", "b2", "Phi", "mu_EI",
+                   "mu_IR", "eta", "rho", "N"),
+    cdir = "./",
+    cfile = "mumpSEIR"
+  )
+```
+</details>
+
+```{r SEIR_MOD, message=FALSE, warning=FALSE}
+## SEIR mode: -----------------------------------------------------------------
+seir_step <- Csnippet("
+double Beta;
+Beta = exp(b1 + b2 * cos(M_2PI/52*t - Phi));
+double dN_SE = rbinom(S, 1-exp(-Beta*I/N*dt));
+double dN_EI = rbinom(E, 1-exp(-mu_EI*dt));
+double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
+S -= dN_SE;
+E += dN_SE - dN_EI;
+I += dN_EI - dN_IR;
+H += dN_IR;
+")
+
+seir_init <- Csnippet("
+S = nearbyint(eta*N);
+E = 20;
+I = 10;
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dnbinom(cases, H, rho, give_log);
+")
+
+rmeas <- Csnippet("
+cases = rnbinom(H, rho);
+")
+
+mumpSEIR = mumps_data %>%
+  pomp(
+    times = "week",
+    t0 = 0,
+    rprocess = euler(seir_step, delta.t=1/7),
+    rinit = seir_init,
+    rmeasure = rmeas,
+    dmeasure = dmeas,
+    accumvars = "H",
+    partrans = parameter_trans(
+      logit = c("rho", "eta")
+    ),
+    statenames = c("S", "E", "I", "H"),
+    paramnames = c("b1", "b2", "Phi", "mu_EI",
+                   "mu_IR", "eta", "rho", "N"),
+    cdir = "./",
+    cfile = "mumpSEIR"
+  )
+
+mumps_fixed_params = c(N = 8881826, mu_EI = 0.412, mu_IR = 0.714)
+
+params = c(b1 = 1, b2 = 1, Phi = 0.1,
+           rho = 0.8, eta = 0.0216,
+           mumps_fixed_params)
+
+y = mumpSEIR %>%
+  simulate(params = params,
+           nsim = 10,
+           format = "data.frame",
+           include.data = TRUE)
+```
+
+We choose starting values to be
+$$b_{1} = 1, b_{2} = 1, \phi = 0.1, \rho = 0.8, \eta = 0.0216, N= 8881826, \mu_{EI} = 0.412, \mu_{IR} = 0.714$$
+Our values for $N$, $\mu_{EI}$, and $\mu_{IR}$ are held constant and are defined by the population of Michigan, approximate incubation period, and approximate infectious period as previously discussed.
+
+The starting value of our remaining variables is randomly selected to examine the feasibility of our model. Below we plot ten simulations of our SEIR model, along with the original time series. We see that the fit is really poor, while part of the values are missing.
+
+This might be caused by a bad choice of parameters. Since we are using binomial process as our measurement, bounded support of binomial distribution requires that the observed reports should not exceed latent cases. A bad choice of parameters can break this requirement and thus results in missing values.
+
+So we now continue to improve our fit by iterated filtering and find the best parameters by maximizing the likelihood function.
+
+```{r fit_1, fig.cap = cap_fig4, message=FALSE, warning=FALSE}
+cap_fig4 = paste( 
+  "**Figure 4.** *10 times simulated data(red) of SEIR model vs original time series(blue).*",
+  "Starting value is randomly selected."
+)
+
+y %>%
+  ggplot(aes(x = week, y = cases,
+             group = .id, color = .id=="data")
+  ) +
+  geom_line() +
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
+```
+
+### Likelihood-based inference
+
+#### Local maximization of likelihood {.tabset .tabset-fade .tabset-pills}
+
+Let’s carry out a local search using `mif2` around our starting point in parameter space.
+We need to choose the `rw.sd` and `cooling.fraction.50` algorithmic parameters.
+
+We’ll use a perturbation size of 0.02, since the parameter $\beta$ now is varied on a small scale, and so do the other parameters.This amount of perturbation can have a small but non-negligible effect on our filtering, which can smooth the likelihood function and can help to converge.
+
+The `cooling.fraction.50` is fixed to be 0.5, so that after 50 `mif2` iterations, the perturbations are reduced to half their original magnitudes.
+
+```{r computational intensity, message=FALSE, warning=FALSE}
+run_level = 2
+mumps_Np = switch(run_level, 100, 1e3, 2e3)
+mumps_Nmif = switch(run_level, 10, 100, 150)
+mumps_Nreps_eval = switch(run_level, 2, 10, 20)
+mumps_Nreps_local = switch(run_level, 10, 30, 40)
+mumps_Nreps_global = switch(run_level, 10, 60, 100)
+mumps_Nsim = switch(run_level, 50, 70, 100)
+```
+
+```{r local_search, message=FALSE, warning=FALSE}
+
+
+stew('results/local.rda', {
+  registerDoParallel(8)
+  registerDoRNG(2021531)
+  mifs_local = foreach(i = 1:mumps_Nreps_local,
+                      .packages = c("pomp", "tidyverse"),
+                      .combine = c,
+                      .export = c("mumpSEIR","params","mumps_Np",
+                                 "mumps_Nreps_eval", "mumps_Nmif")
+                      ) %dopar% { 
+    mumpSEIR %>%
+      mif2(
+        params = params,
+        Np = mumps_Np, 
+        Nmif = mumps_Nmif,
+        cooling.fraction.50 = 0.5,
+        rw.sd = rw.sd(b1 = 0.02, b2 = 0.02, Phi = 0.02,
+                      rho = 0.02, eta = ivp(0.02)
+                      )
+      )
+  }
+
+  registerDoParallel(8)
+  registerDoRNG(2021531)
+  lik_local = foreach(i = 1:mumps_Nreps_local,
+                      .packages = c("pomp", "tidyverse"),
+                      .combine = rbind,
+                      .export = c("mumpSEIR", "params",
+                                 "mumps_Np", "mumps_Nreps_eval")
+                      ) %dopar% {
+    logmeanexp(
+      replicate(mumps_Nreps_eval,
+                logLik(pfilter(mumpSEIR,
+                              params =  coef(mifs_local[[i]]),
+                              Np = mumps_Np)
+                      )
+                ),
+      se = TRUE)
+  }
+})
+
+```
+
+Here's our results, we show them in the table and plot the figure below.
+
+##### Figure
+
+We obtain some diagnostic plots now. There is considerable variability mainly due to the poorness of our starting guess, but what is obvious is that the likelihood eventually increases as the iterations proceed, and seems to converge after several iterations. And, the stochasticity may also be caused by the Monte Carlo algorithm itself.
+
+In terms of parameters, $b_{1}$, $b_{2}$, $\phi$, $\rho$ all have a clear trend of convergence, but $\eta$ seems to have more variability.
+
+```{r local_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig5}
+cap_fig5 = paste( 
+  "**Figure 5.** *Values of parameters corresponding to each local iteration*",
+  "Starting value is randomly selected."
+)
+
+mifs_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x = iteration,
+             y = value,
+             group = L1,
+             color = factor(L1)
+             )
+         )+
+  geom_line()+
+  guides(color = FALSE)+
+  facet_wrap(~variable,
+             scales = "free_y")
+```
+
+##### Table
+
+The likelihood approximation generated by the final filtering iteration may not be that reliable for multiple reasons, so, following the methods we learned in class, we use replicated particle filters to evaluate both likelihood and standard error again at each point estimate.
+
+The results are tabulated below.
+
+Although the likelihood of these models are quite close, we can still find that the parameters and standard error vary from case to case, but roughly on an acceptable scale.
+
+```{r local_tab, message=FALSE, warning=FALSE}
+r_local = t(sapply(mifs_local, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_local[,1],
+                   logLik_se = lik_local[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  head(10)
+cap_tab1 = paste( 
+  "**Table 1.** *Parameters of top ten models of local maximization of likelihood function.*",
+  "Observations are ordered by Log likelihood."
+)
+r_local %>%
+  knitr::kable(digits = 3,
+               caption = cap_tab1)
+```
+
+##### Geometry: Pairwise relation
+
+The sampling is too sparse to give a clear picture, and there seems to be no clear patterns between these parameters.
+
+```{r local_fig_pair, fig.cap=cap_fig6, message=FALSE, warning=FALSE}
+cap_fig6 = paste( 
+  "**Figure 6.** *Pairwaise relations between parameters*",
+  "Local search."
+)
+pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
+      data = r_local, pch = 16)
+```
+
+#### Local fit
+
+The local maximization of likelihood function yields several combination of parameters, as we tabulated them in the above table. Now we select the parameters that corresponds to the largest likelihood to fit our model, and simulate the data to see how reasonable the fit is going to be.
+
+```{r local_fit, message=FALSE, warning=FALSE, fig.cap=cap_fig7}
+params_name = c("b1", "b2", "Phi", "rho", "eta")
+local_params = r_local[1,]
+best_local = unlist(c(local_params[params_name], mumps_fixed_params))
+
+set.seed(643345567)
+mod_local = mumpSEIR %>%
+  simulate(params = best_local,
+           nsim = 1,
+           format = "data.frame",
+           include.data = TRUE)
+
+cap_fig7 = paste( 
+  "**Figure 7.** *One simulation of data.*",
+  "Parameters are selected from the best local search."
+)
+
+mod_local %>%
+  ggplot(aes(x = week,
+             y = cases,
+             group = .id,
+             color = .id=="data")
+  ) +
+  geom_line() +
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
+```
+
+The plot suggests that our current model is much better than the initial one, and it can describe the seasonal characteristics of our data.
+
+#### Global maximization of likelihood {.tabset .tabset-fade .tabset-pills}
+
+Local maximization of likelihood function may already improves model a lot, but global maximization is still of significant importance here, since the dimension of our parameter space is large, our local search is certainly not enough to cover the majority of points.
+
+```{r global_search, message=FALSE, warning=FALSE}
+mumps_box = rbind(
+  b1 = c(0,5), b2 = c(0,5), Phi = c(0, 2*pi),
+  eta = c(0,0.10), rho = c(0, 0.9)
+)
+
+stew('results/global.rda', {
+  registerDoParallel()
+  registerDoRNG(2021531)
+  mifs_global = foreach(i = 1:mumps_Nreps_global,
+                        .packages = 'pomp', 
+                        .combine = c,
+                        .export = c("mifs_local", "mumps_box",
+                                  "mumps_fixed_params")
+                        ) %dopar%{
+    mif2(mifs_local[[1]],
+        params = c(apply(mumps_box,
+                         1,
+                         function(x) runif(1, x[1], x[2])),
+                   mumps_fixed_params
+                   )
+        )
+  }
+  
+  registerDoParallel()
+  registerDoRNG(2021531)
+  lik_global = foreach(i = 1:mumps_Nreps_global,
+                       .packages = 'pomp',
+                       .combine = rbind,
+                       .export = c("mumps_Nreps_eval",
+                                   "mumpSEIR", "mumps_Np")
+                     ) %dopar% {
+    logmeanexp(
+      replicate(mumps_Nreps_eval, 
+                logLik(pfilter(mumpSEIR,
+                              params = coef(mifs_global[[i]]),
+                              Np = mumps_Np)
+                      )
+                ),
+      se = TRUE
+    )
+  }
+})
+```
+
+##### Figure
+
+The global maximization of likelihood function yields rather interesting plots here. Different starting points tends to behave differently, and the convergence values actually vary from case to case. For different starting values, the values of $b_{1}$,$b_{2}$,$\eta$,$\phi$ tends to be stable ever since the first iteration, but $\rho$ has a trend of convergence, although it seems to diverge into two directions because of distinct starting values.
+
+```{r global_fig, message=FALSE, warning=FALSE, fig.cap=cap_fig8}
+cap_fig8 = paste( 
+  "**Figure 8.** *Values of parameters corresponding to each global iteration*",
+  "Starting value is randomly selected."
+)
+
+mifs_global %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x = iteration,
+             y = value,
+             group = L1,
+             color = factor(L1)
+  )
+  )+
+  geom_line()+
+  guides(color = FALSE)+
+  facet_wrap(~variable,
+             scales = "free_y")
+```
+
+The shape of log likelihood is somehow like a cliff, and it can be explained by the bad choices of starting parameters. Note that, this kind of behavior actually is likely to happen when the dimension of parameter space increases. The sparsity nature means that a thorough search is computationally expensive, since basically our algorithm is using **Uniform distribution** to sample parameters from the parameter space. So your starting point is very likely to be away from the optimal point, this is why some likelihood values are so low at the first few iterations and then suddenly increase dramatically. The [plot](#ref)$^{[7]}$ below illustrates the sparsity of the neighborhood of one point in a high dimensional space.
+
+```{r sparsity, fig.align = 'center', fig.cap = cap_fig10, out.width="80%"}
+cap_fig10 = paste(
+  "**Figure 10.** *The curse of dimensionality is well illustrated by a subcubical
+neighborhood for uniform data in a unit cube.*",
+"The figure on the right shows the side-length of the subcube needed to capture a fraction r of the volume of the data, for different dimensions p. In ten dimensions we need to cover 80% of the range
+of each coordinate to capture 10% of the data."
+)
+Sparsity = sprintf('%s/sparsity.png', path)
+knitr::include_graphics(Sparsity)
+```
+
+So with limited computational power, it is unlikely for us to cover all the points in the parameter space, but the global attempts here are still worth trying because it provides us with some other models which have quite different parameters but share a roughly same value of log likelihood(*as showed in the Table*).
+
+##### Table
+
+```{r global_tab, message=FALSE, warning=FALSE}
+r_global = t(sapply(mifs_global, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_global[,1],
+                   logLik_se = lik_global[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  head(10)
+cap_tab2 = paste( 
+  "**Table 2.** *Parameters of top ten models of global maximization of likelihood function.*",
+  "Observations are ordered by Log likelihood."
+)
+r_global %>%
+  knitr::kable(digits = 3,
+               caption = cap_tab2)
+```
+
+##### Geometry: Pairwise relation
+
+A trade-off effect can be found between $b_{1}$ and $\eta$, this may form a ridge on the likelihood surface.
+
+```{r global_fig_pair, fig.cap=cap_fig9, message=FALSE, warning=FALSE}
+cap_fig9 = paste( 
+  "**Figure 9.** *Pairwaise relations between parameters*",
+  "Global search."
+)
+pairs( ~ logLik + b1 + b2 + Phi+ rho + eta ,
+      data = r_global, pch = 16)
+```
+
+### Model suggested by Global search
+
+ The best likelihoods seem to correspond to a low reporting rate $(\rho \sim 12\% )$ and a small susceptible population $(\eta \sim 4-6\%)$. For more detailed information about the parameters of the top ten models identified by our algorithm, see Table 2 above.
+
+Now, we use the parameters suggested by the global search to fit our model. Then, we plot it below. The results of simulation with fit parameters looks pretty promising.
+
+```{r global_mod, message=FALSE, warning=FALSE}
+global_params = r_global[1,]
+best_global = unlist(c(global_params[params_name], mumps_fixed_params))
+set.seed(238765234)
+mod_global = mumpSEIR %>%
+  simulate(params = best_global,
+           nsim = 1,
+           format = "data.frame",
+           include.data = TRUE)
+```
+
+```{r global_plot, fig.cap=cap_fig11, message=FALSE, warning=FALSE}
+cap_fig11 = paste( 
+  "**Figure 11.** *One simulation of data.*",
+  "Parameters are selected from the best global search."
+)
+mod_global %>%
+  ggplot(aes(x = week,
+             y = cases,
+             group = .id,
+             color = .id=="data")
+  ) +
+  geom_line() +
+  labs(x = "Weeks",
+       y = "Reporting Cases",
+       color = "Original Data")
+```
+
+### Profile likelihood for Parameter Rho
+
+According to CDC, before the U.S. mumps vaccination program started in 1967, about 186,000 cases were reported each year, but the actual number of cases was likely much higher due to underreporting. So the reporting rate might be low during those years. One may be interested in the actual level of reporting rate, so we are going to build a profile likelihood for $\rho$, and then construct a confidence interval to see if we can find a reliable estimation of reporting rate.
+
+```{r profile, warning=FALSE, message=FALSE}
+## Profile likelihood for rho: ------------------------------------------------
+box = t(sapply(mifs_global, coef)) %>%
+  as_tibble() %>%
+  bind_cols(tibble(logLik = lik_global[,1],
+                   logLik_se = lik_global[,2])
+  ) %>%
+  arrange(-logLik) %>%
+  drop_na() %>%
+  filter(logLik > max(logLik) - 10, logLik_se < 2) %>%
+  sapply(range)
+
+guesses = profile_design(
+  rho = seq(0.01, 0.50, length = 30),
+  lower = box[1, c("b1", "b2", "Phi", "eta")],
+  upper = box[2, c("b1", "b2", "Phi", "eta")],
+  nprof = 15, type = "runif"
+)
+
+stew('results/profile.rda', {
+
+registerDoParallel(8)
+registerDoRNG(2021531)
+results = foreach(guess = iter(guesses, "row"),
+                  .packages = c("pomp", "tidyverse"),
+                  .combine = rbind,
+                  .export = c("mumps_fixed_params", "mifs_local")
+                  ) %dopar% {
+  mf = mifs_local[[1]] %>%
+    mif2(params = c(unlist(guess),
+                    mumps_fixed_params),
+         rw.sd = rw.sd(b1 = 0.02, b2 = 0.02,
+                       Phi = 0.02, eta = ivp(0.02))
+    ) %>%
+    mif2(Nmif = 40,
+         cooling.fraction.50 = 0.3)
+  ll = replicate(10, mf %>%
+                   pfilter(Np = 1000) %>%
+                   logLik()
+                 ) %>%
+    logmeanexp(se = TRUE)
+  mf %>% 
+    coef() %>% 
+    bind_rows() %>%
+    bind_cols(logLik = ll[1],
+              logLik_se=ll[2]
+    )
+}}
+)
+```
+
+Based on the information given by CDC, we can assume that $\rho<0.5$. So we sampled $\rho$ from $Uniform(0,0.5)$, and then constructed the profile likelihood by maximizing the likelihood function over all other parameters. The figure below illustrate the reliable confidence interval of reporting rate $\rho$, and we place the exact value in the table below.
+
+```{r profile_plot, messgae=FALSE, warning=FALSE, fig.cap=cap_fig12}
+maxloglik = max(results$logLik, na.rm=TRUE)
+ci_cutoff = maxloglik - 0.5 * qchisq(df = 1, p = 0.95)
+cap_fig12 = paste( 
+  "**Figure 12.** *Profile likelihood of reporting rate.*",
+  "Horizontal line respresents the 95% confidence bound."
+)
+results %>%
+  filter(is.finite(logLik)) %>%
+  mutate(rho = round(rho, 5)) %>%
+  group_by(rho) %>%
+  summarize(maxlogLik = max(logLik)) %>%
+  ggplot(aes(x = rho,
+             y = maxlogLik)
+  ) +
+  geom_point()+
+  geom_smooth(method = "loess",
+              span = 0.3
+  )+
+  geom_hline(color = "red",
+             yintercept = ci_cutoff
+  )+
+  lims(y = maxloglik-c(10,0))
+```
+
+The simulation actually tells us that any value of $\rho$ ranging from 11.14% to 14.52% should be considered reasonable. So the reporting rate is indeed quite low, but given the fact that many mumps patients recover completely within two weeks, and mumps is a self-limited disease, such a low reporting rate still makes sense.
+
+```{r, profile_tab, message=FALSE, warning=FALSE}
+rho_ci = results %>%
+  drop_na() %>%
+  filter(logLik > max(logLik) - 0.5 * qchisq(df = 1, p = 0.95)) %>%
+  summarize(min = min(rho),max = max(rho)) %>%
+  mutate(lower = sprintf("%.2f%%", 100 * min),
+         upper = sprintf("%.2f%%", 100 * max)) %>%
+  select(lower, upper)
+
+cap_tab3 = paste( 
+  "**Table 3.** *95% confidence interval of reporting rate.*",
+  "Numbers are rounded to 2 decimal places."
+)
+
+rho_ci %>%
+  knitr::kable(caption = cap_tab3)
+```
+
+## Conclusion
+
+Thinking back to the question we considered at the beginning of the report, we can now can say that mumps cases of Michigan in the 1970s can be well modeled by an SEIR pomp model, and the key to do this is to add a seasonal contact rate. Parameters selection can be time-consuming, the fit may be not that perfect due to randomness of simulation, but what really matters is that the seasonality have already been captured by this model, and usually our model only differs by a constant from the original data.
+
+## Limitations
+
+- The curse of dimension makes it computationally expensive to maximize the likelihood function globally.
+- The problem of depletion of the susceptible population still exists, and our model may not work if the time series is sampled over a long time span, like 10+ years. Similarly, since our model ignores demography, it is possible that our parameters are less accurate than might be ideal.
+- The model can be sensitive to the value of parameters, a bad choice of parameters usually results in *NaN* values of cases, causing *-inf* log likelihood.
+
+## References {#ref}
+
+[1] Mumps Epidemic, https://www.cdc.gov/mmwr/preview/mmwrhtml/mm5513a3.htm
+
+[2] Epidemiology and Prevention of Vaccine-Preventable Diseases, Chapter 15:Mumps, https://www.cdc.gov/vaccines/pubs/pinkbook/mumps.html
+
+[3] Project Tycho: Contagious Diseases, https://www.kaggle.com/pitt/contagious-diseases
+
+[4] Vaccine Coverage Levels – United States, 1962-2009, https://www.cdc.gov/vaccines/pubs/pinkbook/downloads/appendices/g/coverage.pdf
+
+[5] MDHHS Vaccine-Preventable Disease Mumps Investigation Guidelines -Mumps, https://www.michigan.gov/documents/mdch/Mumps_388978_7.pdf
+
+[6] MICHIGAN AND U.S. POPULATION, 1970-2019, https://www.senate.michigan.gov/sfa/Economics/Michigan&USPopulation.PDF
+
+[7] The Elements of Statistical Learning Data Mining, Inference, and Prediction (2nd edition) by Trevor Hastie, Robert Tibshirani, Jerome Friedman, page 23.

@@ -1,0 +1,499 @@
+---
+title: "Extended Analysis on the U.S. 10-year Treasury Bond Yied"
+date: "4/20/2021"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+    theme: united
+    highlight: tango
+    number_sections: yes
+  pdf_document:
+    toc: yes
+---
+
+# Preface
+
+- This report is an extension of the midterm project submitted for STATS 531 in Winter 2021.
+
+- I included the Decomposition of Yield as Trend, Noise and Cycle in section 5.3 which should have been included in the midterm project. This can be reviewed along with other complementary approaches to this research.
+
+# Motivation and Background for the analysis
+
+- US Treasury Bond is a common investment tool for many institutional investors, including insurance companies. Specifically, insurance companies are required to invest in long-term bonds to match the asset duration with the liability duration and enhance the RBC (Risk-Based Capital) ratio. As a person who is devoting the career to the insurance industry, I have a particular interest in the trend, cyclic pattern, and the association with other factors of the U.S. Treasury long-term bond. 
+
+- The data is downloaded from the U.S. Treasury Website. Please note that it may take a minute to download the data. If it takes too long, please pause and rerun the code.
+
+- In this analysis, I choose to analyze the 10-year data among different long-term bonds because it has the most data points. The 30-year yield data was not available for a period between 2002 and 2006 because 30 year securities were not being offered during that period. The 20-year yield is not available until October 1993 because 20-year securities were not offered by then. 
+
+- I choose to transform the daily data into monthly data for the analysis which has just right sample size, $n=375$. The daily data has $n=7801$ samples, which are too large, and the annual data has $n=19$, which are too small.
+
+# Basic Plots
+
+We first checked the overall picture of the monthly yields using the basic plot.
+
+```{r import_package, message=FALSE, warning=FALSE, include=FALSE}
+# Importing packages
+#install.packages("GGally")
+#install.packages("XML")
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(GGally)
+library(httr)
+library(XML)
+```
+
+```{r load_data, message=FALSE, warning=FALSE, include=FALSE}
+# Loading Dataset
+
+year_list = 1990:2021
+dat = data.frame()
+for (year in year_list) {
+  URL = paste0("https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=yieldYear&year=",year)
+  
+  urldata <- httr::GET(URL)
+  data <- XML::readHTMLTable(rawToChar(urldata$content),
+                        stringsAsFactors = FALSE)
+  
+  # Finds html based list element w/daily data for the year
+  namesCheck <- c("Date","1 mo","3 mo","6 mo","1 yr","2 yr","3 yr","5 yr","7 yr","10 yr","20 yr","30 yr")
+  dataCheck <- NULL
+  for(i in 1:length(data)){
+        dataCheck[[i]] <- names(data[[i]])
+  }
+  
+  ## Returns appropriate frame
+  dataCheck <- which(unlist(lapply(1:length(dataCheck), function(i) 
+     (dataCheck[[i]] == namesCheck)[1])) == TRUE)
+  
+  temp <- as.data.frame((data[dataCheck]))
+  names(temp) <- gsub("NULL.","", names(temp)) # Take out "NULL."
+  
+  dat <- rbind(dat, temp)
+}
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+# Change the data format and impute missing values
+
+# Change the type of 10-year yield from character to numeric 
+dat[,'10.yr'] = as.numeric(dat[,'10.yr'])
+
+# Replace a row having 0 values for all variables with the previous day's row
+dat[which(dat['10.yr'] < 0.5),] = dat[which(dat['10.yr'] < 0.5)-1, ]
+
+# Replace a row having NA value for 10-year yield with the previous day's row
+dat[which(dat[,'10.yr'] %in% NA),][,'10.yr'] = dat[which(dat[,'10.yr'] %in% NA)-1,][,'10.yr']
+
+# Transform Date into a standard format 'POSIXct'
+data = dat[, c('Date', '10.yr')]
+colnames(data) = c('Date', 'Yield')
+data$Date = strptime(data$Date, "%m/%d/%y") %>% as.Date()
+data$year = format(data$Date, format="%Y") %>% as.numeric()
+data$month = format(data$Date, format="%m") %>% as.numeric()
+data$day = format(data$Date, format="%d") %>% as.numeric()
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Generate a monthly data
+monthdata = matrix(nrow=1, ncol=dim(data)[2])
+colnames(monthdata) = c("Date", "Yield", "year", "month", "day")
+i=1
+
+for (y in 1990:2020) {
+  for (m in 1:12) {
+    temp_data = data %>% filter(year==y, month==m)
+    temp_day = temp_data$day %>% min()
+    temp_row = temp_data %>% filter(year==y, month==m, day==temp_day)
+    monthdata = rbind(monthdata, temp_row)
+    i = i+1
+  }
+}
+
+for (m in 1:3) {
+  temp_data = data %>% filter(year==2021, month==m)
+  temp_day = temp_data$day %>% min()
+  temp_row = temp_data %>% filter(year==2021, month==m, day==temp_day)
+  monthdata = rbind(monthdata, temp_row)
+  i = i+1
+}
+
+monthdata = monthdata[-1,]
+rownames(monthdata) = NULL
+rownames(monthdata) = 1:nrow(monthdata)
+
+monthdata$Date = as.Date(monthdata$Date, origin = "1970-01-01")
+
+plot(Yield~Date, data=monthdata, ty="l", main="10-year Treasury Bond: Monthly Yields")
+```
+
+Next, we checked the difference of the yields, which can be used for the stochastic volatility models.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yield_diff = diff(monthdata$Yield)
+
+plot(diff(Yield)~Date[-1], data=monthdata, ty="l",
+     xlab="Date", ylab="Difference of yields",
+     main="10-year Treasury Bond: Difference of Monthly Yields")
+```
+
+# GARCH model
+
+In our efforts to find the best model to fit this data, we first fitted the GARCH (Generalized Auto-Regressive Conditional Heteroskedasticity) model.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+require(tseries)
+fit.garch <- garch(yield_diff ,grad = "numerical",
+  trace = FALSE)
+
+summary(fit.garch)
+(L.garch <- tseries:::logLik.garch(fit.garch))
+```
+
+The 3-parameter GARCH(1,1) model has a maximized log likelihood of -33.89. We could simulate from a fitted GARCH model, but we choose not to do. It is because GARCH is a black-box model.
+
+# Stochastic volatility models using POMP
+
+Instead of GARCH model, we tried a POMP (Partially Observed Markov Processes) model that allows us to try diverse hypotheses about how volatility behaves.
+
+```{r include=FALSE}
+## Building a POMP model
+yield_statenames <- c("H","G","Y_state")
+yield_rp_names <- c("sigma_nu","mu_h","phi","sigma_eta")
+yield_ivp_names <- c("G_0","H_0")
+yield_paramnames <- c(yield_rp_names, yield_ivp_names)
+```
+
+```{r include=FALSE}
+rproc1 <- "
+  double beta,omega,nu;
+  omega = rnorm(0,sigma_eta * sqrt( 1- phi*phi ) * 
+    sqrt(1-tanh(G)*tanh(G)));
+  nu = rnorm(0, sigma_nu);
+  G += nu;
+  beta = Y_state * sigma_eta * sqrt( 1- phi*phi );
+  H = mu_h*(1 - phi) + phi*H + beta * tanh( G ) 
+    * exp(-H/2) + omega;
+"
+rproc2.sim <- "
+  Y_state = rnorm( 0,exp(H/2) );
+ "
+
+rproc2.filt <- "
+  Y_state = covaryt;
+ "
+yield_rproc.sim <- paste(rproc1,rproc2.sim)
+yield_rproc.filt <- paste(rproc1,rproc2.filt)
+```
+
+```{r include=FALSE}
+yield_rinit <- "
+  G = G_0;
+  H = H_0;
+  Y_state = rnorm( 0,exp(H/2) );
+"
+
+yield_rmeasure <- "
+   y=Y_state;
+"
+
+yield_dmeasure <- "
+   lik=dnorm(y,0,exp(H/2),give_log);
+"
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+## Parameter transformations
+library(pomp)
+yield_partrans <- parameter_trans(
+  log=c("sigma_eta","sigma_nu"),
+  logit="phi"
+)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+yield.filt <- pomp(data=data.frame(
+    y=yield_diff, time=1:length(yield_diff)),
+  statenames=yield_statenames,
+  paramnames=yield_paramnames,
+  times="time",
+  t0=0,
+  covar=covariate_table(
+    time=0:length(yield_diff),
+    covaryt=c(0,yield_diff),
+    times="time"),
+  rmeasure=Csnippet(yield_rmeasure),
+  dmeasure=Csnippet(yield_dmeasure),
+  rprocess=discrete_time(step.fun=Csnippet(yield_rproc.filt),
+    delta.t=1),
+  rinit=Csnippet(yield_rinit),
+  partrans=yield_partrans
+)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+params_test <- c(
+  sigma_nu = exp(-4.5),  
+  mu_h = -0.25,  	 
+  phi = expit(4),	 
+  sigma_eta = exp(-0.07),
+  G_0 = 0,
+  H_0=0
+)
+  
+sim1.sim <- pomp(yield.filt, 
+  statenames=yield_statenames,
+  paramnames=yield_paramnames,
+  rprocess=discrete_time(
+    step.fun=Csnippet(yield_rproc.sim),delta.t=1)
+)
+
+sim1.sim <- simulate(sim1.sim,seed=1,params=params_test)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+sim1.filt <- pomp(sim1.sim, 
+  covar=covariate_table(
+    time=c(timezero(sim1.sim),time(sim1.sim)),
+    covaryt=c(obs(sim1.sim),NA),
+    times="time"),
+  statenames=yield_statenames,
+  paramnames=yield_paramnames,
+  rprocess=discrete_time(
+    step.fun=Csnippet(yield_rproc.filt),delta.t=1)
+)
+```
+
+## Filtering on simulated data
+
+We first checked that we could indeed filter and re-estimate parameters successfully for the simulated data. We set up code to switch between different levels of computational intensity.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+run_level <- 3
+yield_Np <-           switch(run_level, 100, 1e3, 2e3)
+yield_Nmif <-         switch(run_level,  10, 100, 200)
+yield_Nreps_eval <-   switch(run_level,   4,  10,  20)
+yield_Nreps_local <-  switch(run_level,  10,  20,  20)
+yield_Nreps_global <- switch(run_level,  10,  20, 100)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(doParallel)
+cores <-  as.numeric(Sys.getenv('SLURM_NTASKS_PER_NODE', unset=NA))
+if(is.na(cores)) cores <- detectCores()  
+registerDoParallel(cores)
+library(doRNG)
+registerDoRNG(34118892)
+stew(file=sprintf("pf1-%d.rda",run_level),{
+  t.pf1 <- system.time(
+    pf1 <- foreach(i=1:yield_Nreps_eval,
+      .packages='pomp') %dopar% pfilter(sim1.filt,Np=yield_Np))
+})
+(L.pf1 <- logmeanexp(sapply(pf1,logLik),se=TRUE))
+```
+In a second, using 36 cores of CPU on Great Lakes, we obtained a log likelihood estimate of -539.67 with a Monte Carlo standard error of 0.034.
+
+## Fitting the stochastic leverage model to US 10-year bond yield data
+
+Next, we tried out iterated filtering on the U.S. 10-year bond yield data. We used the IF2 algorithm of Ionides et al. (2015), implemented by mif2.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yield_rw.sd_rp <- 0.02
+yield_rw.sd_ivp <- 0.1
+yield_cooling.fraction.50 <- 0.5
+yield_rw.sd <- rw.sd(
+  sigma_nu  = yield_rw.sd_rp,
+  mu_h      = yield_rw.sd_rp,
+  phi       = yield_rw.sd_rp,
+  sigma_eta = yield_rw.sd_rp,
+  G_0       = ivp(yield_rw.sd_ivp),
+  H_0       = ivp(yield_rw.sd_ivp)
+)	 
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+stew(file=sprintf("mif1-%d.rda",run_level),{
+  t.if1 <- system.time({
+  if1 <- foreach(i=1:yield_Nreps_local,
+    .packages='pomp', .combine=c) %dopar% mif2(yield.filt,
+      params=params_test,
+      Np=yield_Np,
+      Nmif=yield_Nmif,
+      cooling.fraction.50=yield_cooling.fraction.50,
+      rw.sd = yield_rw.sd)
+  L.if1 <- foreach(i=1:yield_Nreps_local,
+    .packages='pomp', .combine=rbind) %dopar% logmeanexp(
+      replicate(yield_Nreps_eval, logLik(pfilter(yield.filt,
+        params=coef(if1[[i]]),Np=yield_Np))), se=TRUE)
+  })
+})
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+  t(sapply(if1,coef)))
+if (run_level>1) write.table(r.if1,file="yield_params.csv",
+  append=TRUE,col.names=FALSE,row.names=FALSE)
+```
+
+In this section, the investigation took 3 minutes on Great Lakes. The repeated stochastic maximization also shows us the geometry of the likelihood surface in a neighborhood of this point estimate:
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+pairs(~logLik+sigma_nu+mu_h+phi+sigma_eta,
+  data=subset(r.if1,logLik>max(logLik)-20))
+```
+
+## Likelihood maximization using randomized starting values
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yield_box <- rbind(
+ sigma_nu=c(0.005,0.05),
+ mu_h    =c(-1,0),
+ phi = c(0.95,0.99),
+ sigma_eta = c(0.5,1),
+ G_0 = c(-2,2),
+ H_0 = c(-1,1)
+)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+stew(file=sprintf("box_eval-%d.rda",run_level),{
+  t.box <- system.time({
+    if.box <- foreach(i=1:yield_Nreps_global,
+      .packages='pomp',.combine=c) %dopar% mif2(if1[[1]],
+        params=apply(yield_box,1,function(x)runif(1,x)))
+    L.box <- foreach(i=1:yield_Nreps_global,
+      .packages='pomp',.combine=rbind) %dopar% {
+         logmeanexp(replicate(yield_Nreps_eval, logLik(pfilter(
+	   yield.filt,params=coef(if.box[[i]]),Np=yield_Np))), 
+           se=TRUE)}
+  })
+})
+r.box <- data.frame(logLik=L.box[,1],logLik_se=L.box[,2],
+  t(sapply(if.box,coef)))
+if(run_level>1) write.table(r.box,file="yield_params.csv",
+  append=TRUE,col.names=FALSE,row.names=FALSE)
+summary(r.box$logLik,digits=5)
+```
+
+In this section, the investigation took 10 minutes on Great Lakes. The best likelihood found was -25.71.
+
+Plotting these diverse parameter estimates can help to give a feel for the global geometry of the likelihood surface.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+pairs(~logLik+log(sigma_nu)+mu_h+phi+sigma_eta+H_0,
+  data=subset(r.box,logLik>max(logLik)-10))
+```
+
+# Complementary approach
+
+## A Loess smooth of 10-year US Treasury Bond rates
+
+We conducted an extended analysis for extracting the cyclic pattern for the data. Beginning with the Loess smoothing, we decomposed the Trend, Noise and Cycle for the data.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yield = monthdata$Yield
+date = seq(from=1962, length=length(monthdata$Date), by=1/12)
+yield_loess = loess(yield~date, span=0.5)
+plot(yield~date, ty="l", col="red")
+lines(yield_loess$x, yield_loess$fitted, ty="l")
+```
+
+## Checking the Frequency response
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yield_ts = ts(yield, start=1990, frequency=12)
+spec = spectrum(ts.union(
+  yield_ts, ts(yield_loess$fitted, start=1990, frequency=12)),
+  plot=FALSE)
+plot(spec$freq, spec$spec[,2]/spec$spec[,1], ty="l", log="y",
+     ylab="frequency ratio", xlab="frequency", xlim=c(0,5),
+     main="frequency response")
+abline(h=1, lty="dashed", col="red")
+```
+
+## Decomposition of Yield as Trend, Noise and Cycle
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+yield_low = ts(loess(yield~date, span=0.5)$fitted,
+               start=1990, frequency=12)
+yield_hi = ts(yield - loess(yield~date, span=0.1)$fitted,
+              start=1990, frequency=12)
+yield_cycles = yield - yield_hi - yield_low
+plot(ts.union(yield, yield_low, yield_hi, yield_cycles),
+     main = "Decomposition of Yield as Trend + Noise + Cycles")
+```
+
+## Association with the 10-year bond yield and CPI (Customer Price Index)
+
+It is alleged that the 10-year bond yield has an association with CPI. We tried to check this. We used the data for CPI (Customer Price Index) growth rate compared to the previous period. The data is from Federal Reserve Bank of St. Louis.
+
+We first used the Hodrick-Prescott filter to define the HP-detrended yield and CPI.
+
+```{r include=FALSE}
+cpi = read.csv("cpi.csv")
+cpi[nrow(cpi)+1,] = cpi[nrow(cpi),]
+cpi[nrow(cpi),1] = "3/1/2021"
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+#install.packages("mFilter")
+library(mFilter)
+t = monthdata$Date
+y = monthdata$Yield
+c = cpi$Growth
+y_hp <- hpfilter(y, freq=100,type="lambda",drift=F)$cycle
+c_hp <- hpfilter(c, freq=100,type="lambda",drift=F)$cycle
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(t,y_hp,type="l",xlab="",ylab="detrended yield")
+par(new=TRUE)
+plot(t,c_hp,col="red",type="l",axes=FALSE,xlab="",ylab="")
+axis(side=4, col="red",col.ticks="red",col.axis="red")
+mtext("detrended CPI growth",side=4,col="red",line=3)
+```
+
+We computed the p-value from a likelihood ratio test based on the detrended data.
+
+```{r echo=FALSE}
+log_lik_ratio <- as.numeric(
+   arima(y_hp,xreg=c_hp,order=c(1,0,0))$loglik -
+   arima(y_hp,order=c(1,0,0))$loglik
+)
+(LRT_pval <- 1-pchisq(2*log_lik_ratio,df=1))
+```
+The p-value is much larger than 0.05, so we could not have a clear statistical evidence for a positive association between detrended yield and detrended CPI.
+
+To ensure that there is no association between two data, we drew a squared coherence plot. As shown below, we couldn't see a significant peak for the plot.
+
+```{r echo=FALSE}
+s <- spectrum(cbind(y_hp,c_hp),spans=c(3,5,3),plot=F)
+plot(s,plot.type="coherency",main="")
+```
+
+# Conclusion
+
+- We compared the GARCH and the POMP models. The POMP model performed better in terms of the maximum likelihood estimate. The GARCH model for the dataset showed a maximized likelihood of -33.89 with 3 fitted parameters. The POMP model has a maximized log likelihood of -25.71 with 6 fitted parameters. Due to the better performance and possibility of interpretation, we would prefer using POMP model.
+
+- As opposed to the common knowledge that there should be an association between the US 10-year bond yield rate and the CPI, we could not find a clear association. Naturally, we could not use the CPI for predicting the yield. It may be possible that other factors such as PMI (Purchasing Managers' Index) or unemployment rates are associate with the yields.
+
+# Reference
+
+[1] 10-year U.S. Treasury Bond Yield data
+
+https://www.treasury.gov/resource-center/data-chart-center/interest-rates/Pages/TextView.aspx?data=yield
+
+[2] Parsing 10-year federal note yield from the website
+
+https://stackoverflow.com/questions/37952589/parsing-10-year-federal-note-yield-from-the-website
+
+[3] Customer Price Index Data: Total All Items for the United States
+
+https://fred.stlouisfed.org/tags/series?t=cpi%3Bmonthly
+
+[4] Introduction to Risk-Based Capital (RBC) by National Association of Insurance Commissioners
+
+https://content.naic.org/cipr_topics/topic_riskbased_capital.htm
+
+[5] Prof. Edward Ionides' Lecture Slides for STATS 531 (Winter 2021)
+
+https://ionides.github.io/531w21/#class-notes-and-lectures

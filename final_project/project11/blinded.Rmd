@@ -1,0 +1,576 @@
+---
+title: "Modeling COVID-19 Cases in Michigan: ARMA model v.s. SEIR POMP model"
+date: "4/20/2021"
+output: 
+  bookdown::html_document2:
+    theme: yeti
+    toc: yes
+    toc_float: true
+---
+
+```{r setup, echo = F, message = F, warning = F}
+library(pomp)
+library(cowplot)
+library(ggplot2)
+library(tseries)
+library(tidyverse)
+library(mFilter)
+
+data <- read.csv("covid_data.csv", stringsAsFactors = T)
+oct_first <- which(data$Date == "2020-10-01")
+feb_first <- which(data$Date == "2021-02-01")
+data_subset <- data[oct_first:feb_first,] 
+data_subset <- data_subset %>% mutate(day = 1:nrow(data_subset))
+data_main <- data_subset %>% select(day, reports = Cases)
+```
+
+# Introduction
+COVID-19’s introduction to the United States has proven to be an incredible force which has shaped our lives throughout 2020 into 2021. This was acutely realized in the state of Michigan which experienced rapid surges, several rounds of restrictions and mask hesitancy. Because the virus can present itself differently based on the individual, it can lead to a variety of infectious periods. The CDC [[1](https://www.cdc.gov/coronavirus/2019-ncov/hcp/duration-isolation.html#:~:text=Most%20adults%20with%20more%20severe,due%20to%20severe%20immunocompromise.)] reported that someone infected with a less severe case should no longer be infectious 10 days after the onset of symptoms, while those with more severe cases can be infectious for 20 days or longer. An article published by the National Institute of Health [[2](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7186134/)] said that symptoms don’t typically start until 5-6 days after infection, with some cases not seeing symptoms until day 14. The variability in the virus has caused severe underreporting, which has been estimated to be around 10% of actual cases according to one article published by researchers at MIT [[3](https://www.medrxiv.org/content/10.1101/2020.06.24.20139451v2.full.pdf)]. The aforementioned conditions along with a latent symptom period and asymptomatic spread has led to an interesting and challenging modeling experience. Past research [[4](https://ionides.github.io/531w20/final_project/Project6/final.html)] on modeling COVID-19 has been done with a specific location in mind; for our purposes, we work to study the state of Michigan and begin by applying an ARMA model and a POMP model and we then draw comparisons between both.
+
+# Exploratory Data Analysis (EDA)
+
+The data is from the Michigan website [[5](https://www.michigan.gov/coronavirus/0,9753,7-406-98163_98173---,00.html)] and available dates included reported positive COVID-19 cases from March 2020 to April 2021. The data is originally given by cases by county. For our purposes, we aggregate the data of all available counties by day. By assessing the plot we can see that there are a couple of large spikes; the largest spike of reported cases was over the winter months. For the purposes of our analysis, the data is subsetted to only analyze and model the “winter spike” from October 1st 2020 to February 1st 2021. 
+
+```{r, echo = F}
+data %>%
+  ggplot(aes(x = as.Date(Date), y = Cases)) +
+  geom_line() +
+  geom_smooth(method = 'lm',
+              formula = y ~ x) +
+  xlab("Date (Daily)") +
+  ylab("Covid Cases") + 
+  theme_bw() + ggtitle("Time Series Plot of Reported Michigan COVID-19 Cases") 
+```
+
+```{r, echo = F}
+data_subset %>%
+  ggplot(aes(x = as.Date(Date), y = Cases)) +
+  geom_line() +
+  geom_smooth(method = 'lm',
+              formula = y ~ x) +
+  xlab("Date (Daily)") +
+  ylab("Covid Cases") +
+  theme_bw()
+```
+
+A line of best fit is included in the plot to visually assess the linearity and stationarity of the plot [[6](https://ionides.github.io/531w21/midterm_project/project02/project.html)]. It can be noticed that in order to proceed with a more introductory time series method such as ARMA modeling, we may want to detrend the data. In addition the Augmented Dickey–Fuller (ADF) and Kwiatkowski–Phillips–Schmidt–Shin (KPSS) tests [[7](https://ionides.github.io/531w18/midterm_project/project22/midterm_project.html)] are run on the data to further test whether it suggests a non-stationary trend.
+
+Recall that the ADF tests the following [[8](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test)],
+
+$$H_{0}: \text{There is a unit root.} \quad \text{v.s.} \quad H_{A}: \text{The data is stationary.} $$
+
+
+```{r, echo = F}
+adf.test(data_subset$Cases)
+```
+
+And the KPSS tests the following [[9](https://en.wikipedia.org/wiki/KPSS_test)],
+
+$$H_{0}: \text{The data is trend-stationary.} \quad \text{v.s.} \quad H_{A}: \text{There is a unit root.} $$
+
+```{r, echo = F}
+kpss.test(data_subset$Cases)
+```
+
+These tests further suggest that the data may not be stationary or trend-stationary. Therefore, to detrend the data, for the preparation of ARMA modeling, the Hodrick-Prescott (HP) [[10](https://en.wikipedia.org/wiki/Hodrick%E2%80%93Prescott_filter)] filter is used with a $\lambda = 100$ to conform with standards in practice [[11](https://ionides.github.io/531w21/09/slides-annotated.pdf)] . By rerunning the ADF and KPSS tests, we obtain results that suggest that the HP Filter applied to the data has detrended it. We then proceed with our ARMA modeling on the detrended Michigan COVID-19 cases data.
+
+```{r, echo = F, warning = F, message = F}
+cases_hp <- hpfilter(data_subset$Cases, freq = 100, type="lambda",drift=F)$cycle
+adf.test(cases_hp)
+kpss.test(cases_hp)
+```
+
+
+
+# ARMA Modeling
+
+We begin with a standard ARMA model and use the Akaike Information Criterion (AIC) [[12](https://ionides.github.io/531w21/05/slides-annotated-revised.pdf)] to select our model. In particular, we look for a model that produces the relatively smaller AIC value; however, this could also lead to picking a large and complex model that could lead to the issue of numerical instability [[13](https://ionides.github.io/531w21/05/slides-annotated-revised.pdf)]. Therefore, the choice of model is based on selecting the model with a balance of low AIC and parsimony.
+
+```{r, echo = F, warning = F, message = F}
+aic_table <- function(data,P,Q){
+  table <- matrix(NA,(P+1),(Q+1))
+  for(p in 0:P) {
+    for(q in 0:Q) {
+      table[p+1,q+1] <- arima(data,order=c(p,0,q), method="ML")$aic
+    }
+  }
+  dimnames(table) <- list(paste("AR",0:P, sep=""),paste("MA",0:Q,sep=""))
+  table
+}
+cnt_aic_table <- aic_table(cases_hp,5,5)
+knitr::kable(cnt_aic_table,digits=2, caption = "Table #")
+
+arima11 <- arima(x = cases_hp, order = c(1, 0, 1))
+arima22 <- arima(x = cases_hp, order = c(2, 0, 2))
+
+arima11
+```
+
+We will consider the ARMA(2, 2) model for meeting the criteria for the goal of having a relatively small AIC and model simplicity and proceed with residual analysis.
+
+## Residual Analysis
+
+```{r, echo = F}
+par(mfrow=c(1,2))
+acf(arima22$residuals)
+qqnorm(arima22$residuals)
+qqline(arima22$residuals)
+```
+
+The residual analysis of the ARMA(2,2) model raises concerns. The residuals do not appear to follow a nearly normal distribution, and by analyzing the Autocorrelation Function (ACF) plot we can see that there are some lines outside of the blue dashed lines which test the 95% confidence region that the residuals are independent and identically distributed under the null [[14](https://ionides.github.io/531w21/02/slides-annotated.pdf)]. In addition there seems to be a larger spike on every seventh lag. Thus, rather than conforming with just an ARMA model of the data, we attempt to model it using a Partially Observed Markov Process (POMP) model to see if it results in an improved model.
+
+# POMP Modeling
+
+We now attempt to model the COVID-19 cases in Michigan using the SEIR model. All analyses in this section works with the **pomp** [[15](https://kingaa.github.io/pomp/)] package in R. The population for the state of Michigan was estimated to be about 10 million. The number of infected individuals in the SEIR model is initialized by considering the number of cases up to October 1st 2020. We use the 7-day moving average of cases within the period of interest to smooth out the data set we are running the pomp model with.
+
+## SEIR Model [[16](https://kingaa.github.io/sbied/stochsim/exercises.html)] [[17](https://kingaa.github.io/sbied/stochsim/slides.pdf)]
+
+The SEIR model builds on the most basic susceptible-infected-recovered (SIR) model by adding a compartment to account for a latency period that infected individuals must pass through before becoming infectious as stated in the introduction. [[18](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7186134/)] 
+
+![_Flow diagram taken from Chp 12 notes_ [[19](https://kingaa.github.io/sbied/stochsim/slides.pdf)] ](https://raw.githubusercontent.com/jeremyny/G6_Final/main/SEIR_diagram.PNG)
+
+<br>
+
+For the SEIR model the compartments are [[20](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[21](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)]:
+
+* $S$: susceptible (population vulnerable to infection)
+* $E$: exposed (asymptomatic infected population)
+* $I$: infected (symptomatic infected population)
+* $R$: removed (recovered or dead population)
+* and $C$ denotes the reported cases
+
+Associated with each arrow is the rate at which individuals move through the compartments [[22](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[23](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)] [[24](https://kingaa.github.io/sbied/stochsim/slides.pdf)] :
+
+* $\mu_{{\bullet}S}$ represents the rate of births into $S$
+* $\mu_{SE}$, $\mu_{EI}$, and $\mu_{IR}$ are the transition rates between $S$, $E$, $I$, and $R$
+
+  + $\mu_{SE}$ is the force of infection and can be described as $\mu_{SE}=\beta \frac{I}{N}$ where $\beta$ is the contact rate (in contacts per person per time)
+ 
+  + $\frac{1}{\mu_{EI}}$ is the mean latency period of the disease (in days)
+ 
+  + $\frac{1}{\mu_{IR}}$ is the mean infectious period of the disease (in days)
+ 
+* $\mu_{S{\bullet}}$, $\mu_{E{\bullet}}$, $\mu_{I{\bullet}}$, and $\mu_{R{\bullet}}$ denote mortality rates at each compartment
+* and $\rho$ denotes the reporting rate
+
+To simplify the model we ignore demographic changes so that $\mu_{{\bullet}S} = \mu_{S{\bullet}} = \mu_{I{\bullet}} = \mu_{R{\bullet}} = 0$ and fix the population at $N=10,000,000$, which is about the population of the state of Michigan. The total population can be described as $S(t) + E(t)+I(t)+R(t)=N$ for any time $t$.
+
+To track flows of individuals through the compartments we use the notation $N_{SE}(t)$ to count individuals who transition from $S$ to $E$ by time $t$, and use a similar counting process for $N_{EI}(t)$ and $N_{IR}(t)$.
+
+By setting initial conditions for $S(0)$, $E(0)$, $I(0)$, and $R(0)$ we can represent the model with the following ordinary differential equations [[25](https://julia.quantecon.org/continuous_time/seir_model.html)] [[26](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)]:
+
+* $\frac{dS}{dt} = -\mu_{SE}(t)\,S(t)$
+
+* $\frac{dE}{dt} = \mu_{SE}(t)\,S(t)-\mu_{EI}(t)\,E(t)$
+
+* $\frac{dI}{dt} = \mu_{EI}(t)\,E(t)-\mu_{IR}(t)\,I(t)$
+
+* $\frac{dR}{dt} = \mu_{IR}(t)\,I(t)$
+
+### Implementing the SEIR model in pomp
+
+As we are analyzing the Michigan "winter spike" of COVID-19 infections we must initialize our pomp model to the start of the spike on October 1st 2020. The parameter $\eta$ is the fraction of people susceptible to the virus. Considering SARS-CoV-2 is a novel virus we can assume at the start of 2020 everyone is susceptible and that $\eta = 1$. After some initial modeling we found that a reporting rate of $\rho = 0.1$ tends to fit the data fairly well, so we hold that value constant in our model. This matches with what we found in the literature [[27](https://www.medrxiv.org/content/10.1101/2020.06.24.20139451v2.full.pdf)].
+
+Taking into account reported cases up to October 2020 and the reporting rate, we estimate the remaining fraction of people susceptible to the virus in October as $\eta = 0.84$. To approximate the initial number of individuals in compartments $E$ and $I$ we look at the cases reported a week before and after October 1st. Though symptoms don’t usually show until 5-6 days after infection, it can take longer before an individual feels the effects of COVID. [[2](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7186134/)] Due to this, we assumed the average latent period was around 7 days. The CDC reported that someone is typically no longer infectious by day 10 of symptoms, which is why we also chose a 7 day infectious period. [[1](https://www.cdc.gov/coronavirus/2019-ncov/hcp/duration-isolation.html#:~:text=Most%20adults%20with%20more%20severe,due%20to%20severe%20immunocompromise.)]
+
+As individuals in the initial latent population will be eventually tested and moved to the infected population, we approximate $E(0)$ as the seven day sum of cases reported between October 1st - October 7th, divided by the reporting rate $\rho$. Likewise, individuals currently infected and moving towards recovery would have tested positive in the days leading up to October 1st, so to approximate $I(0)$ we take the seven day sum of cases reported between September 24th - September 30th and divide by the reporting rate $\rho$.
+
+In summary, to initialize our model we set:
+
+* $S = N\eta$
+* $E = 90,000$
+* $I = 66,000$
+* $R = N(1-\eta)$
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(pomp)
+stopifnot(getRversion() >= "4.0")
+stopifnot(packageVersion("pomp")>="3.0")
+set.seed(1350254336)
+```
+
+```{r echo=FALSE, message=FALSE}
+data <- read.csv("https://raw.githubusercontent.com/jeremyny/G6_Final/main/MI_COVID19_data.csv")
+data$Date <- as.Date(data$Date, "%m/%d/%Y")
+oct_first <- which(data$Date == "2020-10-01")
+feb_first <- which(data$Date == "2021-02-01")
+last_date <- nrow(data)
+data1 <- data[oct_first:feb_first,]
+data1 <- data1 %>% mutate(day = 1:nrow(data1))
+data <- data1 %>% mutate(day = 1:nrow(data1)) %>% select(Cases_RA, day, doses)
+write.csv(data, file = "covid_data_updated.csv")
+data_main <- read.csv("covid_data_updated.csv")
+data_main <- data %>% select(day, reports = Cases_RA)
+data_cov <-  data %>% select(day, reports = Cases_RA)
+pop <- 10000000
+```
+
+```{r echo=TRUE, message=FALSE}
+library(pomp)
+
+paramnames1=c("N","Beta","mu_EI","mu_IR","rho","eta")
+statenames1=c("S","E","I","R","H")
+
+seir_step <- Csnippet("
+  double dN_SE = rbinom(S,1-exp(-Beta*I/N*dt));
+  double dN_EI = rbinom(E,1-exp(-mu_EI*dt));
+  double dN_IR = rbinom(I,1-exp(-mu_IR*dt));
+  S -= dN_SE;
+  E += dN_SE - dN_EI;
+  I += dN_EI - dN_IR;
+  R += dN_IR;
+  H += dN_IR;
+")
+
+seir_init <- Csnippet("
+  S = nearbyint(eta*N);
+  E = 90000;
+  I = 66000;
+  R = nearbyint((1-eta)*N);
+  H = nearbyint((1-eta)*N);
+")
+
+seir_dmeas <- Csnippet("
+  lik = dbinom(reports,H,rho,give_log);
+")
+
+seir_rmeas <- Csnippet("
+  reports = rbinom(H,rho);
+")
+
+data_cov %>%
+  pomp(
+	times="day",t0=0,
+	rprocess=euler(seir_step,delta.t=1/7),
+	rinit=seir_init,
+	rmeasure=seir_rmeas,
+	dmeasure=seir_dmeas,
+	accumvars="H",
+	partrans=parameter_trans(
+  	logit=c("Beta","mu_EI","mu_IR")
+	),
+	statenames=c("S","E","I","R","H"),
+	paramnames=c("N","Beta","mu_EI","mu_IR","rho","eta")
+  ) -> covSEIR
+
+data_cov %>%
+   pomp(
+ 	times="day",t0=0,
+ 	rprocess=euler(seir_step,delta.t=1/7),
+ 	rinit=seir_init, rmeasure=seir_rmeas, dmeasure=seir_dmeas,
+ 	partrans=parameter_trans(logit=c("Beta", "mu_EI","mu_IR")),
+ 	accumvars="H", statenames=c("S","E","I","R","H"),
+ 	paramnames=c("N","Beta","mu_EI","mu_IR","rho","eta"),
+ 	cdir=".", cfile="covSEIR"
+   ) -> covSEIR
+
+```
+
+### Simulations [[28](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[29](https://kingaa.github.io/sbied/mif/notes.pdf)]
+
+Based on our original findings, we set the parameters to represent what the conditions of COVID looked like at the time. Because the statistics around COVID are estimates and our POMP model isn’t perfectly representative, we manually varied the parameters $\beta$, $\mu_{EI}$, and $\mu_{IR}$, and found that $\beta=0.31$, $\mu_{EI}=0.5$, and $\mu_{IR}=0.19$ were good starting points for the model parameters.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+covSEIR %>%
+  simulate(params=c(Beta=0.31, mu_EI=0.5,mu_IR=0.19,rho=0.1,eta=0.84, N = pop),
+	nsim=100,format="data.frame",include.data=TRUE) %>%
+  ggplot(aes(x=day,y=reports,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE) + ggtitle("Initial Simulation Results ")
+```
+
+###  SEIR Local Search [[30](https://kingaa.github.io/sbied/stochsim/slides.pdf)] [[31](https://kingaa.github.io/sbied/stochsim/exercises.html)]
+
+We ran a local search for the maximum log likelihood after setting $N$ and $\rho$ constant (as described above) and varying $\beta$, $\mu_{EI}$, and $\mu_{IR}$ and $\eta$. 
+
+```{r echo=TRUE, message=FALSE}
+params <- c(Beta=0.31, mu_EI=0.5,mu_IR=0.19,rho=0.1,eta=0.84, N = pop)
+
+covSEIR %>%
+  pfilter(Np=1000,params=params) -> pf
+plot(pf, main= "Particle Filter Check")
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# To maximize computing power (Chp 14, slide 36-37)
+library(foreach)
+library(doParallel)
+registerDoParallel()
+#Setup for parallel random number generator
+library(doRNG)
+registerDoRNG(625904618)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+fixed_params <- c(N=pop, rho=0.1)
+tic <- Sys.time()
+
+#Chp 14, slide 38
+foreach(i=1:10,.combine=c) %dopar% {
+  library(pomp)
+  covSEIR %>% pfilter(params=params,Np=1000)
+} -> pf
+
+#Calc log likelihood stats:
+pf %>% logLik() %>% logmeanexp(se=TRUE) -> L_pf
+L_pf
+
+#To store calculated point (Chp 14, slide 40)
+pf[[1]] %>% coef() %>% bind_rows() %>%
+  bind_cols(loglik=L_pf[1],loglik.se=L_pf[2]) %>%
+  write_csv("cov_params.csv")
+```
+
+To run the local search in a reasonable amount of time on a laptop we set Np=1000 and Nmif=50. The results of the maximum log likelihood and corresponding model parameters are shown in the table below.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+tic <- Sys.time()
+
+#Local search of the likelihood surface (Chp 14, slide 42):
+bake(file="local_search_seir.rds",{
+foreach(i=1:20,.combine=c) %dopar% {
+  library(pomp)
+  library(tidyverse)
+  covSEIR %>%
+  	mif2(
+    	params=params,
+    	Np=1000, Nmif=50,
+    	cooling.fraction.50=0.5,
+    	rw.sd=rw.sd(Beta=0.01, mu_EI=0.01, mu_IR=0.001,  eta = 0.001)
+  	)
+  } -> mifs_local1
+}) -> mifs_local1
+ 
+
+mifs_local1 %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+
+#Chp 14, slide 48
+bake(file="lik_local.rds",{
+foreach(mf=mifs_local1,.combine=rbind) %dopar% {
+  library(pomp)
+  library(tidyverse)
+  evals <- replicate(10, logLik(pfilter(mf,Np=1000)))
+  ll <- logmeanexp(evals,se=TRUE)
+  mf %>% coef() %>% bind_rows() %>%
+	bind_cols(loglik=ll[1],loglik.se=ll[2])
+} -> results
+}) -> results
+
+#Add new points to created database (Chp 14, slide 51)
+results <- na.omit(results)
+read_csv("cov_params.csv") %>%
+  bind_rows(results) %>%
+  arrange(-loglik) %>%
+  write_csv("cov_params.csv")
+
+
+loglik_max <- max(results$loglik) #This variable returns the max log likelihood value from the results
+se_associated <- results[results$loglik==loglik_max,]
+se_associated #This variable returns the parameters in the row with the max log likelihood value
+
+plot(mifs_local1)
+```
+ 
+By looking at the conditional log likelihood plot, we can see that the tails are leading to the lowest log likelihood as we found it difficult to match the rapid increase and decrease in cases. We saw $\beta$ vary 0.3 to 0.7 between simulations and iterations. This seems logical due to the mask wearing, social distancing, state regulation and counts per day which can all be represented in this variable. These factors are also reflected in the $\mu_{IR}$ which we saw vary, though it did somewhat converge around 0.09. Ideally there would be covariates representing the aforementioned factors, so that $\beta$ and $\mu_{IR}$ could represent their intended meaning. $\eta$ varied between 0.7 and 0.9, though it’s average was around 0.83 which likely accounts for the percentage of the population which already had COVID in this period.
+$\mu_{EI}$ gave a suspicious result as it had a steep drop and converged around 0. 
+
+
+### SEIR Global Search  [[32](https://kingaa.github.io/sbied/mif/slides.pdf)] [[33](https://kingaa.github.io/sbied/pfilter/notes.pdf)]
+
+Based on this plot we see that the $\mu_{EI}$ stays between 0.0 and 0.15. $\eta$ appeared to be a little lower than our local search, around 0.6, which is interesting considering the novelness of the virus. We found $\beta$ to be inconclusive which we also saw in the local search. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+set.seed(2062379496)
+runif_design(
+lower=c(Beta=0.1, mu_EI = 0.1, mu_IR = 0.1, eta = 0.2),
+upper=c(Beta=1, mu_EI = 0.9, mu_IR = 0.9, eta = 0.9),
+nseq=300
+) -> guesses
+mf1 <- mifs_local1[[1]]
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+bake(file="global_search_seir2.rds",{
+registerDoRNG(1270401374)
+m3<-foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+library(pomp)
+library(tidyverse)
+mf1 %>%
+mif2(params=c(unlist(guess),fixed_params)) %>%
+mif2(Nmif=50) -> mf2
+replicate(
+10,
+mf2 %>% pfilter(Np=1000) %>% logLik()
+) %>%
+logmeanexp(se=TRUE) -> ll
+mf2 %>% coef() %>% bind_rows() %>%
+bind_cols(loglik=ll[1],loglik.se=ll[2])
+} -> results
+}) %>%
+  filter(is.finite(loglik)) -> results
+```
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+  bind_rows(results) %>%
+  filter(is.finite(loglik)) %>%
+  arrange(-loglik) %>%
+  write_csv("new_global2.csv")
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+read_csv("new_global2.csv") %>%
+  filter(loglik>max(loglik)-100000) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> all
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+pairs(~loglik+Beta+mu_IR+mu_EI+eta, data=all,
+      col=ifelse(all$type=="guess",grey(0.5),"red"),pch=16)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+plot(mf1)
+```
+
+
+
+# Conclusion and Discussion
+
+Prediction from ARMA indicates the necessity of the POMP model. We had hoped that the SEIR results would have shown reasonable predicting power of the winter spike. However, the local and global search do not show reliable results as we had hoped. We did find that the $\mu_{EI}$, $\eta$ were consistent with a slight convergence. However, the $\mu_{IR}$, $\beta$ and log likelihood did not seem to be working well with the model and provided inconclusive results with poor convergence. We believe that our model could be improved via selecting a more adequate measurement model. One suggestion for a different measurement model would be to implement a Negative Binomial or a Poisson Model [[34](https://piazza.com/class/kjxfp0fqj9w6d1?cid=53)].
+
+Dealing with an unprecedented pandemic in statistical models is a difficult challenge to carry through and model properly. Thus there is still a lot of work to do with handling COVID-19 data and other directions that can be taken that were not presented here. A suggestion for future work in the area of COVID-19 case modeling could be to create a slightly more complex model with a couple more compartments. The compartments that we had in mind for suggestion would be: Infected and symptomatic and infected and asymptomatic. Since the start of the pandemic, there have been several conjectures on whether asymptomatic individuals are able to expose and infect others, being able to account for that would be interesting in a POMP model. 
+
+Additional improvement could have been made by introducing covariates into the model; the covariates can include social distancing rate with regards to restrictions that could vary beta and eta values. For example, restriction policies for entertainment venues such as movie theaters were released from October 9, 2020, and the reported cases then surged [[35](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan
+)]. Then, the restriction was again enforced on November 15, 2020 and cases were dramatically decreased [[36](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan
+)].  Lastly, the vaccination effect was not considered in this modeling even though the first vaccine was done on December 8, 2020 because the actual immunization can present around 6 weeks after the first dose [[37](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan
+)], and the vaccination status was slow at that time. Also, the variants were reported first on Jan 16,2021, so not considered as well [[38](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan
+)]. Nevertheless, further studies on the case trends with regards to the increasing variants ratio and vaccination rate could allow more interesting results. 
+
+<br>
+![_Annotated Timeline of MI COVID-19 Cases with State Restrictions_](https://raw.githubusercontent.com/jeremyny/G6_Final/main/Timeline_COVID_Michigan.png)
+$$\text{Plot created in Excel with information from Wikipedia [35]}$$
+
+# Division of Labor
+
+For anonymity, description of individual contributions are removed.
+
+# References
+
+[1] Information on disposition [here](https://www.cdc.gov/coronavirus/2019-ncov/hcp/disposition-in-home-patients.html#:~:text=Specifically%2C%20researchers%20have%20reported,after%20their%20symptoms%20began
+)
+
+[2] Information on symptoms [here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7186134/).
+
+[3] Information on reporting and underreporting [here](https://www.medrxiv.org/content/10.1101/2020.06.24.20139451v2.full.pdf).
+
+[4] Previous Stats 531 Final Project, Flattening the Curve: A Case Study of COVID-19 Spread in Seattle, WA [here](https://ionides.github.io/531w20/final_project/Project6/final.html)
+
+[5] Source of data [here](https://www.michigan.gov/coronavirus/0,9753,7-406-98163_98173---,00.html).
+
+[6] Method of assessing stationary and code for plots from previous Stats 531 Midterm Project [here](https://ionides.github.io/531w21/midterm_project/project02/project.html)
+
+[7] Idea for using ADF and KPSS tests from previous Stats 531 Midterm Project [here](https://ionides.github.io/531w18/midterm_project/project22/midterm_project.html)
+
+[8] Information and hypothesis tests on ADF test [here](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test)
+
+[9] Information and hypothesis tests for KPSS test [here](https://en.wikipedia.org/wiki/Augmented_Dickey%E2%80%93Fuller_test)
+
+[10] Information about the HP Filter [here](https://en.wikipedia.org/wiki/Hodrick%E2%80%93Prescott_filter)
+
+[11] Information about using lambda equal to 100 for HP Filter [here](https://ionides.github.io/531w21/09/slides-annotated.pdf)
+
+[12] Information about ARMA model and use of Akaike Information Criterion (AIC) 
+[here](https://ionides.github.io/531w21/05/slides-annotated-revised.pdf)
+
+[13] Information about analyzing Akaike Information Criterion (AIC) 
+[here](https://ionides.github.io/531w21/05/slides-annotated-revised.pdf).
+
+[14] Information about analyzing the Autocorrelation Function (ACF) plot
+[here](https://ionides.github.io/531w21/02/slides-annotated.pdf)
+
+[15] Information about POMP model
+[here](https://kingaa.github.io/pomp/)
+
+[16] Example of simulation of stochastic dynamic models
+[here](https://kingaa.github.io/sbied/stochsim/exercises.html)
+
+[17] Information about simulation of stochastic dynamic models
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf)
+
+[18] Information about COVID-19 epidemic model with latency period
+[here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7186134/)
+
+[19] Information about SEIR model
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf)
+
+[20] Information about compartments
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf)
+
+[21] Information about compartmental models in epidemiology
+[here](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)
+
+[22] Information about compartment structure
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf)
+
+[23] Information about compartmental models in epidemiology
+[here](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)
+
+[24] Example of simulation of stochastic dynamic models
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf)
+
+[25] Information about differential equations for modeling COVID 19 
+[here](https://julia.quantecon.org/continuous_time/seir_model.html)
+
+[26] Information about compartmental models in epidemiology [here](https://en.wikipedia.org/wiki/Compartmental_models_in_epidemiology)
+
+[27] Introduction to reporting rate and susceptibility
+[here](https://www.medrxiv.org/content/10.1101/2020.06.24.20139451v2.full.pdf).
+
+[28] Information and code about building and simulating POMP model
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf).
+
+[29] Information and code about building and simulating POMP model
+[here](https://kingaa.github.io/sbied/mif/notes.pdf).
+
+[30] Information about SEIR local search
+[here](https://kingaa.github.io/sbied/stochsim/slides.pdf)
+
+[31] Information about SEIR local search
+[here](https://kingaa.github.io/sbied/stochsim/exercises.html)
+
+[32] Information about SEIR global search
+[here](https://kingaa.github.io/sbied/mif/slides.pdf)
+
+[33] Information about SEIR global search
+[here](https://kingaa.github.io/sbied/pfilter/notes.pdf)
+
+[34] Discussion of using Negative Binomial and Poisson Model 
+[here](https://piazza.com/class/kjxfp0fqj9w6d1?cid=53)
+
+[35] Information about Michigan’s reported cases
+[here](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan)
+
+[36] Information about Michigan’s restriction policies
+[here](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan)
+
+[37] Information about Michigan’s vaccination trends
+[here](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan)
+
+[38] Information about Michigan’s variants reporting
+[here](https://en.wikipedia.org/wiki/COVID-19_pandemic_in_Michigan)
+
+
+## Additional Acknowledgements
+
+We also acknowledge the discussions and guidance from the course Professor and GSI during weekly group meetings, and the occasional discussion posts that other groups had posted on Piazza.
+
+

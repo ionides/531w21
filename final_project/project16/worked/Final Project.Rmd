@@ -1,0 +1,443 @@
+---
+title: "Volatility analysis on the Shanghai Composite Index"
+date: "April 20, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# 1. Introduction
+
+Volatility is a statistical measure of the dispersion of returns for a given market index(investopedia). The volatility in the stock market refers to the price swing around the mean price. That is the risks of assets. The volatility is usually measured by the standard deviation of logarithmic returns(Wikipedia). To avoid marketing risk, we need to investigate the volatility of a market before investing. In this project, we will focus on the volatility of the Chinese stock market.
+
+After the financial crisis of 2007–2008, Chinese growth remained quite robust despite the damage to many of the nation's main export markets. It seems that the Chinese stock market drove bank business and stabilized the inflationary during the recession(Richard C. K. Burdekin, 2012). It suggests that the main index of the Chinese stock market, the Shanghai Composite Index, might be a good indicator of China's economy. The Shanghai Composite Index is the most commonly used indicator to reflect Shanghai stock market performance(Wikipedia). 
+
+In this project, we build two different models for the volatility of the Shanghai Composite Index. We first investigate the index using a GARCH model as a benchmark model. Then, we implement the POMP model to characterize the volatility of the Shanghai Composite Index and compare the result to the GARCH model.
+
+# 2. Exploratory analysis
+
+## 2.1. Data exploration
+
+The index data are downloaded from the website "https://www.investing.com/indices/shanghai-composite-historical-data." The data includes a total of 570 observations of weekly average closing price from 03/21/2010 to 04/11/2021. The prices are shown below. The left plot refers to the time series of original prices, while the right one refers to the time series of the logarithm of the prices. The red line in the plot indicates the mean prices and mean log prices of the index in this period, respectively.
+
+```{r load data, echo=FALSE}
+Shanghai <-read.csv("Shanghai Composite Historical Data.csv", header=TRUE, sep=",",fileEncoding="UTF-8-BOM")
+N <- dim(Shanghai)[1]
+Price <- as.numeric(gsub(",", "", Shanghai$Price))
+open <- as.numeric(gsub(",", "", Shanghai$Open))
+Date <- as.Date(Shanghai$Date, "%d-%B-%y")
+par(mfrow=c(1,2))
+plot(Date,Price,type="l",xlab="Date",ylab="Price($)",main="Daily adjusted closing price")
+abline(h=mean(Price),col="red")
+plot(Date,log(Price),type="l",log="y",xlab="Date",ylab="Log price($)",main="Log price")
+abline(h=mean(log(Price)),col="red")
+```
+
+To investigate the volatility, we need to calculate the return, which is the difference of the log of the index. Mathematically, $y^{*}_n=log(z_n)-log(z_{n-1})$, where $z_n$ refers to the index value of week $n$. The demeaned return is plotted below. The demeaned return is calculated by subtracting the mean of the return.
+
+```{r log-return, echo=FALSE}
+wreturn = diff(log(Price))
+demeaned = wreturn - mean(wreturn)
+plot(demeaned,type="l",main="Demeaned SSE log-return")
+```
+
+The demeaned log-return looks appropriate to fit a stationary model with white noise. There is no significant peak or trend in the plot. Then, we can check that this time series has negligible sample autocorrelation by plotting the ACF.
+
+```{r acf, echo=FALSE}
+acf(demeaned, main = 'ACF plot of return')
+```
+
+The above plot shows that there is no significant autocorrelation for $lag\# > 0$. Therefore, we can safely assume that the data are all independent.
+
+# 3. GARCH model analysis
+
+The generalized autoregressive conditional heteroskedasticity model, also known as GARCH(p, q) model, is widely used in time series analysis in the area of finance (Ionides, 2021). The GARCH(p, q) model has the form: $$Y_n=\epsilon_n \sqrt{V_n}$$
+where $V_n=\alpha_0 + \sum_{j=1}^{p} \alpha_j Y^2_{n-j} + \sum_{k=1}^{q} \beta_k V_{n-k}$ and $\epsilon_{1:N}$ is white noise.
+Although, the GARCH(1, 1) model is a popular choice for time series analysis (Cowpertwait and Metcalfe, 2009), we still want to evaluate several different GARCH model and choose the best fitted model.
+
+## 3.1 GARCH model selection
+
+To decide the value of $p$ and $q$ of the GARCH(p, q) model, we will start by tabulating Akaike Information Criteria (AIC). A model with low AIC values implies a precise prediction.
+
+```{r GARCH selection}
+library(tseries)
+Table_For_GARCH_AIC <- function(data,P,Q){
+  table <- matrix(NA,(P),(Q))
+  for(p in 1:P) {
+    for(q in 1:Q) {
+      temp.fit = garch(x = data, order = c(p,q), grad = "numerical", trace = FALSE)
+      table[p,q] <- 2*length(temp.fit$coef) - 2*as.numeric(logLik(temp.fit))
+    }
+  }
+  dimnames(table) <- list(paste("<b> p",1:P, "</b>", sep=""),paste("q",1:Q,sep=""))
+  table
+}
+Shanghai_aic_table <- Table_For_GARCH_AIC(demeaned,5,5)
+require(knitr)
+kable(Shanghai_aic_table,digits=2)
+```
+The lowest value of the AIC criteria above is -2528.11 from the GARCH(1, 1) model. This model coincidently agrees with the most popular GARCH model. Therefore, we choose the GARCH(1, 1) model without further formal statistical tests.
+
+## 3.2 GARCH model assessment
+
+We evaluate the performance of our model by checking a model summary, a QQ-plot of residuals, and residuals autocorrelation plot.
+
+```{r GARCH summary, message=FALSE, echo=FALSE}
+library(fGarch) 
+fit.garch <- garchFit(~garch(1,1), demeaned, trace = F)
+summary(fit.garch)
+```
+
+The summary above suggests that our GARCH(1, 1) model is $V_n=  0.143 Y^2_{n-1} +  0.822 V_{n-1}$. The summary also shows that the log-likelihood of this model is 1269.58. This value would be the benchmark of our analysis. We would compare the log-likelihood of the POMP model with this benchmark method later.
+
+Then, we draw the QQ-plot for residuals as below:
+
+```{r QQ-plot, echo=FALSE}
+res = residuals(fit.garch)
+qqnorm(res, pch = 1, frame = FALSE, ylab="Residuals", main="QQ-plot for Residuals of GARCH(1, 1) model")
+qqline(res, col = "steelblue", lwd = 2)
+```
+
+The QQ-plot suggests that the residuals of the GARCH(1, 1) model have a heavy tail distribution. It violates the normality assumption of the residuals in the GARCH model. One possible explanation is that the sample is a little biased to the true distribution.
+
+Finally, we check the autocorrelation plot to determine whether the residuals are uncorrelated.
+
+```{r res_acf, echo=FALSE}
+acf_plot = acf(res, main="ACF-plot for Residuals of GARCH(1, 1) model")
+```
+
+Since there is no significant correlation other than lag 0, we conclude that residuals are uncorrelated.
+
+# 4. POMP model analysis
+
+## 4.1 Build the POMP model
+
+Then we utilized the POMP model proposed in the lecture to analyze the volatility of SSE Composite Index. The equation and notations that we build for this POMP model are adopted from Breto (2014). We denote $H_n=log(\sigma^2_n)=2log(\sigma_n)$ and the model is following:
+
+\begin{align}
+  Y_n &= exp(H_n/2) \epsilon_n \\
+  H_n &= \mu_h (1-\phi) + \phi H_{n-1} + \beta_{n-1} R_n exp(-H_{n-1}/2) + \omega_n \\
+  G_n &= G_{n-1}+\nu_n \\
+\end{align}
+
+where,
+\begin{align}
+  \beta_n &= Y_n \sigma_{\eta} \sqrt{1-\phi^2} \\
+  \sigma_{\omega} &= \sigma_{\eta} \sqrt{1-\phi^2} \sqrt{1-R_n^2} \\
+  \epsilon_n &\overset{i.i.d}{\sim} N(0, 1) \\
+  \nu_n &\overset{i.i.d}{\sim} N(0, \sigma_{\nu}^2) \\
+  \omega_n &\overset{i.i.d}{\sim} N(0, \sigma_{\omega}^2) \\
+  Rn &= \frac{exp(2G_n)-1}{exp(2G_n)+1}
+\end{align}
+
+The motivation of applying the POMP model on the index analysis is the financial leverage, which relates to the correlation between returns of previous day and the increasing in the log volatility.
+
+```{r, cache=TRUE, message=FALSE, echo=FALSE}
+Shanghai_statenames <- c("H","G","Y_state")
+Shanghai_rp_names <- c("sigma_nu","mu_h","phi","sigma_eta")
+Shanghai_ivp_names <- c("G_0","H_0")
+Shanghai_paramnames <- c(Shanghai_rp_names,Shanghai_ivp_names)
+
+rproc1 <- "
+  double beta,omega,nu;
+  omega = rnorm(0,sigma_eta * sqrt( 1- phi*phi ) * 
+    sqrt(1-tanh(G)*tanh(G)));
+  nu = rnorm(0, sigma_nu);
+  G += nu;
+  beta = Y_state * sigma_eta * sqrt( 1- phi*phi );
+  H = mu_h*(1 - phi) + phi*H + beta * tanh( G ) 
+    * exp(-H/2) + omega;
+"
+rproc2.sim <- "
+  Y_state = rnorm( 0,exp(H/2) );
+ "
+
+rproc2.filt <- "
+  Y_state = covaryt;
+ "
+Shanghai_rproc.sim <- paste(rproc1,rproc2.sim)
+Shanghai_rproc.filt <- paste(rproc1,rproc2.filt)
+
+Shanghai_rinit <- "
+  G = G_0;
+  H = H_0;
+  Y_state = rnorm( 0,exp(H/2) );
+"
+
+Shanghai_rmeasure <- "
+   y=Y_state;
+"
+
+Shanghai_dmeasure <- "
+   lik=dnorm(y,0,exp(H/2),give_log);
+"
+
+library(pomp)
+Shanghai_partrans <- parameter_trans(
+  log=c("sigma_eta","sigma_nu"),
+  logit="phi"
+)
+
+Shanghai.filt <- pomp(data=data.frame(
+    y=demeaned,time=1:length(demeaned)),
+  statenames=Shanghai_statenames,
+  paramnames=Shanghai_paramnames,
+  times="time",
+  t0=0,
+  covar=covariate_table(
+    time=0:length(demeaned),
+    covaryt=c(0,demeaned),
+    times="time"),
+  rmeasure=Csnippet(Shanghai_rmeasure),
+  dmeasure=Csnippet(Shanghai_dmeasure),
+  rprocess=discrete_time(step.fun=Csnippet(Shanghai_rproc.filt),
+    delta.t=1),
+  rinit=Csnippet(Shanghai_rinit),
+  partrans=Shanghai_partrans,
+  cdir=".", cfile="Shanghai.filt"
+)
+
+params_test <- c(
+  sigma_nu = exp(-4.5),  
+  mu_h = -0.25,  	 
+  phi = expit(4),	 
+  sigma_eta = exp(-0.07),
+  G_0 = 0,
+  H_0=0
+)
+  
+sim1.sim <- pomp(Shanghai.filt, 
+  statenames=Shanghai_statenames,
+  paramnames=Shanghai_paramnames,
+  rprocess=discrete_time(
+    step.fun=Csnippet(Shanghai_rproc.sim),delta.t=1)
+)
+
+sim1.sim <- simulate(sim1.sim,seed=1,params=params_test)
+
+
+sim1.filt <- pomp(sim1.sim, 
+  covar=covariate_table(
+    time=c(timezero(sim1.sim),time(sim1.sim)),
+    covaryt=c(obs(sim1.sim),NA),
+    times="time"),
+  statenames=Shanghai_statenames,
+  paramnames=Shanghai_paramnames,
+  rprocess=discrete_time(
+    step.fun=Csnippet(Shanghai_rproc.filt),delta.t=1),
+  cdir=".", cfile="sim1.filt"
+)
+
+
+```
+
+let's check the function of pfilter for further investigation.
+```{r, echo=FALSE, cache=TRUE}
+
+set.seed(2050320976)
+run_level <- 2
+Shanghai_Np <- 2000
+Shanghai_Nmif <- 50
+Shanghai_Nreps_eval <- 10
+Shanghai_Nreps_local <- 20
+Shanghai_Nreps_global <- 50
+
+library(doParallel)
+library(foreach)
+registerDoParallel()
+library(doRNG)
+registerDoRNG(34118892)
+bake(file=sprintf("pf1-%d.rds",run_level),{
+  t.pf1 <- system.time(
+    pf1 <- foreach(i=1:Shanghai_Nreps_eval,
+      .packages='pomp') %dopar% pfilter(sim1.filt,Np=Shanghai_Np))
+})
+(L.pf1 <- logmeanexp(sapply(pf1,logLik),se=TRUE))
+
+```
+
+## 4.2 MLE from local search
+
+Then, we perform the local search for maximum log-likelihood by using mif2 function in POMP package. A database was created to store the likelihood information.
+```{r echo=FALSE, cache=TRUE}
+set.seed(2050320976)
+Shanghai_rw.sd_rp <- 0.02
+Shanghai_rw.sd_ivp <- 0.1
+Shanghai_cooling.fraction.50 <- 0.5
+
+
+bake(file=sprintf("mif1-%d.rds",run_level),{
+  t.if1 <- system.time({
+  if1 <- foreach(i=1:Shanghai_Nreps_local,
+    .packages='pomp', .combine=c) %dopar% mif2(Shanghai.filt,
+      params=params_test,
+      Np=Shanghai_Np,
+      Nmif=Shanghai_Nmif,
+      cooling.fraction.50=Shanghai_cooling.fraction.50,
+      rw.sd = rw.sd(
+  sigma_nu  = Shanghai_rw.sd_rp,
+  mu_h      = Shanghai_rw.sd_rp,
+  phi       = Shanghai_rw.sd_rp,
+  sigma_eta = Shanghai_rw.sd_rp,
+  G_0       = ivp(Shanghai_rw.sd_ivp),
+  H_0       = ivp(Shanghai_rw.sd_ivp)
+))
+  L.if1 <- foreach(i=1:Shanghai_Nreps_local,
+    .packages='pomp', .combine=rbind) %dopar% logmeanexp(
+      replicate(Shanghai_Nreps_eval, logLik(pfilter(Shanghai.filt,
+        params=coef(if1[[i]]),Np=Shanghai_Np))), se=TRUE)
+  })
+})
+
+r.if1 <- data.frame(logLik=L.if1[,1],logLik_se=L.if1[,2],
+  t(sapply(if1,coef)))
+if (run_level>1) write.table(r.if1,file="Shanghai_params.csv",
+  append=TRUE,col.names=TRUE,row.names=FALSE)
+summary(r.if1$logLik, digits=5)
+plot(if1)
+```
+```{r}
+pairs(~logLik+sigma_nu+mu_h+phi+sigma_eta,
+  data=subset(r.if1,logLik>max(logLik)-20),pch=16)
+```
+
+From the plot above, we see that the variable phi is stable around 1. The maximum log-likelihood using local search is 1244. Other parameters are fluctuated between certain range. we conduct a global search method with random starting values and figure out the maximized likelihood for this POMP model.
+
+## 4.3 MLE from global search
+
+```{r echo = FALSE, cache=TRUE}
+Shanghai_box <- rbind(
+ sigma_nu=c(0.0005,0.08),
+ mu_h    =c(-5,2),
+ phi = c(0.9950, 0.9999),
+ sigma_eta = c(0.1,35),
+ G_0 = c(-2,2),
+ H_0 = c(-1,1)
+)
+
+bake(file=sprintf("box_eval-%d.rds",run_level),{
+  t.box <- system.time({
+    if.box <- foreach(i=1:Shanghai_Nreps_global,
+      .packages='pomp',.combine=c) %dopar% mif2(if1[[1]],
+        params=apply(Shanghai_box,1,function(x)runif(1,x)))
+    L.box <- foreach(i=1:Shanghai_Nreps_global,
+      .packages='pomp',.combine=rbind) %dopar% {
+         logmeanexp(replicate(Shanghai_Nreps_eval, logLik(pfilter(
+	   Shanghai.filt,params=coef(if.box[[i]]),Np=Shanghai_Np))), 
+           se=TRUE)}
+  })
+})
+
+r.box <- data.frame(logLik=L.box[,1],logLik_se=L.box[,2],
+  t(sapply(if.box,coef)))
+if(run_level>1) write.table(r.box,file="Shanghai_params.csv",
+  append=TRUE,col.names=FALSE,row.names=FALSE)
+summary(r.box$logLik,digits=5)
+```
+
+From the summary we see that the maximum log-likelihood using global search is 1264, which is better than the result using local parameter search.
+
+```{r}
+pairs(~logLik+log(sigma_nu)+mu_h+phi+sigma_eta+H_0,
+  data=subset(r.box,logLik>max(logLik)-10),pch=16)
+```
+
+```{r}
+plot(if.box)
+```
+
+
+## 4.4 profile likelihood over $\phi$
+
+Since the variable $\phi$ is shown in each term of our POMP model, we could further investigating the profile likelihood of $\phi$ to see whether $\phi$ should be close to 1 as suggested in local search. Another reason for checking the profile likelihood of $\phi$ is that it seems a strong positive relationship between $\phi$ and log-likelihood. That is, as $\phi$ increasing and getting close to 1, the log-likelihood also increases.
+
+```{r, include=FALSE}
+library(plyr)
+library(ggplot2)
+library(dplyr)
+```
+```{r echo = FALSE, cache=TRUE, include=FALSE}
+set.seed(1196696958)
+read.table("Shanghai_params.csv", header=TRUE) %>%
+  filter(logLik>max(logLik)-20,logLik_se<2) %>%
+  sapply(range) -> box
+
+guesses <- profile_design(  
+  phi=exp(seq(log(0.80000),log(0.99999),length.out=50)),
+  lower=box[1,c("sigma_nu","mu_h","sigma_eta","G_0","H_0")],
+  upper=box[2,c("sigma_nu","mu_h","sigma_eta","G_0","H_0")],
+  nprof=2, type="runif"
+)
+bake(file=sprintf("profile_phi-%d.rds",run_level),{
+  t_pro <- system.time({
+      prof.llh<- foreach(i=1:100,.packages=c('pomp','tidyverse'), .combine=rbind) %dopar%{
+        mif2(
+          if1[[1]],
+          start=c(unlist(guesses[i,]),params_test),
+          Np=1000,Nmif=50,
+          rw.sd=rw.sd(
+                           sigma_nu  = Shanghai_rw.sd_rp,
+                            mu_h      = Shanghai_rw.sd_rp,
+                            sigma_eta = Shanghai_rw.sd_rp,
+                            G_0       = ivp(Shanghai_rw.sd_ivp),
+                            H_0       = ivp(Shanghai_rw.sd_ivp)
+          )
+        )->phi_pro
+        evals = replicate(Shanghai_Nreps_eval, logLik(pfilter(phi_pro,Np=1000)))
+        ll=logmeanexp(evals, se=TRUE)        
+        phi_pro %>% coef() %>% bind_rows() %>%
+    bind_cols(logLik=ll[1],logLik_se=ll[2])
+      }
+  })
+})
+if(run_level>1) write.table(prof.llh,file="Shanghai_params.csv",
+  append=TRUE,col.names=FALSE,row.names=FALSE)
+```
+
+
+```{r echo = FALSE, cache=TRUE}
+library(tidyverse)
+read.table("Shanghai_params.csv", header=TRUE) -> results
+
+results %>%
+  filter(logLik>max(logLik)-25,logLik_se<1) %>%
+  group_by(round(phi,5)) %>%
+  filter(rank(-logLik)<3) %>%
+  ungroup() %>%
+  ggplot(aes(x=phi,y=logLik))+
+  geom_point()+
+  geom_hline(
+    color="red",
+    yintercept=max(results$logLik)-0.5*qchisq(df=1,p=0.95)
+  )
+
+```
+
+The plot above looks contradicted to our assumption. The plot above suggests that the maximum log-likelihood over $\phi$ is achieved when $\phi = $. As $\phi$ appraoches 1, the likelihood becomes unstable.
+
+# 5. Conclusions
+
+In this project, we applied two statistical models for analysis of volatility of SSE Composite Index. First, we applied a GARCH(1, 1) model as our benchmark. The model suggests that the volatility should slightly shift positively as time moving forward. Then, we performs a simulation study using the POMP model. After comparing the GARCH model and the POMP models, we see that the POMP model have even worse log-likelihood score. This could due to the limitation of time and computational sources. The final POMP model in this project may not have the optimal parameters.
+
+For future work, it is necessary to use this preliminary results from the POMP model and increase the computational force to achieve a better result subsequently. Another possible promotion for the POMP model is to add more features to describe the process in a more sophisticated way.
+
+# 6. Work distribution
+Description of individual contributions removed for anonymity.
+
+# 7. References
+1. Ionides, L. E. (2021). "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 16: A case study of financial volatility and a POMP model with observations driving latent dynamics"
+2. Kidus Asfaw, Edward L. Ionides and Aaron A. King. (2021). "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 14: Likelihood maximization for POMP models"
+3. Ionides, L. E. (2021). "STATS/DATASCI 531(winter 2021), Lecture Notes, chapter 3: Stationarity, white noise, and some basic time series models"
+4. Wikipedia: Volatility. URL:https://en.wikipedia.org/wiki/Volatility_(finance). access at 04/20/2021.
+5. Wikipedia: Shanghai_Stock_Exchange. URL:https://en.wikipedia.org/wiki/Shanghai_Stock_Exchange. access at 04/20/2021.
+6. Ionides, L. E. (2016). "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2016 Final project: 'Financial Volatility Analysis with SV-in-Mean Model in Pomp'"
+7. Ionides, L. E. (2018). "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2018 Final project: 'Investigate Financial Volatility of Google Stock'"
+8. Ionides, L. E. (2020). "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2020 Final project: 'POMP Model Analysis with CSI 300 Stock Index'"
+9. Ionides, L. E. (2020). "STATS/DATASCI 531(winter 2021), Lecture sources, winter 2020 Final project: 'Financial Volatility Analysis of Alibaba Stock'"
+10. Breto, C. (2014). On idiosyncratic stochasticity of financial leverage effects, Statistics & Probability Letters 91: 20-26.
+11. Ionides, E. L., Nguyen, D., Atchad´e, Y., Stoev, S. and King, A. A. (2015). Inference for dynamic and latent variable models via iterated, perturbed Bayes maps, Proceedings of the National Academy of Sciences of the U.S.A. 112(3): 719-724.
+12. Cowpertwait, P.S., and A.V. Metcalfe. (2009). Introductory time series with R. Springer Science & Business Media.
+13. Yu, J. (2005). On leverage in a stochastic volatility model. Journal of Econometrics. Volume 127, Issue 2, Pages 165-178.
+14. Burdekin, Richard C. K., Barth, James R., Song, Frank M., Zhou, Zhongfei. (2012). China after the Global Financial Crisis. Economics Research International.

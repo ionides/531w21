@@ -1,0 +1,435 @@
+---
+title: "Information Epidemics: Modeling Search Trends during the GameStop Short Squeeze Using Stochastic Compartmental Models"
+subtitle: STATS 531 Final Project (W21)
+output:
+  html_document:
+    toc: yes
+    toc_depth: 2
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = FALSE,
+	warning = FALSE,
+	message = FALSE,
+	include = TRUE,
+	comment='',
+	fig.align = "center"
+)
+```
+
+```{r load_packages, include=FALSE}
+library(pomp)
+library(tidyverse)
+
+set.seed(1350254336)
+
+library(foreach)
+library(doParallel)
+registerDoParallel()
+library(doRNG)
+registerDoRNG(12345678)
+
+read_csv('gme.csv') -> gme
+# read_csv('price.csv') -> price
+```
+
+# 1. Introduction
+
+Social scientists have long drawn comparisons between the spread of information and the spread of disease. Methods from epidemiology have been used to model such dynamics by treating an idea, meme, or news event as the infectious agent; this analogy has only grown in popularity with the explosive growth of social media  [[1](https://www.sciencedirect.com/science/article/pii/S0307904X11002824), [2](https://engineering.stanford.edu/magazine/article/how-fake-news-spreads-real-virus)].
+
+In this project, we apply epidemiological methods -- specifically, compartmental models -- to model information flow during the 2021 GameStop short squeeze, an event in which thousands of Reddit users coordinated to buy shares of the gaming company GameStop, having anticipated a short by major hedge funds. The resulting jump in stock price caused such hedge funds to incur significant losses, resulting in a flurry of attention on both social media sites and major news networks [[3](https://en.wikipedia.org/wiki/GameStop_short_squeeze)].
+
+We use search frequency of the term "gme", GameStop's ticker symbol, as a proxy for the spread of news. The data was downloaded from Google Trends [[4](https://trends.google.com/trends/)], consisting of normalized daily measurements over an 88-day period.
+
+The main objectives of this project are as follows: 
+
+1. Model the information spread of a current event using an interpretable model.
+
+2. Draw parallels between the spread of information and the spread of disease.
+
+------------
+
+# 2. Exploratory Data Analysis
+
+```{r data cleaning, include=FALSE}
+gme$count[as.numeric(gme$count) %>% is.na()] <- 0
+gme$count <- as.numeric(gme$count)
+# price$High[price$High %>% is.na()] <- 0
+```
+
+
+```{r dataplot, echo=FALSE}
+gme %>% ggplot(aes(x=date,y=count)) + geom_line() + geom_point() + ggtitle('Search Frequency of "gme", 1/6/2021 – 4/3/2021') +theme(plot.title = element_text(hjust = 0.5))
+```
+  
+First, we note that the search data are normalized to have a maximum value of $100$. Understandably, the search frequency of the term "gme" peaks in late January, during the initial short squeeze. Notably, the data strongly resemble the measles dataset studied in class, lending support to the idea that such trends can be modeled using methods from epidemiology.
+
+The initial peak is followed by multiple, smaller peaks in the following months. This latter half of the data seems to exhibit strong weekly seasonality, as shown in the plot of the smoothed periodogram below. However, this may be because many stock exchanges are closed on weekends, and not something directly attributable to the short squeeze itself  [[5](https://www.investopedia.com/terms/w/weekendeffect.asp)]. 
+
+```{r spectrum, echo=FALSE}
+smoothed <- spectrum(gme$count[45:88], spans=c(5,5,5), main="Periodogram (Smoothed) - Past 43 Days")
+abline(v=1/7, lty=2, col='red')
+paste0('period corresponding to maximum spectral density (days): ', 1 / smoothed$freq[which.max(smoothed$spec)])
+```
+
+Combined with the evidence from the periodogram, the erratic, quasi-regular trend in the latter half of the data suggests that we may want to choose a model that accounts for both regular and irregular resurgences (or even delays) in popularity.
+
+------------
+
+# 3. Model Design
+
+## 3.1. Model Structure
+
+Given our analyses above, we find it appropriate to model our data with a compartmental model, commonly used in epidemiological studies -- specifically, we use a **SIRS model** to represent the latent process.
+
+We define *susceptible* in this context to mean individuals who have not yet heard about the short squeeze, *infected* to mean individuals who have heard about the short squeeze and are actively interested in it, and *recovered* to refer to individuals who have lost interest in the short squeeze and have no further inclination to search about it. In analogy with the original SIR model, the *reporting rate* would be the proportion of interested individuals who end up actually searching about the event online. 
+
+Consider that the popularity of a trend can *resurge* long after the initial event; indeed, this behavior seems to be evident in the data. Because of this, we suppose that recovered individuals -- represented by the state $R$ -- move back into the initial susceptible state $S$ after some time. 
+
+## 3.2. Mathematical Formulation
+
+### Process Model.
+
+The number of individuals in each compartment, at each time point $t$ are given by the following equations:
+
+\begin{align*}
+S(t) &= S(0) + N_{RS}(t) - N_{SI}(t) \\
+I(t) &= I(0) + N_{SI}(t) - N_{IR}(t) \\
+R(t) &= R(0) + N_{IR}(t) - N_{RS}(t) \\
+\end{align*}
+
+where $N_{XY}$ is a counting process that represents the number of individuals transitioning from state $X$ to state $Y$. The associated compartment transfer rates are given by:
+
+\begin{align*}
+\frac{dN_{SI}(t)}{dt} &= \mu_{SI}(t)S(t) = \beta I(t)S(t) \\
+\frac{dN_{IR}(t)}{dt} &= \mu_{IR}I(t) \\
+\frac{dN_{RS}(t)}{dt} &= \mu_{RS}R(t) \\
+\end{align*}
+
+We use Euler's method to compute approximations to the above rates. In particular, each transfer rate is discretely approximated by a binomial distribution with exponential transition probabilities:
+
+\begin{align*}
+\Delta N_{SI}(t) &\sim \mathrm{Bin}(S, 1 - e^{-\beta\frac{I}{N}\Delta t}) \\
+\Delta N_{IR}(t) &\sim \mathrm{Bin}(I, 1 - e^{-\mu_{IR}\Delta t}) \\
+\Delta N_{RS}(t) &\sim \mathrm{Bin}(R, 1 - e^{-\mu_{RS}\Delta t}) \\
+\end{align*}
+
+### Measurement Model.
+
+We suppose that the number of searches $Q$ is drawn from a negative binomial distribution with parameters $H$, $\rho$, where $H$ is the underlying number of new infections per time step and $\rho$ is the reporting rate. Mathematically:
+
+$$
+Q \sim \mathrm{NegBin}(H, \rho)
+$$
+
+------------
+
+## 3.3. Simulations
+
+```{r model implement, echo=FALSE}
+sir_step <- Csnippet("double dN_SI = rbinom(S, 1-exp(-Beta*I/N*dt));
+                      double dN_IR = rbinom(I, 1-exp(-mu_IR*dt));
+                      double dN_RS = rbinom(R, 1-exp(-mu_RS*dt));
+                      S += dN_RS - dN_SI;
+                      I += dN_SI - dN_IR;
+                      R += dN_IR - dN_RS;
+                      H += dN_SI;")
+  
+sir_init <- Csnippet("S = nearbyint(eta*N);
+                      I = 5;
+                      R = 0; 
+                      H = 5;")
+
+dgme <- Csnippet("lik = dnbinom(count,H,rho,give_log);")
+
+rgme <- Csnippet("count = rnbinom(H,rho);")
+
+gme <- as.data.frame(cbind(day = 1:nrow(gme), count=gme$count))
+
+gme %>% 
+  pomp(times="day",t0=0,
+       rprocess=euler(sir_step,delta.t=1/6), # update once every 4 hours
+       rinit=sir_init,
+       rmeasure=rgme,
+       dmeasure=dgme,
+       accumvars="H", 
+       partrans=parameter_trans(log=c("N", "Beta", "mu_IR", "mu_RS"), 
+                                logit=c("rho", "eta")),
+       statenames=c("S","I","R","H"),
+       paramnames=c("Beta", "mu_IR", "mu_RS", "eta", "rho", "N"),
+       cdir=".", cfile="SSIR") -> SSIR
+```
+
+We simulate 20 trajectories from some manually chosen parameters in order to check the validity of our model. 
+
+```{r simulate, echo=FALSE}
+params <- c(Beta=1.3,mu_IR=0.5,mu_RS=0.03,rho=0.4,eta=0.5,N=3000)
+
+SSIR %>%
+  simulate(params=params, nsim=20,format="data.frame",include.data=TRUE) -> sims
+
+sims %>% ggplot(aes(x=day,y=count,group=.id,color=.id=="data"))+ geom_line()+
+guides(color=FALSE)
+```
+
+There is great variability in the simulations, but many of the trajectories seem to peak early, then level off around some smaller, nonzero value, much like the real data. Thus, we conclude that our model is at least reasonable, and continue on to conduct a parameter search.
+
+-----------
+
+# 4. Model Selection
+
+### Variable Parameters
+
+The model parameters we are interested in estimating are:
+
+- $\beta$ — the information transmission rate 
+- $\mu_{IR}$ — the recovery rate ("hype factor")
+- $\mu_{RS}$ — the resurgence rate
+- $\eta$ — the initial susceptible fraction 
+
+### Fixed Parameters
+
+Since the search frequency data are normalized to have maximum $100$, it is difficult to interpret the reporting rate $\rho$ and population size $N$. We will still vary these parameters so as to not overconstrain our model, but due to convergence concerns, we will limit the range of the reporting rate $\rho$ to be $[0.1, 0.3]$, and the range of the population size $N$ to be $[1000, 10000]$.
+
+### Global Search.
+
+We define an optimal set of parameters as one that maximizes the likelihood of the model. To do this, we use iterated filtering -- the IF2 algorithm -- to simulate and evaluate the likelihood of many randomly-chosen candidate parameter sets. As a benchmark, we compute the likelihood of the parameter set used in the simulation in the previous section:
+
+```{r benchmark, echo=FALSE, warning=FALSE}
+stew(file="benchmark.rda", {
+  pf1 <- foreach(i=1:20,.export=c("SSIR","params"),c.packages='pomp') %dopar%
+    pfilter(SSIR,Np=5000,params=params)
+})
+L1 <- logmeanexp(sapply(pf1,logLik),se=TRUE)
+paste0('log-likelihood: ', L1[1])
+
+```
+
+```{r iterations, echo=FALSE}
+# helps us debug -- we want to use 3 when actually running
+
+run_level <- 1
+Np <- switch(run_level, 100, 1e3, 5e3)
+Nmif <- switch(run_level, 10, 100, 200)
+Nseq <- switch(run_level, 100, 500, 5000)
+Nreps_eval <- switch(run_level, 2, 10, 20)
+Nreps_global <- switch(run_level, 10, 20, 100)
+Nsim <- switch(run_level, 50, 100, 500)
+```
+
+<!-- ACTUAL GLOBAL SEARCH -->
+
+```{r grid, echo=FALSE}
+runif_design(lower=c(Beta=0.1,mu_IR=0.1,mu_RS=0.01,eta=0.1,rho=0.1, N=1000), 
+             upper=c(Beta=5,mu_IR=1,mu_RS=1,eta=1,rho=0.3, N=10000),
+             nseq=Nseq) -> guesses
+
+# guesses$N = runif(length(guesses$rho), 10000, 20000) * guesses$rho
+```
+
+```{r global_search, echo=FALSE}
+stew(file="results.rda", {
+  foreach(guess=iter(guesses,"row"), .export=c("Np", "SSIR", "Nmif"), .combine=rbind) %dopar% {
+    library(pomp)
+    library(tidyverse)
+    SSIR %>% mif2(params=c(unlist(guess)),
+                  Np=Np, Nmif,
+                  cooling.fraction.50=0.5,
+                  rw.sd=rw.sd(Beta=0.02, mu_IR=0.02, mu_RS=0.02, eta=ivp(0.02))) %>% 
+      mif2(Nmif) -> mf
+    replicate(10, mf %>% pfilter(Np) %>% logLik()) %>% logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>% bind_cols(loglik=ll[1],loglik.se=ll[2]) 
+  } -> results
+})
+```
+
+Let's plot a scatterplot matrix to see if we can garner any insight into our likelihood surface.
+
+```{r plot_results, echo=FALSE, fig.width=8, fig.height=8}
+results[results$loglik < -293,] %>%
+#write_csv("gme_params.csv")
+#read_csv("gme_params.csv") %>%
+  filter(is.finite(loglik)) %>%
+  filter(loglik>max(loglik)-50) %>%
+  bind_rows(guesses) %>%
+  mutate(type=if_else(is.na(loglik),"guess","result")) %>%
+  arrange(type) -> all
+
+pairs(~loglik+Beta+mu_IR+mu_RS+eta, data=all,
+      col=ifelse(all$type=="guess",grey(0.5),"red"),lower.panel=NULL,pch=16)
+```
+
+From the parameter search, we can see that our model has converged on estimates of $\beta$ around $1$, although the likelihood profile is somewhat flat here. Our model also favors values of the recovery rate $\mu_{IR}$ around $0.5$. Fpr $\mu_{RS}$ and $\eta$, the parameter search did not seem to converge; the model does not seem to have an overall preference. However, there is a clear relationship between $\beta$ and $\eta$; it seems that higher values of $\beta$ are associated with lower values of $\eta$.
+
+Finally, we obtain our best parameter set:
+
+```{r best, echo=FALSE}
+results[results$loglik < -293,] %>% filter(is.finite(loglik)) -> final_results
+
+final_results[final_results$loglik == max(final_results$loglik),] %>%
+  print()
+```
+
+-----------
+
+# 5. Model Diagnostics
+
+## 5.1. Simulations 
+
+To check model fit, let's simulate some values from the model using the optimal parameters we just found. 
+
+```{r simulation, echo=FALSE, warning=FALSE}
+params <- final_results[final_results$loglik == max(final_results$loglik),][,1:6]
+#params <- c(Beta=1.3,mu_IR=0.5,mu_RS=0.03,rho=0.4,eta=0.5,N=3000)
+SSIR %>%
+  simulate(params=params, nsim=30,format="data.frame",include.data=TRUE) -> sims
+
+sims %>% ggplot(aes(x=day,y=count,group=.id,color=.id=="data"))+ geom_line()+
+guides(color=FALSE)
+```
+The simulations are still quite inconclusive! In general, the only similarities between the simulations and the actual data are that they tend to peak early on and stay lower after day 50 or so. There is still considerable variability.
+
+## 5.2. Profile Likelihoods
+
+Let's see if the associated profile confidence intervals give us any more information about parameter optimality.
+
+```{r box, echo=FALSE}
+results%>% 
+  filter(is.finite(loglik)) %>%
+  filter(loglik>max(loglik)-20,loglik.se<2) %>% sapply(range) -> box
+```
+
+```{r echo=FALSE}
+set.seed(1196696958) 
+profile_design(
+  eta=seq(0.01,0.1,length=40), 
+  lower=box[1,c("Beta", "mu_IR", "mu_RS", "eta", "rho", "N")], 
+  upper=box[2,c("Beta", "mu_IR", "mu_RS", "eta", "rho", "N")], 
+  nprof=15, type="runif"
+) -> guesses2
+```
+
+```{r echo=FALSE}
+stew(file="results2.rda", {
+  foreach(guess=iter(guesses,"row"), .export=c("Np", "SSIR", "Nmif"),.combine=rbind) %dopar% { 
+    library(pomp)
+    library(tidyverse)
+    SSIR %>% mif2(params=c(unlist(guess)), 
+                  Np=Np, Nmif,
+                  cooling.fraction.50=0.3,
+                  rw.sd=rw.sd(Beta=0.02,rho=0.02)) %>% mif2(Nmif) -> mf 
+    replicate(10,mf %>% pfilter(Np) %>% logLik()) %>% logmeanexp(se=TRUE) -> ll
+    mf %>% coef() %>% bind_rows() %>% bind_cols(loglik=ll[1],loglik.se=ll[2])
+  } -> results2
+})
+```
+
+```{r echo=FALSE}
+results %>% bind_rows(results2) %>% 
+  filter(is.finite(loglik)) %>% 
+  arrange(-loglik) %>% 
+  filter(is.finite(loglik)) %>%
+  filter(loglik>max(loglik)-10) -> all
+all <- all[all$loglik < -294, ]
+# pairs(~loglik+Beta+mu_IR+mu_RS+eta,data=all,pch=16)
+```
+
+```{r profile1, echo=FALSE}
+maxloglik <- max(all$loglik,na.rm=TRUE) 
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>% group_by(round(Beta,4)) %>% ungroup() %>%
+  ggplot(aes(x=Beta,y=loglik))+ geom_point() + 
+  geom_smooth(method="loess",span=1) + 
+  geom_hline(color="red",yintercept=ci.cutoff)+ lims(y=maxloglik-c(10,0))
+
+all %>% filter(loglik>max(loglik)-0.5*qchisq(df=1,p=0.95)) %>% 
+  summarize(min=min(Beta),max=max(Beta)) -> Beta_ci
+Beta_ci
+```
+
+The profile likelihood curve for $\beta$ is quite flat, suggesting convergence issues, or at least non-linearity of the likelihood surface. However, we see that the model tends to favor higher values of $\beta$. An approximate 95% confidence interval for $\beta$, based on Wilks' Theorem, is given by $[0.55, 8.21]$. 
+
+```{r profile2, echo=FALSE}
+maxloglik <- max(all$loglik,na.rm=TRUE) 
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>% filter(is.finite(loglik)) %>% 
+  group_by(round(mu_IR,4)) %>% 
+  filter(rank(-loglik)<3) %>% ungroup() %>% 
+  filter(loglik>max(loglik)-30) %>% 
+  ggplot(aes(x=mu_IR,y=loglik))+ geom_point() + 
+  geom_smooth(method="loess",span=1)+ 
+  geom_hline(color="red",yintercept=ci.cutoff)+ lims(y=maxloglik-c(5,0))
+
+all %>% filter(loglik>max(loglik)-0.5*qchisq(df=1,p=0.95)) %>% 
+  summarize(min=min(mu_IR),max=max(mu_IR)) -> muIR_ci
+muIR_ci
+```
+
+Here, we see that the model prefers middling values of the recovery rate $\mu_{IR}$, although the likelihood profile is not very distinct. A 95% confidence interval for $\mu_{IR}$ is given by $[0.30, 0.99]$.
+
+
+```{r profile3, echo=FALSE}
+maxloglik <- max(all$loglik,na.rm=TRUE) 
+ci.cutoff <- maxloglik-0.5*qchisq(df=1,p=0.95)
+
+all %>% group_by(round(mu_RS,1)) %>% ungroup() %>%
+  ggplot(aes(x=mu_RS,y=loglik))+ geom_point() + 
+  geom_smooth(method="loess",span=1) + 
+  geom_hline(color="red",yintercept=ci.cutoff)+ lims(y=maxloglik-c(3,0)) + xlim(0, 1.5)
+
+all %>% filter(loglik>max(loglik)-0.5*qchisq(df=1,p=0.95)) %>% 
+  summarize(min=min(mu_RS),max=max(mu_RS)) -> muRS_ci
+muRS_ci
+```
+
+The profile likelihood plot for $\mu_{RS}$ is so scattered as to be essentially useless; there is no real evidence for any particular value, given that the confidence interval essentially comprises the entire range of values.
+
+Overall, there is not enough evidence to conclude that these parameters are a good fit for the data. However, the underlying model and dynamics seem reasonable.
+
+------------
+
+# 6. Conclusion
+
+Our parameter search was mostly inconclusive. However, it is clear that the model favors higher values of $\beta$, the information transmission rate. This both matches up with the data as well as intuition -- given the speed at which social media spreads news, it makes sense that the information transmission rate is on the higher side.
+
+We can also interpret the recovery rate $\mu_{IR}$ as what we call the "hype factor" -- how quickly do trends fade in societal consciousness? Our parameter search revealed that the recovery rate should be smaller than the information transmission rate, which does seem to match up with the data. However, we would still expect the recovery rate to be somewhat larger in magnitude since there is a drastic decrease in search frequency right after the initial peak.
+
+The other two parameters turned out to be difficult to model effectively. The search did not converge on any particular values for the initial susceptible fraction $\eta$ or the resurgence rate $\mu_{RS}$! In particular, we would expect the resurgence rate $\mu_{RS}$ to be small in magnitude, but our optimization returned inconclusive results. This is most likely due to model mis-specification. 
+
+Overall, based on model diagnostics and some simulations, it is somewhat inconclusive whether or not our model is a good fit for the data. However, we believe the interpretability offered by compartmental models can be useful in understanding how information might spread like a pathogen. Previous research has already showed the utility in modeling information spread using epidemiological methods, and we hope this project has demonstrated some more evidence for such a claim.
+
+------------
+
+# 7. Limitations 
+
+Our model was somewhat simplistic -- more sophisticated models could include additional susceptible states to differentiate between the speed of information spread in different media (i.e., social media vs. newspapers) [[6](https://larswillnat.files.wordpress.com/2014/05/2013-american-journalist-key-findings.pdf), [7](https://www.journalism.org/2015/07/14/the-evolving-role-of-news-on-twitter-and-facebook/)]. Another addition could be to model the resurgence rate $\mu_{RS}$ and reporting rate $\rho$ as time-varying.
+  
+If we had more time, we would have included the value of $GME as a covariate. From there, we would have conducted a likelihood ratio test using Wilks' approximation to judge whether the model with or without the stock price was a better predictor of the data. This has many interesting implications; for example, we may be able to tell whether the stock price can be viewed as an external driver for the GameStop hype, or whether such search trends are self-driven. (Extrapolating further, we could even determine whether reverse causation is at play, and if the information spread is itself a driver for the stock price!)
+  
+On a computational note, we ran into many problems with infinite likelihoods due to the incompatibility of a binomial measurement model; as a result, we had to compromise a little bit of interpretability by modeling the search frequency as a negative binomial distribution. Future work could definitely explore alternatives that are both interpretable and compatible with the latent process.
+
+------------
+
+# 8. References  
+
+[1] [Wang, Lin & Wood, Brendan](https://www.sciencedirect.com/science/article/pii/S0307904X11002824), "An Epidemiological Approach to Model the Viral Propagation of Memes". <br> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *Applied Mathematical Modelling*, Volume 35, Issue 11: 5442-5447. November 11, 2011.
+
+[2] [Stanford University](https://engineering.stanford.edu/magazine/article/how-fake-news-spreads-real-virus), "How Fake News Spreads Like a Real Virus". October 9, 2019.
+
+[3] [Wikipedia](https://en.wikipedia.org/wiki/GameStop_short_squeeze), "GameStop Short Squeeze". Accessed April 8, 2021.
+
+[4] [Google Trends](https://trends.google.com/trends/), Google. Accessed April 6, 2021.
+
+[5] [Investopedia](https://www.investopedia.com/terms/w/weekendeffect.asp), "Weekend Effect". Accessed April 13, 2021.
+
+[6] [Indiana University](https://larswillnat.files.wordpress.com/2014/05/2013-american-journalist-key-findings.pdf), “The American Journalist in the Digital Age: Key Findings”. 2014.
+
+[7] [Pew Research Center](https://www.journalism.org/2015/07/14/the-evolving-role-of-news-on-twitter-and-facebook/), “The Evolving Role of News on Twitter and Facebook”. July 14, 2015.
+
+<div style='margin-top: 25px'>
+Our project took inspiration from the following former STATS 531 projects: [W20 Project 32](https://ionides.github.io/531w20/final_project/Project32/final.html) for the SIR model with delay, and <br> [W18 Project 13](https://ionides.github.io/531w18/final_project/13/final.html) and [W20 Project 34](https://ionides.github.io/531w20/final_project/Project34/final.html) for the idea of applying epidemiological models to information spread. All uncited statistical <br> methods, as well as the code used in this project, were adapted from the [STATS 531](https://ionides.github.io/531w21/) class notes.
+</div>

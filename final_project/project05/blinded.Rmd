@@ -1,0 +1,705 @@
+---
+title: "STATS 531 WN21 Final Project"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 5
+    code_folding: hide
+    theme: cerulean
+    highlight: tango
+csl: ecology.csl
+---
+\newcommand\prob{\mathbb{P}}
+\newcommand\E{\mathbb{E}}
+\newcommand\var{\mathrm{Var}}
+\newcommand\cov{\mathrm{Cov}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, echo = TRUE)
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(lubridate)
+  library(astsa)
+  library(forecast)
+  library(ggplot2)
+  library(babynames) 
+  library(dplyr)
+  library(hrbrthemes)
+  library(viridis)
+  library(data.table)
+  library(rmarkdown)
+  library(pomp)
+  library(foreach)
+  library(doParallel)
+  registerDoParallel()
+  library(doRNG)
+  stopifnot(getRversion() >= "4.0")
+  stopifnot(packageVersion("pomp")>="3.0")
+  library(DiagrammeR)
+})
+```
+
+## 1 Introduction
+
+### Seasonal influenza (Flu) in Michigan
+
+According to the Centers for Disease Control and Prevention, Influenza (flu), a contagious respiratory illness caused by influenza viruses, often leads to mild to severe illness. In the United States, flu viruses are most common during fall and winter. Most of the time, seasonal flu starts in October, peaks between  December and February, and sometimes lasts until May. I am interested in studying the patterns of seasonal influenza in Michigan. I will investigate [the Weekly Influenza Surveillance Data in Michigan](https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html) by CDC to identify general patterns of seasonal flu, especially the flu activity in the 2019-2020 season. Since the COVID-19 pandemic has heavily impacted every aspect of people's lives, I am motivated to study how the COVID-19 pandemic affects the flu season in Michigan and aim to find an appropriate model to fit the data. My research question will be
+
+> Is it possible to model the change of contact rate of influenza in Michigan using POMP models?
+
+
+## 2 Data
+
+### 2.1 Overview {.tabset .tabset-fade .tabset-pills}
+
+[The Weekly Influenza Surveillance Data in Michigan](https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html) is downloaded from an online application, [FluView Interactive](https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html), developed and updated at weekly basis by the Influenza Division at Centers for Disease Control and Prevention (CDC). The data is collected from both the U.S. World Health Organization (WHO) Collaborating Laboratories and National Respiratory and Enteric Virus Surveillance System (NREVSS) since 1997. The data are reported from approximately 100 public health and over 300 clinical laboratories. 
+
+In this report, I will focus on analyzing the data presented from clinical laboratories in `Michigan` from 2016 to 2021. The dataset includes:
+
+- `TOTAL.SPECIMENS`: weekly total number of specimens tested
+- `PERCENT.POSITIVE`: the percent positive of the total number of tests
+- `TOTAL.A`: the number of positive influenza tests for virus type A 
+- `TOTAL.B`: the number of positive influenza tests for virus type B
+- `PERCENT.A`: the percent positive by influenza virus type A 
+- `PERCENT.B`: the percent positive by influenza virus type B
+- `season`: manully added variable to indicate the flu season (According to CDC, the influenza activity often begins to increase in October which usually corresponds to the 40th week of the year)
+
+#### Dataset preview
+```{r data, warning=FALSE, result='asis' }
+## read in data file
+path = './'
+data_file = sprintf('%s/FluViewPhase2Data/WHO_NREVSS_Clinical_Labs.csv', path)
+# modify the column names by replacing spaces with dots
+data = read_csv(data_file,skip = 1) %>% dplyr::rename_all(funs(make.names(.))) 
+# separate out season
+season16=data %>% filter( YEAR==2016&WEEK>=40 | YEAR==2017&WEEK<40) %>% mutate(season="2016-17 Season",id=row_number())
+season17=data %>% filter( YEAR==2017&WEEK>=40 | YEAR==2018&WEEK<40) %>% mutate(season="2017-18 Season",id=row_number())
+season18=data %>% filter( YEAR==2018&WEEK>=40 | YEAR==2019&WEEK<40) %>% mutate(season="2018-19 Season",id=row_number())
+season19=data %>% filter( YEAR==2019&WEEK>=40 | YEAR==2020&WEEK<40) %>% mutate(season="2019-20 Season",id=row_number())
+season20=data %>% filter( YEAR==2020&WEEK>=40 | YEAR==2021&WEEK<40) %>% mutate(season="2020-21 Season",id=row_number())
+# combine the season together
+data = rbind(season16,season17,season18,season19,season20)
+#data
+paged_table(data)
+```
+#### 40th Week from 2016 to 2020
+
+40th week of a year is usually the early October or end of September.
+
+```{r Weeknumber}
+weeknumber <- matrix(c(2016,"October 3, 2016","October 9, 2016",2017,"October 2, 2017","October 8, 2017",2018,"October 1, 2018","October 7, 2018",2019,"September 23, 2019","October 6, 2019",2020,"September 28, 2020","October 4, 2020"),ncol=3,byrow=TRUE)
+colnames(weeknumber) <- c("Year","From Date","To Date")
+rownames(weeknumber) <- c()
+paged_table(data.table(weeknumber))
+```
+
+
+### 2.2 Exploratory Data Analysis 
+
+#### 2.2.1 Five-year trend of Influenza A and Influenza B  {.tabset .tabset-fade .tabset-pills}
+
+There are four types of influenza viruses, A, B, C and D. I want to look at the time series plot of the percentage positive of tests for influenza A and B Reported to CDC by U.S. Clinical Laboratories to get a general understanding of the pattern of the flu seaons.
+
+##### Influenza A viruses
+
+```{r Influenza A: 2015-16 Season - 2020-21 Season,message =FALSE, fig.width=10,fig.height=5, fig.cap=cap_fig1}
+cap_fig1 = paste(
+  "**Figure 1.** *Percentage Positive of Tests for Influenza A Reported to CDC by U.S. Clinical Laboratories, Michigan, 2016-17 Season - 2020-21 Season, starting from 40th week in each year, ending April 3rd (13th week), 2021*"
+)
+data %>%
+  ggplot(aes(x = id, y = PERCENT.A, group=season,color=season)) +
+  geom_line() +
+  geom_point()+
+  theme(axis.text.x=element_blank())+
+  xlab("Week") + 
+  ylab("% Positive Flu A")+
+  ggtitle("Percentage Positive of Tests for Influenza A Reported to CDC by U.S. Clinical Laboratories, Michigan") 
+```
+
+I plot out the five flu seasons in recent five years. Before the COVID-19 pandemic, 2016-17, 2017-18, and 2018-19 season of flu A follow a similar pattern. The cases start to increase from October(around 40th week of the year), increase exponentially during the winter and fall, and decrease gradually in spring. Few number of cases fluctuate during the summer. There is a small reemergence during September. The reemergence might be potentially caused by different subtypes of influenza A. (I will not investigate the reason here. )
+As we can see from 2019-20 and 2020-21 season plots, the general pattern of the flu A changes due to the COVID-19 outbreak. During 2019-20 season, during the first half of the flu season, the pattern is similar to that of past years. During the second half of the flu season, which corresponds to spring in 2020. As we all know the COVID-19 pandemic break out in March corresponding to 10th-13th week of 2020. People tend to stay at home to prevent themselves from COVID-19. Thus, less people are exposed to flu A. As we can see from the graph, the significant decrease in contact rate lead to a sharper drop in reported cases compared to past years. During 2020-21 season, there is almost zero case of flu A through out the entire season. 
+
+Therefore, we could potentially come up with a hypothesis that decreasing in contact rate helps decreasing the transmission rate of flu A. I want to further investigate this hypothesis by attempt to model the time series using POMP models.
+
+##### Influenza B viruses
+
+```{r Influenza B: 2016-17 Season - 2020-21 Season, message =FALSE, fig.width=10,fig.height=5, fig.cap=cap_fig2}
+cap_fig2 = paste(
+  "**Figure 2.** *Percentage Positive of Tests for Influenza B Reported to CDC by U.S. Clinical Laboratories, Michigan, 2016-17 Season - 2020-21 Season, starting from 40th week in each year, ending April 3rd (13th week), 2021*"
+)
+data %>%
+  ggplot(aes(x = id, y = PERCENT.B, group=season,color=season)) +
+  geom_line() +
+  geom_point()+
+  theme(axis.text.x=element_blank())+
+  xlab("Week") + 
+  ylab("% Positive Flu B")+
+  ggtitle("Percentage Positive of Tests for Influenza B Reported to CDC by U.S. Clinical Laboratories, Michigan") 
+```
+
+As we can see from the graph that the patterns of influenza B is different from that of influenza A. Type B viruses occur and peak at different time points. The duration of flu B season varies as well. Besides, the level of peaks are different in each season. During 2018-19 season, flu B seem to be not as prevalent as other seasons. While during 2019-20 season, the peak comes earlier than other seasons. There is no reemergence as flu A as well.
+However, we can see that the impact of COVID-19 on the transmission of flu B is similar to that of flu A. After the outbreak, there is also almost zero case of flu B since March, 2020.
+
+#### 2.2.2 Dataset for modeling {.tabset .tabset-fade .tabset-pills}
+
+So far, I have explored some general patterns of season flu and compare the patterns difference between flu A and flu B. I found a common characteristics which is the impact of COVID-19 on the transmission of influenza. I notice that people's contact rate decrease sharply since they want to stay away from the COVID-19 virus and the government also carry out stay-home order to enforce it. Although the immovability does not really help the spread of COVID-19 virus, it helps the decrease of flu cases dramatically. I want to use POMP models to estimate the change of the contact rate and carry out a POMP analysis. I will only focus on the data of flu A during 2019-20 season. 
+
+##### Dataset of Influenza A viruses
+
+Here is the input dataset for the POMP models. There are two columns: week and reports. Starting from 40th week in 2019 to the 39th week in 2020, there are 52 weeks in total. `reports` is the number of positive cases of flu A test reported to CDC by U.S. Clinical Laboratories.
+
+```{r}
+# set up the dataset
+df = data.frame(season19) %>%
+  mutate(TOTAL.A = as.integer(TOTAL.A)) %>%
+  select(week=id,reports=TOTAL.A)
+paged_table(df)
+```
+
+
+
+##### Visualization of Influenza A viruses in 2019-20 Season
+
+
+```{r Influenza A: 2019-21 Season, message =FALSE, fig.width=10,fig.height=5, fig.cap=cap_fig3}
+cap_fig3 = paste(
+  "**Figure 3.** *Cases of Influenza A Reported to CDC by U.S. Clinical Laboratories, Michigan, 2019-20 Season*"
+)
+df %>%
+  ggplot(aes(x = week, y = reports)) +
+  geom_line() +
+  geom_point()+
+  theme(axis.text.x=element_blank())+
+  xlab("Week") + 
+  ylab("Positive Cases of Flu A")+
+  ggtitle("Cases of Influenza A Reported to CDC by U.S. Clinical Laboratories, Michigan") 
+```
+
+
+## 3 Model
+
+### 3.1 Model Set-up and Simulation {.tabset .tabset-fade .tabset-pills}
+
+#### 1st model: The SIR Model 
+
+I firstly start with the SIR model with binomial measurement model. My initial guess for the parameters for the model is: $\beta(contact\ rate) = 31,\ mu\_IR(recovery\ rate)=2.5,\ \rho(reporting\ rate)=0.025,\ \eta=0.0853,\ N(Michigan's\ population) = 9.984*10^6)$
+
+```{r}
+DiagrammeR::grViz("
+  digraph graph2 {
+  
+  graph [layout = dot, rankdir = LR]
+  
+  # node definitions with substituted label text
+  node [shape = rectangle]
+  a [label = 'S']
+  b [label = 'I']
+  c [label = 'R']
+  a  -> b -> c 
+  }
+  
+  ", 
+  height = 100)
+```
+
+$\mu_{SI}(t): rate\ at\ which\ individuals\ in\ S\ transition\ to\ I\ $
+
+$\mu_{IR}(t): rate\ at\ which\ individuals\ in\ I\ transition\ to\ R\ $
+
+
+```{r SIR_building}
+sir_step <- Csnippet("
+double dN_SI = rbinom(S,1-exp(-Beta*I/N*dt)); 
+double dN_IR = rbinom(I,1-exp(-mu_IR*dt));
+S -= dN_SI;
+I += dN_SI - dN_IR;
+R += dN_IR;
+H += dN_IR;
+")
+
+sir_init <- Csnippet("
+S = nearbyint(eta*N);
+I = 1;
+R = nearbyint((1-eta)*N);
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dbinom(reports,H,rho,give_log);
+")
+
+rmeas <- Csnippet("
+reports = rbinom(H,rho);
+")
+
+fluSIR = df %>%
+  pomp(
+    times="week",t0=0,
+    rprocess=euler(sir_step,delta.t=1/7),
+    rinit=sir_init,
+    rmeasure=rmeas,
+    dmeasure=dmeas,
+    accumvars="H",
+    partrans=parameter_trans(
+      log=c("Beta","mu_IR"),
+      logit=c("rho","eta")
+    ),
+    statenames=c("S","I","R","H"),
+    paramnames=c("Beta","mu_IR","eta","rho","N")
+  )
+
+set.seed(5312021)
+
+# Initial guesss of the parameters for SIR model
+sir_params=c(Beta=31,mu_IR=2.5,rho=0.025,eta=0.0853,N=9.984*10^6)
+
+# Simulation
+fluSIR %>%
+  simulate(params=sir_params, nsim=20,format="data.frame", include.data=TRUE) %>%
+  ggplot(aes(x=week,y=reports,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE)
+```
+
+The simulation of the first model looks. The model is able to simulate well with the the data before it reaches to the peak. But the model seems to fall slowly after the peak than the original data does. 
+
+The likelihood and the standard error of the initial guess is:
+
+```{r SIR_init_lik}
+# Calculate the likelihood of the initial guess
+foreach(i=1:10,.combine=c) %dopar% {
+  library(pomp)
+  fluSIR %>% pfilter(params=sir_params,Np=10000)
+} -> sir_pf
+
+sir_pf %>% logLik() %>% logmeanexp(se=TRUE) -> sir_L_pf
+
+sir_pf[[1]] %>% 
+  coef() %>% 
+  bind_rows() %>% 
+  bind_cols(loglik=sir_L_pf[1],loglik.se=sir_L_pf[2]) %>%
+  write_csv("sir_lik.csv")
+
+print(sir_L_pf)
+```
+
+
+#### 2nd model: The SEIR Model 
+
+Next, I attempt to use the SEIR model with binomial measurement model to fit the data. My initial guess for the parameters for the SEIR model is: $\beta(contact\ rate) = 35,\ mu\_EI(latency\ rate)=4,\ mu\_IR(recovery\ rate)=2,\ \rho(reporting\ rate)=0.01,\ \eta=0.0853,\ N(Michigan's\ population) = 9.984*10^6)$
+
+
+```{r}
+DiagrammeR::grViz("
+  digraph graph2 {
+  
+  graph [layout = dot, rankdir = LR]
+  
+  # node definitions with substituted label text
+  node [shape = rectangle]
+  a [label = 'S']
+  b [label = 'E']
+  c [label = 'I']
+  d [label = 'R']
+  a  -> b -> c -> d
+  }
+  
+  ", 
+  height = 100)
+```
+
+
+```{r SEIR_building}
+seir_step <- Csnippet("
+  double dN_SE = rbinom(S,1-exp(-Beta*I/N*dt));
+  double dN_EI = rbinom(E,1-exp(-mu_EI*dt));
+  double dN_IR = rbinom(I,1-exp(-mu_IR*dt));
+  S -= dN_SE;
+  E += dN_SE - dN_EI;
+  I += dN_EI - dN_IR;
+  R += dN_IR;
+  H += dN_IR;
+")
+
+
+seir_init <- Csnippet("
+  S = nearbyint(eta*N);
+  E = 0;
+  I = 1;
+  R = nearbyint((1-eta)*N);
+  H = 0;
+")
+
+fluSIR %>%
+  pomp(
+    rprocess=euler(seir_step,delta.t=1/7),
+    rinit=seir_init,
+    paramnames=c("N","Beta","mu_EI","mu_IR","rho","eta"),
+    statenames=c("S","E","I","R","H")
+  ) -> fluSEIR
+
+set.seed(5312021)
+
+
+# Initial guesss of the parameters for SEIR model
+seir_params=c(Beta=35,mu_EI=4,mu_IR=2,rho=0.01,eta=0.0853,N=9.984*10^6)
+
+# Simulation
+fluSEIR %>%
+  simulate(params=seir_params, nsim=20,format="data.frame", include.data=TRUE) %>%
+  ggplot(aes(x=week,y=reports,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE,alpha=FALSE)
+```
+
+After adding the latency effect to the model, the simulation does not look as good as the first model. The latency effect make the simulated data start to increase later than the original data and decrease earlier than the original data. This model might not be a good fit for the data
+
+The likelihood and the standard error of the initial guess is:
+
+```{r SEIR_init_lik}
+# Calculate the likelihood of the initial guess
+foreach(i=1:10,.combine=c) %dopar% {
+  library(pomp)
+  fluSEIR %>% pfilter(params=seir_params,Np=10000)
+} -> seir_pf
+
+seir_pf %>% logLik() %>% logmeanexp(se=TRUE) -> seir_L_pf
+
+seir_pf[[1]] %>% 
+  coef() %>% 
+  bind_rows() %>% 
+  bind_cols(loglik=seir_L_pf[1],loglik.se=seir_L_pf[2]) %>%
+  write_csv("seir_lik.csv")
+print(seir_L_pf)
+```
+
+
+#### 3rd model: The SIR model with time sensitive conatct rate
+
+In order to model the sharp decrease of the cases, I decide to utilize the time variable $t$ in the Csnippet and directly decrease the contact rate after 10th week of 2020, which corresponds to 22th week in the dataset. 
+
+```{r SIR2}
+sir_step <- Csnippet("
+double dN_SI = rbinom(S,1-exp(-Beta*I/N*dt)); 
+double dN_IR = rbinom(I,1-exp(-mu_IR*dt));
+if (t>22){
+ dN_SI = rbinom(S,1-exp(-0.7*Beta*I/N*dt)); 
+}
+S -= dN_SI;
+I += dN_SI - dN_IR;
+R += dN_IR;
+H += dN_IR;
+")
+
+sir_init <- Csnippet("
+S = nearbyint(eta*N);
+I = 1;
+R = nearbyint((1-eta)*N);
+H = 0;
+")
+
+dmeas <- Csnippet("
+lik = dbinom(reports,H,rho,give_log);
+")
+
+rmeas <- Csnippet("
+reports = rbinom(H,rho);
+")
+
+fluSIR2 = df %>%
+  pomp(
+    times="week",t0=0,
+    rprocess=euler(sir_step,delta.t=1/7),
+    rinit=sir_init,
+    rmeasure=rmeas,
+    dmeasure=dmeas,
+    accumvars="H",
+    partrans=parameter_trans(
+      log=c("Beta","mu_IR"),
+      logit=c("rho","eta")
+    ),
+    statenames=c("S","I","R","H"),
+    paramnames=c("Beta","mu_IR","eta","rho","N")
+  )
+
+set.seed(5312021)
+
+# Initial guesss of the parameters for SIR model
+sir2_params=c(Beta=31,mu_IR=2.5,rho=0.027,eta=0.0853,N=9.984*10^6)
+
+# Simulation
+fluSIR2 %>%
+  simulate(params=sir2_params, nsim=20,format="data.frame", include.data=TRUE) %>%
+  ggplot(aes(x=week,y=reports,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE)
+```
+
+The simulation of the third model seems to be a good fit of the data. After decreasing the contact rate manually, the model is able to capture the sharper drop compared to previous two models. The simulated data aligns well with the original data. 
+
+The likelihood and the standard error of the initial guess is:
+
+```{r SIR2_init_lik}
+# Calculate the likelihood of the initial guess
+foreach(i=1:10,.combine=c) %dopar% {
+  library(pomp)
+  fluSIR2 %>% pfilter(params=sir2_params,Np=10000)
+} -> sir2_pf
+
+sir2_pf %>% logLik() %>% logmeanexp(se=TRUE) -> sir2_L_pf
+
+sir2_pf[[1]] %>% 
+  coef() %>% 
+  bind_rows() %>% 
+  bind_cols(loglik=sir2_L_pf[1],loglik.se=sir2_L_pf[2]) %>%
+  write_csv("sir2_lik.csv")
+
+print(sir_L_pf)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+### 3.2 Local Search {.tabset .tabset-fade .tabset-pills}
+
+Next, I will run a local search for the parameters for all three models. 
+
+#### 1st model {.tabset .tabset-fade .tabset-pills}
+
+For the first model, as the iteration increases, we can see that the log-likelihood bouncing around. It might be because of the NaN log likelihood, which means that the model might not be a good fit for the dataset. Starting from the initial guess, the parameters $\beta, mu\_IR, \rho, and\ \eta$ seem to be scatter away in a wide range of values. $\beta, mu\_IR, \rho$ tend to increase while the number of iteration increases. As for the likelihood estimation, there is no clear pattern. The estimations are not stable.
+
+##### Parameter Estimation
+
+```{r SIR_par}
+registerDoRNG(5312021)
+
+foreach(i=1:20,.combine=c) %dopar% { # 20 calculation in total
+  library(pomp) # make sure the library is loaded
+  library(tidyverse)
+  fluSIR %>%
+      mif2( #iterated filtering in pomp
+        params=sir_params,
+        Np=2000, Nmif=50, # use 2000 particles in filter, perform 50 iterations
+        cooling.fraction.50=0.5,
+        rw.sd=rw.sd(Beta=0.02,rho=0.02, eta=ivp(0.02), mu_IR=0.02) # random walk standard deviation; ivp: indicate value parameter
+      )
+} -> sir_local
+
+sir_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+
+##### Likelihood Estimation
+
+```{r SIR_lik}
+foreach(mf=sir_local,.combine=rbind) %dopar% {
+  library(pomp)
+  library(tidyverse)
+  evals <- replicate(10, logLik(pfilter(mf,Np=20000))) # for each 20 parameter estimates, run 10 pfilter with 20,000 particles
+  ll <- logmeanexp(evals,se=TRUE)
+  mf %>% coef() %>% bind_rows() %>%
+    bind_cols(loglik=ll[1],loglik.se=ll[2])
+} %>% filter(is.finite(loglik))  -> sir_lik_local
+
+
+read_csv("sir_lik.csv") %>%
+  bind_rows(sir_lik_local) %>%
+  arrange(-loglik) %>%
+  filter(is.finite(loglik)) %>%
+  write_csv("sir_lik.csv")
+
+pairs(~loglik+Beta+mu_IR+eta+rho,data=sir_lik_local,pch=16)
+```
+
+```{r}
+sir <- sir_lik_local[[1]]
+```
+
+
+
+
+
+
+
+
+
+#### 2nd model {.tabset .tabset-fade .tabset-pills}
+
+
+For the second model, as the iteration increases, we can see that the log-likelihood seems to converge around -1000 while starting from around -10,000. Thus, it seems that the model might not be a good fit for the dataset. Starting from the initial guess, the parameters $\beta, mu\_EI, mu\_IR, \rho, and\ \eta$ seem to be scatter away in a wide range of values. $\beta, mu\_EI, mu\_IR, \rho$ tend to increase while the number of iteration increases. 
+As for the likelihood estimation, the log-likelihood tends to decrease as $\beta. mu\_EI,and\ mu\_IR$ increases. It also tends to first decrease then increase as $\eta$ increases. Besides, it also tends to increase as $\rho$ increases.
+
+##### Parameter Estimation
+
+```{r SEIR_par}
+registerDoRNG(5312021)
+
+df %>%
+  pomp(
+    times="week",t0=0,
+    rprocess=euler(seir_step,delta.t=1/7),
+    rinit=seir_init,
+    rmeasure=rmeas,
+    dmeasure=dmeas,
+    accumvars="H",
+    partrans=parameter_trans(
+      log=c("Beta","mu_EI","mu_IR"),
+      logit=c("rho","eta") # logit-transformed: rho: reporting probability in [0,1]; eta: initial fraction of susceptibles in the population,needs to be in [0,1]
+    ),
+    statenames=c("S","E","I","R","H"),
+    paramnames=c("Beta","mu_EI","mu_IR","eta","rho","N")
+  ) -> fluSEIR
+
+foreach(i=1:20,.combine=c) %dopar% { # 20 calculation in total
+  library(pomp) # make sure the library is loaded
+  library(tidyverse)
+  fluSEIR %>%
+      mif2( #iterated filtering in pomp
+        params=seir_params,
+        Np=2000, Nmif=50, # use 2000 particles in filter, perform 50 iterations
+        cooling.fraction.50=0.5,
+        rw.sd=rw.sd(Beta=0.02,rho=0.02, eta=ivp(0.02), mu_EI=0.02, mu_IR=0.02) # random walk standard deviation; ivp: indicate value parameter
+      )
+} -> seir_local
+
+seir_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+
+##### Likelihood Estimation
+
+
+```{r SEIR_lik}
+foreach(mf=seir_local,.combine=rbind) %dopar% {
+  library(pomp)
+  library(tidyverse)
+  evals <- replicate(10, logLik(pfilter(mf,Np=20000))) # for each 20 parameter estimates, run 10 pfilter with 20,000 particles
+  ll <- logmeanexp(evals,se=TRUE)
+  mf %>% coef() %>% bind_rows() %>%
+    bind_cols(loglik=ll[1],loglik.se=ll[2])
+} %>% filter(is.finite(loglik)) -> seir_lik_local
+
+read_csv("seir_lik.csv") %>%
+  bind_rows(seir_lik_local) %>%
+  arrange(-loglik) %>%
+  filter(is.finite(loglik)) %>%
+  write_csv("seir_lik.csv")
+
+pairs(~loglik+Beta+mu_EI+mu_IR+eta+rho,data=seir_lik_local,pch=16)
+```
+
+The current lowest loglikelihood is around -860.9967 with parameters estimated $\beta=82.55924, mu\_EI=16.67153, mu\_IR=8.361215,\rho=0.03748629,\eta=0.06968546$. The simulated dataset looks like following graph, wihch does not seem to align with the original dataset. 
+
+```{r}
+read_csv("seir_lik.csv")[1,]
+```
+
+
+```{r}
+# Second guesss of the parameters for SEIR model
+seir2_params=c(Beta=82.55924,mu_EI=16.67153,mu_IR=8.361215,rho=0.03748629,eta=0.06968546,N=9.984*10^6)
+
+# Simulation
+fluSEIR %>%
+  simulate(params=seir2_params, nsim=20,format="data.frame", include.data=TRUE) %>%
+  ggplot(aes(x=week,y=reports,group=.id,color=.id=="data"))+
+  geom_line()+
+  guides(color=FALSE,alpha=FALSE)
+```
+
+
+
+
+
+
+
+#### 3rd model {.tabset .tabset-fade .tabset-pills}
+
+For the third model, as the iteration increases, we can see that the log-likelihood also bouncing around and even tend to decrease. It might be because of the NaN log likelihood, which means that the model might not be a good fit for the dataset. Starting from the initial guess, the parameters $\beta, mu\_IR, \rho, and\ \eta$ seem to be scatter away in a wide range of values. $\beta, mu\_IR, \rho$ tend to increase while the number of iteration increases. Similar to the first model, as for the likelihood estimation, there is no clear pattern. The estimations are not stable.
+
+##### Parameter Estimation
+
+```{r SIR2_par}
+registerDoRNG(5312021)
+
+foreach(i=1:20,.combine=c) %dopar% { # 20 calculation in total
+  library(pomp) # make sure the library is loaded
+  library(tidyverse)
+  fluSIR2 %>%
+      mif2( #iterated filtering in pomp
+        params=sir2_params,
+        Np=2000, Nmif=50, # use 2000 particles in filter, perform 50 iterations
+        cooling.fraction.50=0.5,
+        rw.sd=rw.sd(Beta=0.02,rho=0.02, eta=ivp(0.02), mu_IR=0.02) # random walk standard deviation; ivp: indicate value parameter
+      )
+} -> sir2_local
+
+sir2_local %>%
+  traces() %>%
+  melt() %>%
+  ggplot(aes(x=iteration,y=value,group=L1,color=factor(L1)))+
+  geom_line()+
+  guides(color=FALSE)+
+  facet_wrap(~variable,scales="free_y")
+```
+
+
+
+##### Likelihood Estimation
+
+```{r SIR2_lik}
+foreach(mf=sir2_local,.combine=rbind) %dopar% {
+  library(pomp)
+  library(tidyverse)
+  evals <- replicate(10, logLik(pfilter(mf,Np=20000))) # for each 20 parameter estimates, run 10 pfilter with 20,000 particles
+  ll <- logmeanexp(evals,se=TRUE)
+  mf %>% coef() %>% bind_rows() %>%
+    bind_cols(loglik=ll[1],loglik.se=ll[2])
+} %>% filter(is.finite(loglik)) -> sir2_lik_local
+
+
+read_csv("sir2_lik.csv") %>%
+  bind_rows(sir2_lik_local) %>%
+  arrange(-loglik) %>%
+  filter(is.finite(loglik)) %>%
+  write_csv("sir2_lik.csv")
+
+pairs(~loglik+Beta+mu_IR+eta+rho,data=sir2_lik_local,pch=16)
+```
+
+
+
+## 4 Conclusion
+
+Based on the observation of time series plot of influenza A and B in recent five seasons, I make a hypothesis that reducing contact rate could significantly decreases the transmission rate of flu. I try three different models to fit the data, the SIR model with binomial measurement model, the SEIR model with binomial measurement model, and the SIR model with time sensitive contact rate. All three models are able to generate fairly good simulations of original dataset. Based on the simulation of the initial guess for all three models, the third model seems to be the best fit for the data. The first model and the second model are not able to simualte the sharp drop of casese. However, after estimating parameters and likelihood, I found that the second model seems to be a better fit, while the first and third model both have issues with NaN log-likelihood. Therefore, I will safely conclude that all three models are not appropriate for fitting the data. So global search and profile likelihood calculations are not carried out. 
+
+As we can see from the plot of the original dataset, there is a small peak before the data reaches to the highest point, which means that we need more variability in the model to explain the data. Further improvements can be done through dealing with model misspecification issue. The issue might be able to be solved by adjusting either the measurement model or the process model. Over-dispersed model such as negative binomial is suggested by professor. 
+
+
+## 5 References
+
+[1] Dataset source: [FluView Interactive](https://gis.cdc.gov/grasp/fluview/fluportaldashboard.html) developed and updated at weekly basis by the Influenza Division at Centers for Disease Control and Prevention (CDC)
+
+[2] [Lecture notes](https://ionides.github.io/531w21/index.html) from Chapter 11-15 
