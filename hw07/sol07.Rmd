@@ -81,7 +81,7 @@ fixed_params <- c(N=38000, mu_IR=2)
 
 ```{r}
 registerDoRNG(123294940)
-foreach(i=1:30,.combine=c) %dopar% {
+foreach(i=1:30,.combine=c) %do% {
   library(pomp)
   measSIR %>% pfilter(params=params,Np=50000)
 } -> pf
@@ -99,7 +99,7 @@ pf[[1]] %>% coef() %>% bind_rows() %>%
 ```{r}
 registerDoRNG(482947940)
 bake(file="local_search.rds",{
-  foreach(i=1:20,.combine=c) %dopar% {
+  foreach(i=1:20,.combine=c) %do% {
     library(pomp)
     library(tidyverse)
     measSIR %>%
@@ -134,7 +134,7 @@ mifs_local %>%
 ```{r}
 registerDoRNG(900242057)
 bake(file="lik_local.rds",{
-  foreach(mf=mifs_local,.combine=rbind) %dopar% {
+  foreach(mf=mifs_local,.combine=rbind) %do% {
     library(pomp)
     library(tidyverse)
     evals <- replicate(10, logLik(pfilter(mf,Np=20000)))
@@ -174,7 +174,7 @@ mf1 <- mifs_local[[1]]
 
 bake(file="global_search.rds",{
   registerDoRNG(1270401374)
-  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %do% {
     library(pomp)
     library(tidyverse)
     mf1 %>%
@@ -240,7 +240,7 @@ mf1 <- mifs_local[[1]]
 ```{r}
 registerDoRNG(830007657)
 bake(file="eta_profile.rds",{
-  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %do% {
     library(pomp)
     library(tidyverse)
     mf1 %>%
@@ -308,7 +308,7 @@ read_csv("measles_params.csv") %>%
 mf1 <- mifs_local[[1]]
 registerDoRNG(2105684752)
 bake(file="rho_profile.rds",{
-  foreach(guess=iter(guesses,"row"), .combine=rbind) %dopar% {
+  foreach(guess=iter(guesses,"row"), .combine=rbind) %do% {
     library(pomp)
     library(tidyverse)
     mf1 %>%
