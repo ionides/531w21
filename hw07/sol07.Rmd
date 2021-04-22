@@ -19,7 +19,7 @@ csl: ecology.csl
 ## Question 7.2 : Investigating the SEIR model
 
 a) First we do a local search start with the initial parameter values, $\beta=40, \mu_{IR}=1.3, \mu_{EI}=0.8, \rho=0.5, \eta=0.06$, and $N=38000$ where we fix the values of $\mu_{IR}$ and $N$ as truth.
-We do particle filters 30 times to get an unbiased likelihood estimate of -271 with a Monte Carlo standard error of 5.4.
+We do particle filters 30 times to get an unbiased likelihood estimate of -289 with a Monte Carlo standard error of 5.0.
 
 
 ```{r, echo=FALSE, message=FALSE}
