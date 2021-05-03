@@ -20,22 +20,22 @@ csl: ecology.csl
 
 | | |
 |:----|:----|
-| 1. [Investigating the effects of vaccinations and government policy on the spread of COVID-19 in the State of Pennsylvania](https://ionides.github.io/531w21/final_project/project01/blinded.html).<br> | [Review comments] |
-| 2. [Study of daily COVID-19 Infected cases in the United States](https://ionides.github.io/531w21/final_project/project02/blinded.html) | [Review comments] |
-| 3. [Investigation of Vaccination Effect on Covid-19 in California](https://ionides.github.io/531w21/final_project/project03/blinded.html) | [Review comments] |
-| 4. [Extended Analysis on the U.S. 10-year Treasury Bond Yield](https://ionides.github.io/531w21/final_project/project04/blinded.html) | [Review comments] |
-| 5. [Seasonal influenza (Flu) in Michigan](https://ionides.github.io/531w21/final_project/project05/blinded.html) | [Review comments] |
-| 6. [To The Moon or Not - Analysis on GameStop Stock Price](https://ionides.github.io/531w21/final_project/project06/blinded.html) | [Review comments] |
-| 7. [Information Epidemics: Modeling Search Trends during the GameStop Short Squeeze Using Stochastic Compartmental Models](https://ionides.github.io/531w21/final_project/project07/blinded.html) | [Review comments]|
-| 8. [Statistical Models for Solar Flare X-ray Flux Time Series](https://ionides.github.io/531w21/final_project/project08/blinded.html) | [Review comments] |
-| 9. [Utah Covid-19 data](https://ionides.github.io/531w21/final_project/project09/blinded.html) | [Review comments] |
-| 10. [Time Series Analysis of COVID-19 in Georgia](https://ionides.github.io/531w21/final_project/project10/blinded.html) | [Review comments] |
-| 11. [Modeling COVID-19 Cases in Michigan: ARMA model v.s. SEIR POMP model](https://ionides.github.io/531w21/final_project/project11/blinded.html) | [Review comments] |
-| 12. [Analysis on Nasdaq-100 Index for the Past 5 Years](https://ionides.github.io/531w21/final_project/project12/blinded.html) | [Review comments] |
-| 13. [An Investigation into COVID-19 in California](https://ionides.github.io/531w21/final_project/project13/blinded.html) | [Review comments] |
-| 14. [Can mumps cases of Michigan in the 1970s be well modeled by an SEIR pomp model?](https://ionides.github.io/531w21/final_project/project14/blinded.html) | [Review comments] |
-| 15. [An Analysis of COVID-19 Cases in Washtenaw County](https://ionides.github.io/531w21/final_project/project15/blinded.html) | [Review comments] |
-| 16. [Volatility analysis on the Shanghai Composite Index](https://ionides.github.io/531w21/final_project/project16/blinded.html) | [Review comments] |
+| 1. [Investigating the effects of vaccinations and government policy on the spread of COVID-19 in the State of Pennsylvania](project01/blinded.html).<br> | [Review comments](project01/comments.html) |
+| 2. [Study of daily COVID-19 Infected cases in the United States](project02/blinded.html) | [Review comments](project02/comments.html) |
+| 3. [Investigation of Vaccination Effect on Covid-19 in California](project03/blinded.html) | [Review comments](project03/comments.html) |
+| 4. [Extended Analysis on the U.S. 10-year Treasury Bond Yield](project04/blinded.html) | [Review comments](project04/comments.html) |
+| 5. [Seasonal influenza (Flu) in Michigan](project05/blinded.html) | [Review comments](project05/comments.html) |
+| 6. [To The Moon or Not - Analysis on GameStop Stock Price](project06/blinded.html) | [Review comments](project06/comments.html) |
+| 7. [Information Epidemics: Modeling Search Trends during the GameStop Short Squeeze Using Stochastic Compartmental Models](project07/blinded.html) | [Review comments](project07/comments.html)|
+| 8. [Statistical Models for Solar Flare X-ray Flux Time Series](project08/blinded.html) | [Review comments](project08/comments.html) |
+| 9. [Utah Covid-19 data](project09/blinded.html) | [Review comments](project09/comments.html) |
+| 10. [Time Series Analysis of COVID-19 in Georgia](project10/blinded.html) | [Review comments](project10/comments.html) |
+| 11. [Modeling COVID-19 Cases in Michigan: ARMA model v.s. SEIR POMP model](project11/blinded.html) | [Review comments](project11/comments.html) |
+| 12. [Analysis on Nasdaq-100 Index for the Past 5 Years](project12/blinded.html) | [Review comments](project12/comments.html) |
+| 13. [An Investigation into COVID-19 in California](project13/blinded.html) | [Review comments](project13/comments.html) |
+| 14. [Can mumps cases of Michigan in the 1970s be well modeled by an SEIR pomp model?](project14/blinded.html) | [Review comments](project14/comments.html) |
+| 15. [An Analysis of COVID-19 Cases in Washtenaw County](project15/blinded.html) | [Review comments](project15/comments.html) |
+| 16. [Volatility analysis on the Shanghai Composite Index](project16/blinded.html) | [Review comments](project16/comments.html) |
 ----------
 
 -----------
