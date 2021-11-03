@@ -9,9 +9,10 @@
 <meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
 
 
+<meta name="author" content="STATS/DATASCI 531, Winter 2021" />
 
 
-<title>STATS 531 Winter 2021  Final projects</title>
+<title>Review comments on Project 5</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -402,92 +403,26 @@ summary {
 
 
 
-<h1 class="title toc-ignore">STATS 531 Winter 2021 <br>Final projects</h1>
+<h1 class="title toc-ignore">Review comments on Project 5</h1>
+<h4 class="author">STATS/DATASCI 531, Winter 2021</h4>
 
 </div>
 
 
-<hr />
-<ul>
-<li><p>Projects are posted anonymously below. Source code and data are available from <a href="https://github.com/ionides/531w21/tree/master/final_project">https://github.com/ionides/531w21/final_project</a>.</p></li>
-<li><p>After the course is over and the class grades are assigned, you may choose to request to have your name attached to your project.</p></li>
-</ul>
-<hr />
-<hr />
-<table>
-<colgroup>
-<col width="50%" />
-<col width="50%" />
-</colgroup>
-<tbody>
-<tr class="odd">
-<td align="left">1. <a href="project01/blinded.html">Investigating the effects of vaccinations and government policy on the spread of COVID-19 in the State of Pennsylvania</a>.<br></td>
-<td align="left"><a href="project01/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">2. <a href="project02/blinded.html">Study of daily COVID-19 Infected cases in the United States</a></td>
-<td align="left"><a href="project02/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">3. <a href="project03/blinded.html">Investigation of Vaccination Effect on Covid-19 in California</a></td>
-<td align="left"><a href="project03/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">4. <a href="project04/blinded.html">Extended Analysis on the U.S. 10-year Treasury Bond Yield</a></td>
-<td align="left"><a href="project04/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">5. <a href="project05/blinded.html">Seasonal influenza (Flu) in Michigan</a></td>
-<td align="left"><a href="project05/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">6. <a href="project06/blinded.html">To The Moon or Not - Analysis on GameStop Stock Price</a></td>
-<td align="left"><a href="project06/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">7. <a href="project07/blinded.html">Information Epidemics: Modeling Search Trends during the GameStop Short Squeeze Using Stochastic Compartmental Models</a></td>
-<td align="left"><a href="project07/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">8. <a href="project08/blinded.html">Statistical Models for Solar Flare X-ray Flux Time Series</a></td>
-<td align="left"><a href="project08/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">9. <a href="project09/blinded.html">Utah Covid-19 data</a></td>
-<td align="left"><a href="project09/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">10. <a href="project10/blinded.html">Time Series Analysis of COVID-19 in Georgia</a></td>
-<td align="left"><a href="project10/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">11. <a href="project11/blinded.html">Modeling COVID-19 Cases in Michigan: ARMA model v.s. SEIR POMP model</a></td>
-<td align="left"><a href="project11/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">12. <a href="project12/blinded.html">Analysis on Nasdaq-100 Index for the Past 5 Years</a></td>
-<td align="left"><a href="project12/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">13. <a href="project13/blinded.html">An Investigation into COVID-19 in California</a></td>
-<td align="left"><a href="project13/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">14. <a href="project14/blinded.html">Can mumps cases of Michigan in the 1970s be well modeled by an SEIR pomp model?</a></td>
-<td align="left"><a href="project14/comments.html">Review comments</a></td>
-</tr>
-<tr class="odd">
-<td align="left">15. <a href="project15/blinded.html">An Analysis of COVID-19 Cases in Washtenaw County</a></td>
-<td align="left"><a href="project15/comments.html">Review comments</a></td>
-</tr>
-<tr class="even">
-<td align="left">16. <a href="project16/blinded.html">Volatility analysis on the Shanghai Composite Index</a></td>
-<td align="left"><a href="project16/comments.html">Review comments</a></td>
-</tr>
-</tbody>
-</table>
-<hr />
-<hr />
+<p><strong>Strengths</strong>:</p>
+<ol style="list-style-type: decimal">
+<li><p>Fig 1 is a nice representation, showing clearly the steep decline in flu when the 2020 COVID lockdown started, and the complete disappearance in 2021.</p></li>
+<li><p>A range of POMP models was tried. The project noted problematic issues with the models developed, without getting around to solving them.</p></li>
+</ol>
+<p><strong>Points for consideration</strong>:</p>
+<ol style="list-style-type: decimal">
+<li><p>There is evidence of model misspecification. The perturbed model (with parameters having a random walk) obtains log likelihoods around -300. As the perturbations decrease, the likelihood goes down and filtering failures (large drops in the estimated likelihood) start occurring. This is most likely a result of insufficient process and/or measurement noise.</p></li>
+<li><p>All models use binomial measurement, which can be problematic partly because of the bounded support and partly because it cannot fit overdispersion. Similarly, no models included additional noise in the rates.</p></li>
+<li><p>The model is not fully described (via mathematical equations). The parameter eta is not defined, except by the computer code.</p></li>
+<li><p>Initializing to <span class="math inline">\(I=1\)</span> seems a strong assumption, but works out okay here.</p></li>
+<li><p>Reference list is limited to course notes, plus the data set source. More context could be added.</p></li>
+<li><p>The likelihood at the initial guess is not scientifically as important as the likelihood after parameter estimation - better to report the latter instead.</p></li>
+</ol>
 
 
 
